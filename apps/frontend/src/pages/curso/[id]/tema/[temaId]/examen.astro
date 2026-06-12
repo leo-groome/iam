@@ -1,0 +1,26 @@
+---
+import StudentLayout from "@/layouts/StudentLayout.astro";
+import ExamRunner from "@/components/ui/ExamRunner.vue";
+import { cursos, findCurso, preguntasMock } from "@/lib/mock";
+
+export function getStaticPaths() {
+  return cursos.flatMap(c =>
+    c.modulos.flatMap(m => m.temas.filter(t => t.hasExam).map(t => ({ params: { id: c.id, temaId: t.id } })))
+  );
+}
+
+const { id, temaId } = Astro.params;
+const curso = findCurso(id!);
+if (!curso) return Astro.redirect('/catalogo');
+
+const tema = curso.modulos.flatMap(m => m.temas).find(t => t.id === temaId);
+if (!tema) return Astro.redirect(`/curso/${id}`);
+---
+<StudentLayout title={`Examen · ${tema.title}`} courseName={curso.title} progress={curso.progress}>
+  <p class="text-sm text-[var(--color-primary)] font-medium">Cuestionario</p>
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-6">{tema.title}</h1>
+
+  <ExamRunner client:load preguntas={preguntasMock} cursoId={id!} temaId={temaId!} minPercent={70} />
+
+  <div class="h-32"></div>
+</StudentLayout>

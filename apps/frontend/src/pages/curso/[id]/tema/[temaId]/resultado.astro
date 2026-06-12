@@ -1,0 +1,30 @@
+---
+import StudentLayout from "@/layouts/StudentLayout.astro";
+import { cursos, findCurso } from "@/lib/mock";
+
+export function getStaticPaths() {
+  return cursos.flatMap(c =>
+    c.modulos.flatMap(m => m.temas.filter(t => t.hasExam).map(t => ({ params: { id: c.id, temaId: t.id } })))
+  );
+}
+
+const { id, temaId } = Astro.params;
+const curso = findCurso(id!);
+if (!curso) return Astro.redirect('/catalogo');
+
+const allTemas = curso.modulos.flatMap(m => m.temas);
+const idx = allTemas.findIndex(t => t.id === temaId);
+const next = allTemas[idx + 1];
+---
+<StudentLayout title="Resultado" courseName={curso.title} progress={curso.progress}>
+  <div class="card p-8 text-center max-w-md mx-auto mt-8">
+    <div class="text-6xl mb-3">🎉</div>
+    <h1 class="text-3xl font-bold">¡Bien hecho!</h1>
+    <p class="text-[var(--color-text-muted)] mt-2">Tema aprobado. Sigues avanzando.</p>
+    <a href={next ? `/curso/${id}/tema/${next.id}` : `/curso/${id}/certificado`}
+       class="btn btn-primary btn-block mt-6">
+      {next ? 'Continuar al siguiente tema' : 'Ver mi certificado'}
+    </a>
+    <a href={`/curso/${id}`} class="btn btn-ghost btn-block mt-2">Volver al curso</a>
+  </div>
+</StudentLayout>

@@ -1,0 +1,120 @@
+---
+import StudentLayout from "@/layouts/StudentLayout.astro";
+import CourseCard from "@/components/ui/CourseCard.astro";
+import { cursos } from "@/lib/mock";
+
+const enProgreso = cursos.filter(c => c.progress > 0 && c.progress < 100);
+const nuevos = cursos.filter(c => c.progress === 0);
+const completados = cursos.filter(c => c.progress === 100);
+
+// Coloca tus fotos en apps/frontend/public/bg/ con estos nombres (1.jpg ... 10.jpg)
+// Formato recomendado: JPG/WebP, ratio 4:5 (vertical), ~700px de ancho mínimo.
+const bgPhotos = [
+  "/bg/1.jpg",
+  "/bg/2.jpg",
+  "/bg/3.jpg",
+  "/bg/4.jpg",
+  "/bg/5.jpg",
+  "/bg/6.jpg",
+  "/bg/7.jpg",
+  "/bg/8.jpg",
+  "/bg/9.jpg",
+  "/bg/10.jpg",
+];
+
+type Tile = { src: string; top: string; left: string; w: string; rot: number; z: number };
+const tiles: Tile[] = [
+  { src: bgPhotos[0], top: '2%',  left: '3%',  w: '22vw', rot: -8,  z: 2 },
+  { src: bgPhotos[1], top: '6%',  left: '20%', w: '18vw', rot: 5,   z: 4 },
+  { src: bgPhotos[2], top: '1%',  left: '38%', w: '24vw', rot: -3,  z: 3 },
+  { src: bgPhotos[3], top: '10%', left: '60%', w: '20vw', rot: 7,   z: 5 },
+  { src: bgPhotos[4], top: '3%',  left: '78%', w: '22vw', rot: -6,  z: 2 },
+
+  { src: bgPhotos[5], top: '24%', left: '0%',  w: '20vw', rot: 4,   z: 3 },
+  { src: bgPhotos[6], top: '22%', left: '16%', w: '17vw', rot: -7,  z: 5 },
+  { src: bgPhotos[7], top: '28%', left: '33%', w: '22vw', rot: 6,   z: 4 },
+  { src: bgPhotos[8], top: '20%', left: '55%', w: '19vw', rot: -4,  z: 2 },
+  { src: bgPhotos[9], top: '26%', left: '72%', w: '24vw', rot: 8,   z: 6 },
+
+  { src: bgPhotos[2], top: '44%', left: '4%',  w: '23vw', rot: 6,   z: 4 },
+  { src: bgPhotos[5], top: '48%', left: '23%', w: '18vw', rot: -5,  z: 2 },
+  { src: bgPhotos[4], top: '42%', left: '40%', w: '21vw', rot: 4,   z: 5 },
+  { src: bgPhotos[7], top: '46%', left: '58%', w: '20vw', rot: -8,  z: 3 },
+  { src: bgPhotos[8], top: '50%', left: '76%', w: '22vw', rot: 5,   z: 4 },
+
+  { src: bgPhotos[0], top: '66%', left: '2%',  w: '21vw', rot: -6,  z: 3 },
+  { src: bgPhotos[3], top: '70%', left: '20%', w: '19vw', rot: 4,   z: 5 },
+  { src: bgPhotos[6], top: '64%', left: '37%', w: '23vw', rot: -3,  z: 2 },
+  { src: bgPhotos[9], top: '72%', left: '57%', w: '17vw', rot: 7,   z: 4 },
+  { src: bgPhotos[1], top: '68%', left: '73%', w: '22vw', rot: -5,  z: 3 },
+
+  { src: bgPhotos[5], top: '88%', left: '10%', w: '20vw', rot: 5,   z: 3 },
+  { src: bgPhotos[8], top: '90%', left: '32%', w: '18vw', rot: -7,  z: 4 },
+  { src: bgPhotos[2], top: '86%', left: '52%', w: '22vw', rot: 6,   z: 2 },
+  { src: bgPhotos[4], top: '92%', left: '74%', w: '19vw', rot: -4,  z: 3 },
+];
+---
+<StudentLayout title="Catálogo">
+  <style is:global>
+    body { background: transparent !important; }
+    html { background: var(--color-app-bg); }
+  </style>
+
+  <div aria-hidden="true" class="fixed inset-0 pointer-events-none overflow-hidden" style="z-index: 0;">
+    <div class="relative w-full h-[180vh] opacity-70">
+      {tiles.map(t => (
+        <div
+          class="absolute rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/40 bg-[var(--color-primary-soft)]"
+          style={`top: ${t.top}; left: ${t.left}; width: ${t.w}; aspect-ratio: 4/5; transform: rotate(${t.rot}deg); z-index: ${t.z};`}
+        >
+          <img
+            src={t.src}
+            alt=""
+            class="w-full h-full object-cover"
+            loading="lazy"
+            onerror="this.style.display='none'"
+          />
+        </div>
+      ))}
+    </div>
+    <div class="absolute inset-0 bg-gradient-to-b from-[var(--color-app-bg)]/55 via-[var(--color-app-bg)]/40 to-[var(--color-app-bg)]/75"></div>
+  </div>
+
+  <div class="relative" style="z-index: 1;">
+    <header class="card px-6 py-5 sm:px-8 sm:py-6 mb-6">
+      <h1 class="text-4xl sm:text-5xl font-bold tracking-tight">Cursos</h1>
+      <p class="text-[var(--color-primary)] font-semibold mt-2 text-lg">Hola, Alex 👋</p>
+    </header>
+
+    {enProgreso.length > 0 && (
+      <section class="mb-10">
+        <h2 class="text-lg font-semibold mb-3">Continuar donde lo dejé</h2>
+        <div class="grid gap-4">
+          {enProgreso.map(c => (
+            <CourseCard id={c.id} title={c.title} description={c.description} duration={c.duration} progress={c.progress} cover={c.cover} />
+          ))}
+        </div>
+      </section>
+    )}
+
+    <section class="mb-10">
+      <h2 class="text-lg font-semibold mb-3">Cursos disponibles</h2>
+      <div class="grid gap-4">
+        {nuevos.map(c => (
+          <CourseCard id={c.id} title={c.title} description={c.description} duration={c.duration} cover={c.cover} />
+        ))}
+      </div>
+    </section>
+
+    {completados.length > 0 && (
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Ya completados</h2>
+        <div class="grid gap-4">
+          {completados.map(c => (
+            <CourseCard id={c.id} title={c.title} description={c.description} duration={c.duration} progress={100} cover={c.cover} cta="Ver certificado" href={`/curso/${c.id}/certificado`} />
+          ))}
+        </div>
+      </section>
+    )}
+  </div>
+</StudentLayout>

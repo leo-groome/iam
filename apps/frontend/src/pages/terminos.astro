@@ -1,0 +1,157 @@
+---
+import PublicLayout from "@/layouts/PublicLayout.astro";
+
+const fechaActualizacion = "11 de junio de 2026";
+const nombreResponsable = "Misioneras";
+const sitioWeb = "https://misioneras.org";
+const correoContacto = "contacto@misioneras.org";
+const jurisdiccion = "Ciudad de México, México";
+---
+<PublicLayout title="Términos y Condiciones">
+  <div class="min-h-screen py-10 px-4">
+    <div class="max-w-3xl mx-auto card p-8 sm:p-12">
+      <a href="/" class="text-sm text-[var(--color-text-muted)] mb-4 inline-block hover:text-[var(--color-primary)]">← Volver al inicio</a>
+
+      <header class="border-b border-[var(--color-border)] pb-6 mb-8">
+        <p class="text-sm text-[var(--color-primary)] font-semibold uppercase tracking-wider">Documento legal</p>
+        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mt-1">Términos y Condiciones de Uso</h1>
+        <p class="text-[var(--color-text-muted)] mt-3 text-sm">Última actualización: {fechaActualizacion}</p>
+      </header>
+
+      <article class="space-y-8 text-[var(--color-text)] leading-relaxed">
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">1. Aceptación de los términos</h2>
+          <p>
+            Al crear una cuenta y utilizar la plataforma de formación digital operada por <strong>{nombreResponsable}</strong> (en adelante, "la Plataforma"),
+            usted manifiesta que ha leído, comprendido y aceptado en su totalidad los presentes Términos y Condiciones, así como el
+            <a href="/privacidad" class="text-[var(--color-primary)] underline">Aviso de Privacidad</a>.
+            Si no está de acuerdo con cualquiera de estas disposiciones, deberá abstenerse de usar la Plataforma.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">2. Definiciones</h2>
+          <ul class="list-disc pl-6 space-y-2">
+            <li><strong>Plataforma:</strong> el sistema digital de formación accesible a través de {sitioWeb} y sus subdominios.</li>
+            <li><strong>Usuario:</strong> persona física que se registra para acceder a los contenidos formativos.</li>
+            <li><strong>Contenido:</strong> videos, documentos, infografías, textos, cuestionarios y certificados disponibles en la Plataforma.</li>
+            <li><strong>Cuenta:</strong> el registro personal del Usuario que permite el acceso al servicio.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">3. Registro y cuenta de usuario</h2>
+          <p class="mb-3">
+            Para utilizar la Plataforma es necesario crear una cuenta. El Usuario se compromete a:
+          </p>
+          <ul class="list-disc pl-6 space-y-1.5">
+            <li>Proporcionar información veraz, exacta, actual y completa.</li>
+            <li>Mantener actualizada su información de contacto.</li>
+            <li>Resguardar la confidencialidad de su contraseña y notificar de inmediato cualquier uso no autorizado.</li>
+            <li>Ser mayor de 13 años para registrarse. Los menores de edad deberán contar con autorización de quien ejerza la patria potestad o tutela.</li>
+          </ul>
+          <p class="mt-3">
+            {nombreResponsable} se reserva el derecho de suspender o cancelar cuentas que incumplan los presentes términos o cuyo uso resulte indebido.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">4. Uso aceptable</h2>
+          <p class="mb-3">El Usuario se obliga a usar la Plataforma únicamente para los fines formativos previstos. Queda expresamente prohibido:</p>
+          <ul class="list-disc pl-6 space-y-1.5">
+            <li>Compartir, copiar, redistribuir o explotar comercialmente el Contenido.</li>
+            <li>Realizar ingeniería inversa, descompilar o intentar acceder al código fuente.</li>
+            <li>Cargar archivos maliciosos o realizar ataques que comprometan la integridad del servicio.</li>
+            <li>Suplantar la identidad de otra persona o falsear información.</li>
+            <li>Usar la Plataforma con fines contrarios a la ley, la moral o las buenas costumbres.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">5. Propiedad intelectual</h2>
+          <p>
+            Todo el Contenido disponible en la Plataforma —incluidos textos, videos, gráficos, logotipos, marcas y diseños— es propiedad
+            de {nombreResponsable} o de terceros que han autorizado su uso, y se encuentra protegido por la legislación aplicable en
+            materia de derechos de autor y propiedad industrial. El registro en la Plataforma otorga al Usuario una licencia limitada,
+            personal, no exclusiva, no transferible y revocable, exclusivamente para acceder al Contenido con fines formativos.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">6. Certificados</h2>
+          <p>
+            Al completar la totalidad del contenido y aprobar los cuestionarios de un curso, el Usuario podrá descargar un certificado
+            digital. Dicho certificado acredita la culminación del curso en la Plataforma, sin perjuicio de que su validez ante terceros
+            (instituciones académicas, empleadores u otras) dependa del reconocimiento que estos le otorguen.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">7. Disponibilidad del servicio</h2>
+          <p>
+            {nombreResponsable} hará sus mejores esfuerzos para mantener la Plataforma disponible de forma continua. Sin embargo, no
+            garantiza la ausencia de interrupciones derivadas de mantenimiento, fallas técnicas, eventos de fuerza mayor o causas ajenas
+            a su control razonable. Nos reservamos el derecho de modificar, suspender o discontinuar, total o parcialmente, el servicio
+            en cualquier momento.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">8. Limitación de responsabilidad</h2>
+          <p>
+            La Plataforma se proporciona "tal cual" y "según disponibilidad". En la máxima medida permitida por la ley,
+            {nombreResponsable} no será responsable por daños indirectos, incidentales, especiales o consecuenciales derivados del uso
+            o imposibilidad de uso de la Plataforma. La responsabilidad total agregada por cualquier reclamación se limitará al monto
+            efectivamente pagado por el Usuario por el servicio durante los doce meses previos a la reclamación, o a cero en caso de
+            servicios gratuitos.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">9. Modificaciones a los términos</h2>
+          <p>
+            {nombreResponsable} podrá modificar estos Términos y Condiciones en cualquier momento. Los cambios entrarán en vigor desde
+            su publicación en la Plataforma. El uso continuado del servicio después de dicha publicación constituye aceptación tácita
+            de los términos actualizados.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">10. Terminación</h2>
+          <p>
+            El Usuario podrá cancelar su cuenta en cualquier momento desde la sección de Mi perfil o solicitándolo al correo de
+            contacto. {nombreResponsable} podrá suspender o cancelar cuentas que incumplan los presentes términos sin necesidad de aviso previo.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">11. Ley aplicable y jurisdicción</h2>
+          <p>
+            Los presentes Términos y Condiciones se rigen por las leyes vigentes en {jurisdiccion}. Para la interpretación y cumplimiento
+            de los mismos, las partes se someten expresamente a la jurisdicción de los tribunales competentes en dicha sede, renunciando
+            a cualquier otro fuero que pudiera corresponderles por razón de sus domicilios presentes o futuros.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-bold mb-3">12. Contacto</h2>
+          <p>
+            Cualquier duda, comentario o reclamación relacionada con estos Términos y Condiciones puede dirigirse a:
+          </p>
+          <div class="mt-3 p-4 bg-[var(--color-app-bg)] rounded-xl">
+            <p><strong>{nombreResponsable}</strong></p>
+            <p>Correo electrónico: <a href={`mailto:${correoContacto}`} class="text-[var(--color-primary)]">{correoContacto}</a></p>
+            <p>Sitio web: <a href={sitioWeb} class="text-[var(--color-primary)]">{sitioWeb}</a></p>
+          </div>
+        </section>
+
+      </article>
+
+      <footer class="mt-10 pt-6 border-t border-[var(--color-border)] flex flex-wrap gap-4 justify-between text-sm text-[var(--color-text-muted)]">
+        <a href="/privacidad" class="text-[var(--color-primary)] font-medium">Ver Aviso de Privacidad →</a>
+        <span>© {new Date().getFullYear()} {nombreResponsable}. Todos los derechos reservados.</span>
+      </footer>
+    </div>
+  </div>
+</PublicLayout>

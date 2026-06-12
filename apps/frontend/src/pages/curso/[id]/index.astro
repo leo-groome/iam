@@ -1,0 +1,74 @@
+---
+import StudentLayout from "@/layouts/StudentLayout.astro";
+import ProgressBar from "@/components/ui/ProgressBar.vue";
+import { cursos, findCurso } from "@/lib/mock";
+
+export function getStaticPaths() {
+  return cursos.map(c => ({ params: { id: c.id } }));
+}
+
+const { id } = Astro.params;
+const curso = findCurso(id!);
+if (!curso) return Astro.redirect('/catalogo');
+
+const primerTemaPendiente = curso.modulos.flatMap(m => m.temas).find(t => t.status !== 'aprobado') ?? curso.modulos[0].temas[0];
+const ctaHref = `/curso/${curso.id}/tema/${primerTemaPendiente.id}`;
+const ctaLabel = curso.progress > 0 ? "Continuar" : "Empezar curso";
+---
+<StudentLayout title={curso.title}>
+  <a href="/catalogo" class="text-sm text-[var(--color-text-muted)] mb-4 inline-block">← Catálogo</a>
+
+  <div class="card overflow-hidden mb-6">
+    <div class="aspect-[21/9] bg-[var(--color-primary-soft)] overflow-hidden">
+      <img src={curso.cover} alt={curso.title} class="w-full h-full object-cover" />
+    </div>
+    <div class="p-6 sm:p-8">
+    <p class="text-sm text-[var(--color-primary)] font-medium mb-1">{curso.subtitle}</p>
+    <h1 class="text-3xl font-bold tracking-tight">{curso.title}</h1>
+    <p class="text-[var(--color-text-muted)] mt-3 leading-relaxed">{curso.description}</p>
+
+    <div class="flex flex-wrap gap-2 mt-5">
+      <span class="chip">{curso.duration}</span>
+      <span class="chip">{curso.modulos.length} módulos</span>
+      <span class="chip">Certificado al terminar</span>
+    </div>
+
+    <div class="mt-6">
+      <ProgressBar client:visible value={curso.progress} label="Tu progreso" showPercent />
+    </div>
+    </div>
+  </div>
+
+  <h2 class="text-lg font-semibold mb-3">Contenido del curso</h2>
+  <div class="space-y-3 mb-8">
+    {curso.modulos.map((mod, idx) => (
+      <details class="card p-5" open={idx === 0}>
+        <summary class="flex items-start justify-between gap-3 cursor-pointer list-none">
+          <div class="flex-1 min-w-0">
+            <p class="text-xs text-[var(--color-text-muted)] mb-1">Módulo {idx + 1}</p>
+            <h3 class="font-semibold">{mod.title}</h3>
+            <p class="text-sm text-[var(--color-text-muted)] mt-1">{mod.description}</p>
+          </div>
+          <span class="chip shrink-0">{mod.duration}</span>
+        </summary>
+        <ul class="mt-4 space-y-2 border-t border-[var(--color-border)] pt-4">
+          {mod.temas.map((tema, ti) => (
+            <li class="flex items-center gap-3 text-sm">
+              <span class={`w-7 h-7 rounded-full grid place-items-center text-xs font-semibold ${tema.status === 'aprobado' ? 'bg-emerald-100 text-emerald-700' : tema.status === 'bloqueado' ? 'bg-[var(--color-app-bg)] text-[var(--color-text-muted)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'}`}>
+                {tema.status === 'aprobado' ? '✓' : ti + 1}
+              </span>
+              <span class={tema.status === 'bloqueado' ? 'text-[var(--color-text-muted)]' : ''}>{tema.title}</span>
+              <span class="ml-auto text-xs text-[var(--color-text-muted)]">{tema.duration}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    ))}
+  </div>
+
+  <div class="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] p-4 sm:static sm:bg-transparent sm:border-0 sm:p-0">
+    <div class="max-w-3xl mx-auto">
+      <a href={ctaHref} class="btn btn-primary btn-block">{ctaLabel}</a>
+    </div>
+  </div>
+</StudentLayout>

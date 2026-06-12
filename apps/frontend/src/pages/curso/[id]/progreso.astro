@@ -1,0 +1,56 @@
+---
+import StudentLayout from "@/layouts/StudentLayout.astro";
+import ProgressBar from "@/components/ui/ProgressBar.vue";
+import { cursos, findCurso } from "@/lib/mock";
+
+export function getStaticPaths() {
+  return cursos.map(c => ({ params: { id: c.id } }));
+}
+
+const { id } = Astro.params;
+const curso = findCurso(id!);
+if (!curso) return Astro.redirect('/catalogo');
+
+const totalTemas = curso.modulos.flatMap(m => m.temas).length;
+const aprobados = curso.modulos.flatMap(m => m.temas).filter(t => t.status === 'aprobado').length;
+---
+<StudentLayout title="Mi progreso" courseName={curso.title} progress={curso.progress}>
+  <a href={`/curso/${id}`} class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Volver al curso</a>
+
+  <h1 class="text-3xl font-bold mb-2">Mi progreso</h1>
+  <p class="text-[var(--color-text-muted)] mb-6">{curso.title}</p>
+
+  <div class="card p-6 mb-6">
+    <ProgressBar client:load value={curso.progress} showPercent label="Progreso total" />
+    <p class="text-sm text-[var(--color-text-muted)] mt-4">{aprobados} de {totalTemas} temas completados</p>
+  </div>
+
+  <div class="space-y-4">
+    {curso.modulos.map((mod, mi) => {
+      const modTemas = mod.temas;
+      const modAprobados = modTemas.filter(t => t.status === 'aprobado').length;
+      const modProgress = Math.round((modAprobados / modTemas.length) * 100);
+      return (
+        <div class="card p-5">
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p class="text-xs text-[var(--color-text-muted)]">Módulo {mi + 1}</p>
+              <h3 class="font-semibold">{mod.title}</h3>
+            </div>
+            <span class="chip">{modProgress}%</span>
+          </div>
+          <ul class="space-y-1.5">
+            {modTemas.map(t => (
+              <li class="flex items-center gap-2 text-sm">
+                <span class={`w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold ${t.status === 'aprobado' ? 'bg-emerald-100 text-emerald-700' : t.status === 'bloqueado' ? 'bg-[var(--color-app-bg)] text-[var(--color-text-muted)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'}`}>
+                  {t.status === 'aprobado' ? '✓' : ''}
+                </span>
+                <span class={t.status === 'bloqueado' ? 'text-[var(--color-text-muted)]' : ''}>{t.title}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    })}
+  </div>
+</StudentLayout>

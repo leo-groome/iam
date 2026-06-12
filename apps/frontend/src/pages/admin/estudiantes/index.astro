@@ -1,0 +1,65 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+
+const estudiantes = [
+  { id: '1', nombre: 'Alex Hernández', email: 'alex@correo.com', edad: 28, cursos: 2, progreso: 47, ultimo: 'Hoy', estado: 'activo' },
+  { id: '2', nombre: 'María López', email: 'maria@correo.com', edad: 34, cursos: 1, progreso: 100, ultimo: 'Ayer', estado: 'completado' },
+  { id: '3', nombre: 'Jorge Ruiz', email: 'jorge@correo.com', edad: 22, cursos: 1, progreso: 30, ultimo: 'Hace 3 días', estado: 'atorado' },
+  { id: '4', nombre: 'Sofía García', email: 'sofia@correo.com', edad: 41, cursos: 3, progreso: 78, ultimo: 'Hoy', estado: 'activo' },
+  { id: '5', nombre: 'Diego Martínez', email: 'diego@correo.com', edad: 19, cursos: 1, progreso: 12, ultimo: 'Hace 1 semana', estado: 'nuevo' },
+];
+---
+<AdminLayout title="Estudiantes" section="estudiantes">
+  <header class="mb-6">
+    <h1 class="text-3xl font-bold">Estudiantes</h1>
+    <p class="text-[var(--color-text-muted)]">Monitorea progreso y apoya a quienes lo necesitan.</p>
+  </header>
+
+  <div class="flex flex-col sm:flex-row gap-3 mb-4">
+    <input class="input flex-1" placeholder="Buscar por nombre o correo..." />
+    <select class="input sm:max-w-48">
+      <option>Todos los estados</option>
+      <option>Activos</option>
+      <option>Completados</option>
+      <option>Atorados</option>
+    </select>
+  </div>
+
+  <div class="card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-[var(--color-app-bg)] text-left text-[var(--color-text-muted)]">
+        <tr>
+          <th class="px-4 py-3 font-medium">Nombre</th>
+          <th class="px-4 py-3 font-medium">Correo</th>
+          <th class="px-4 py-3 font-medium">Cursos</th>
+          <th class="px-4 py-3 font-medium">Progreso</th>
+          <th class="px-4 py-3 font-medium">Último acceso</th>
+          <th class="px-4 py-3 font-medium">Estado</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-[var(--color-border)]">
+        {estudiantes.map(e => (
+          <tr class="hover:bg-[var(--color-app-bg)] cursor-pointer" onclick={`location.href='/admin/estudiantes/${e.id}'`}>
+            <td class="px-4 py-3 font-medium">{e.nombre}</td>
+            <td class="px-4 py-3 text-[var(--color-text-muted)]">{e.email}</td>
+            <td class="px-4 py-3">{e.cursos}</td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2">
+                <div class="w-24 h-1.5 bg-[var(--color-primary-soft)] rounded-full overflow-hidden">
+                  <div class="h-full bg-[var(--color-primary)]" style={`width: ${e.progreso}%`}></div>
+                </div>
+                <span class="text-xs text-[var(--color-text-muted)]">{e.progreso}%</span>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-[var(--color-text-muted)]">{e.ultimo}</td>
+            <td class="px-4 py-3">
+              <span class={`chip ${e.estado === 'atorado' ? 'bg-amber-100 text-amber-700' : e.estado === 'completado' ? 'bg-emerald-100 text-emerald-700' : ''}`}>
+                {e.estado}
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

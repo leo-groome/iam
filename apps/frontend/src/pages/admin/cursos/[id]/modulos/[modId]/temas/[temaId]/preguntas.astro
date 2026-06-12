@@ -1,0 +1,57 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { cursos, preguntasMock } from "@/lib/mock";
+
+export function getStaticPaths() {
+  const paths = [];
+  for (const c of cursos) {
+    for (const m of c.modulos) {
+      for (const t of m.temas) {
+        if (t.hasExam) paths.push({ params: { id: c.id, modId: m.id, temaId: t.id } });
+      }
+    }
+  }
+  return paths;
+}
+const { id, modId, temaId } = Astro.params;
+---
+<AdminLayout title="Banco de preguntas" section="cursos">
+  <a href={`/admin/cursos/${id}/modulos/${modId}/temas/${temaId}`} class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Tema</a>
+  <header class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold">Banco de preguntas</h1>
+      <p class="text-[var(--color-text-muted)]">{preguntasMock.length} preguntas activas</p>
+    </div>
+    <a href={`/admin/cursos/${id}/modulos/${modId}/temas/${temaId}/preguntas/nueva`} class="btn btn-primary">+ Agregar pregunta</a>
+  </header>
+
+  <div class="card p-6 mb-6">
+    <label class="label">% mínimo para aprobar</label>
+    <div class="flex items-center gap-3">
+      <input type="number" class="input max-w-32" min="50" max="100" value="70" />
+      <p class="text-sm text-[var(--color-text-muted)]">Mínimo 50, máximo 100. Default 70.</p>
+    </div>
+  </div>
+
+  <div class="space-y-3">
+    {preguntasMock.map((p, i) => (
+      <div class="card p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <p class="text-xs text-[var(--color-text-muted)] mb-1">Pregunta {i + 1}</p>
+            <p class="font-semibold">{p.enunciado}</p>
+            <ul class="mt-3 space-y-1 text-sm">
+              {p.opciones.map((opt, oi) => (
+                <li class={`flex items-center gap-2 ${oi === p.correcta ? 'text-emerald-700 font-medium' : 'text-[var(--color-text-muted)]'}`}>
+                  <span>{oi === p.correcta ? '✓' : '○'}</span>
+                  <span>{opt}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <a href={`/admin/cursos/${id}/modulos/${modId}/temas/${temaId}/preguntas/${p.id}`} class="btn btn-secondary">Editar</a>
+        </div>
+      </div>
+    ))}
+  </div>
+</AdminLayout>

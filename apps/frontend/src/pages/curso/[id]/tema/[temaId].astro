@@ -1,0 +1,57 @@
+---
+import StudentLayout from "@/layouts/StudentLayout.astro";
+import LearningPlayer from "@/components/ui/LearningPlayer.vue";
+import { cursos, findCurso } from "@/lib/mock";
+
+export function getStaticPaths() {
+  return cursos.flatMap(c =>
+    c.modulos.flatMap(m => m.temas.map(t => ({ params: { id: c.id, temaId: t.id } })))
+  );
+}
+
+const { id, temaId } = Astro.params;
+const curso = findCurso(id!);
+if (!curso) return Astro.redirect('/catalogo');
+
+const allTemas = curso.modulos.flatMap(m => m.temas.map(t => ({ ...t, moduloTitle: m.title })));
+const idx = allTemas.findIndex(t => t.id === temaId);
+const tema = allTemas[idx];
+if (!tema) return Astro.redirect(`/curso/${id}`);
+
+const nextTema = allTemas[idx + 1];
+const examUrl = `/curso/${id}/tema/${temaId}/examen`;
+const nextUrl = nextTema ? `/curso/${id}/tema/${nextTema.id}` : `/curso/${id}/certificado`;
+
+const isRepaso = Astro.url.searchParams.get('repaso') === '1';
+---
+<StudentLayout title={tema.title} courseName={curso.title} progress={curso.progress}>
+  <a href={`/curso/${id}`} class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Volver al curso</a>
+
+  {isRepaso && (
+    <div class="card p-4 mb-4 bg-amber-50 border-amber-200">
+      <p class="text-amber-800 text-sm font-medium">📖 Repaso del tema</p>
+      <p class="text-amber-700 text-sm mt-1">Vuelve a ver el contenido completo para reintentar el cuestionario.</p>
+    </div>
+  )}
+
+  <p class="text-sm text-[var(--color-primary)] font-medium">{tema.moduloTitle}</p>
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mt-1 mb-2">{tema.title}</h1>
+  <p class="text-[var(--color-text-muted)] mb-6">{tema.duration} · {tema.hasExam ? 'Con examen' : 'Sin examen'}</p>
+
+  <LearningPlayer
+    client:load
+    type={tema.type}
+    examUrl={examUrl}
+    nextUrl={nextUrl}
+    hasExam={tema.hasExam}
+  >
+    <h2>Introducción</h2>
+    <p>El acompañamiento social es una práctica que requiere atención, escucha activa y respeto absoluto por la dignidad de la persona. En este tema veremos los pilares fundamentales para hacerlo bien.</p>
+    <h3>Pilar 1: Atención</h3>
+    <p>Estar presente sin distracciones. Mirar a los ojos. Notar el lenguaje corporal.</p>
+    <h3>Pilar 2: Escucha</h3>
+    <p>Sin interrumpir. Sin juzgar. Validando emociones.</p>
+    <h3>Pilar 3: Orientación</h3>
+    <p>Solo cuando se solicite. Con información clara y verificada.</p>
+  </LearningPlayer>
+</StudentLayout>

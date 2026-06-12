@@ -1,0 +1,53 @@
+---
+import AdminLayout from "@/layouts/AdminLayout.astro";
+---
+<AdminLayout title="Configuración" section="configuracion">
+  <header class="mb-6">
+    <h1 class="text-3xl font-bold">Configuración</h1>
+    <p class="text-[var(--color-text-muted)]">Ajustes generales de la plataforma.</p>
+  </header>
+
+  <div class="grid gap-6 max-w-3xl">
+    <div class="card p-6">
+      <h2 class="font-semibold mb-1">Resumen semanal por correo</h2>
+      <p class="text-sm text-[var(--color-text-muted)] mb-4">Te enviaremos cada lunes un resumen con finalizaciones de la semana.</p>
+      <label class="flex items-center justify-between">
+        <span class="text-sm font-medium">Activar correo semanal</span>
+        <input type="checkbox" checked class="w-5 h-5 accent-[var(--color-primary)]" />
+      </label>
+      <div class="mt-4">
+        <label class="label">Correo destino</label>
+        <input class="input" type="email" value="admin@ejemplo.com" />
+      </div>
+    </div>
+
+    <div class="card p-6">
+      <h2 class="font-semibold mb-1">Branding</h2>
+      <p class="text-sm text-[var(--color-text-muted)] mb-4">Logo y color primario que ven los estudiantes.</p>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="label">Logo</label>
+          <div class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center text-sm text-[var(--color-text-muted)]">
+            Subir imagen (PNG/SVG)
+          </div>
+        </div>
+        <div>
+          <label class="label">Color primario</label>
+          <div class="flex items-center gap-3">
+            <input type="color" value="#1448E0" class="w-12 h-12 rounded-lg border border-[var(--color-border)] cursor-pointer" />
+            <input class="input flex-1" value="#1448E0" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-6">
+      <h2 class="font-semibold mb-1">Documentos legales</h2>
+      <p class="text-sm text-[var(--color-text-muted)] mb-4">Términos y política de privacidad mostrados al registrarse.</p>
+      <div class="space-y-2">
+        <a href="#" class="btn btn-secondary btn-block">Editar términos de uso</a>
+        <a href="#" class="btn btn-secondary btn-block">Editar política de privacidad</a>
+      </div>
+    </div>
+  </div>
+</AdminLayout>

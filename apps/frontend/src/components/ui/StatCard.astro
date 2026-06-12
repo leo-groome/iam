@@ -1,0 +1,10 @@
+---
+interface Props { label: string; value: string | number; delta?: string; trend?: 'up' | 'down' | 'neutral' }
+const { label, value, delta, trend = 'neutral' } = Astro.props;
+const trendColor = trend === 'up' ? 'text-emerald-600' : trend === 'down' ? 'text-red-600' : 'text-[var(--color-text-muted)]';
+---
+<div class="card p-5">
+  <p class="text-sm text-[var(--color-text-muted)]">{label}</p>
+  <p class="text-3xl font-bold mt-1">{value}</p>
+  {delta && <p class={`text-xs mt-1 ${trendColor}`}>{delta}</p>}
+</div>

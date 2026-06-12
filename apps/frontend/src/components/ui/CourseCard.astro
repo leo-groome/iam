@@ -1,0 +1,43 @@
+---
+interface Props {
+  id: string;
+  title: string;
+  description: string;
+  duration: string;
+  progress?: number;
+  cover?: string;
+  cta?: string;
+  href?: string;
+}
+const { id, title, description, duration, progress = 0, cover, cta, href } = Astro.props;
+const url = href ?? `/curso/${id}`;
+const buttonLabel = cta ?? (progress > 0 ? "Continuar" : "Comenzar");
+---
+<a href={url} class="card overflow-hidden block hover:border-[var(--color-primary)] transition group flex flex-col md:flex-row">
+  <div class="relative shrink-0 overflow-hidden bg-[var(--color-primary-soft)] aspect-[16/9] md:aspect-auto md:w-[42%] md:max-w-xs">
+    {cover ? (
+      <img src={cover} alt={title} loading="lazy" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+    ) : (
+      <div class="w-full h-full grid place-items-center text-[var(--color-primary)]">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
+      </div>
+    )}
+    {progress === 100 && (
+      <span class="absolute top-3 right-3 chip bg-emerald-500/95 text-white">✓ Completado</span>
+    )}
+  </div>
+  <div class="p-5 md:p-6 flex flex-col flex-1 min-w-0">
+    <h3 class="font-bold text-xl leading-tight mb-2">{title}</h3>
+    <p class="text-[var(--color-text-muted)] text-sm leading-relaxed mb-4 line-clamp-3">{description}</p>
+    <div class="flex flex-wrap gap-2 mb-4">
+      <span class="chip">{duration}</span>
+      <span class="chip">Examen corto</span>
+    </div>
+    {progress > 0 && progress < 100 && (
+      <div class="h-1.5 bg-[var(--color-primary-soft)] rounded-full overflow-hidden mb-3">
+        <div class="h-full bg-[var(--color-primary)]" style={`width: ${progress}%`}></div>
+      </div>
+    )}
+    <span class="btn btn-primary mt-auto md:self-start group-hover:bg-[var(--color-primary-hover)]">{buttonLabel}</span>
+  </div>
+</a>
