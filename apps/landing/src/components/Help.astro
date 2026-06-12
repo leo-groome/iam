@@ -1,0 +1,165 @@
+---
+const ways = [
+  {
+    title: "Donar",
+    text: "Tu aporte sostiene el acompañamiento a madres, programas educativos y materiales misioneros.",
+    cta: "Hacer una donación",
+    href: "#",
+    image: "/images/img-23.webp",
+    accent: "#DC2626",
+    impact: "$25 = 1 mes de leche para un bebé",
+  },
+  {
+    title: "Voluntariado",
+    text: "Suma tu tiempo y talento. Acompañamos a madres, formamos jóvenes y necesitamos manos comprometidas.",
+    cta: "Quiero ser voluntario",
+    href: "#contacto",
+    image: "/images/img-42.webp",
+    accent: "#1E3A8A",
+    impact: "+800 voluntarios activos",
+  },
+  {
+    title: "Compartir",
+    text: "Comparte nuestro mensaje. Educar y sensibilizar es también defender la vida.",
+    cta: "Difundir",
+    href: "#",
+    image: "/images/img-25.webp",
+    accent: "#7BA7D9",
+    impact: "1 historia compartida = 100 corazones tocados",
+  },
+];
+
+---
+
+<section id="ayudar" class="relative py-24 md:py-36 overflow-hidden">
+  <!-- Background decorative shapes -->
+  <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
+    <div class="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-[color:var(--color-primary-light)]/15 blur-3xl"></div>
+    <div class="absolute top-1/2 -right-32 w-[600px] h-[600px] rounded-full bg-[color:var(--color-accent)]/8 blur-3xl"></div>
+  </div>
+
+  <div class="container-x relative">
+    <!-- Header with portrait collage -->
+    <div class="grid lg:grid-cols-12 gap-12 items-end mb-20">
+      <div class="lg:col-span-7">
+        <span class="text-xs uppercase tracking-widest text-[color:var(--color-accent)] font-medium">Cómo ayudar</span>
+        <h2 class="font-display text-5xl md:text-6xl lg:text-7xl mt-4 leading-[0.95] text-[color:var(--color-text)]">
+          Tu acción <br/>
+          <span class="relative inline-block italic text-[color:var(--color-primary)]">
+            salva vidas reales.
+            <svg class="absolute -bottom-3 left-0 w-full" height="14" viewBox="0 0 300 14" fill="none" preserveAspectRatio="none">
+              <path d="M2 9C70 2 150 2 220 7C260 9 280 8 298 5" stroke="#DC2626" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+          </span>
+        </h2>
+        <p class="mt-8 max-w-xl text-lg text-[color:var(--color-text-muted)] leading-relaxed">
+          No necesitás ser rico, ni tener mucho tiempo, ni ser misionero profesional.
+          Necesitás un corazón dispuesto. Hay tres caminos para empezar hoy.
+        </p>
+      </div>
+
+      <!-- Floating portrait stack -->
+      <div class="lg:col-span-5 relative h-64 sm:h-72 hidden lg:block">
+        <div class="absolute top-0 right-20 w-36 h-36 rounded-3xl overflow-hidden shadow-2xl rotate-[-6deg] border-4 border-white">
+          <img src="/images/img-14.webp" alt="Familia" class="w-full h-full object-cover"/>
+        </div>
+        <div class="absolute top-12 right-0 w-32 h-32 rounded-3xl overflow-hidden shadow-2xl rotate-[8deg] border-4 border-white">
+          <img src="/images/img-31.webp" alt="Niño" class="w-full h-full object-cover"/>
+        </div>
+        <div class="absolute top-32 right-32 w-40 h-40 rounded-3xl overflow-hidden shadow-2xl rotate-[3deg] border-4 border-white">
+          <img src="/images/img-19.webp" alt="Madre" class="w-full h-full object-cover"/>
+        </div>
+        <div class="absolute bottom-0 right-60 bg-[color:var(--color-accent)] text-white rounded-2xl px-4 py-3 shadow-xl">
+          <p class="text-2xl font-display leading-none">+3.247</p>
+          <p class="text-[10px] uppercase tracking-widest mt-1 opacity-90">vidas salvadas</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action cards: large bento layout -->
+    <div class="grid md:grid-cols-12 gap-5">
+      <!-- DONAR: featured large card -->
+      <a
+        href={ways[0].href}
+        class="group relative md:col-span-7 rounded-[2rem] overflow-hidden bg-[color:var(--color-primary)] text-white min-h-[520px] flex flex-col justify-end p-8 md:p-12 transition-transform hover:scale-[1.01]"
+      >
+        <div class="absolute inset-0">
+          <img src={ways[0].image} alt="" class="w-full h-full object-cover"/>
+          <div class="absolute inset-0 bg-black/45"></div>
+        </div>
+
+        <div class="relative">
+
+          <h3 class="font-display text-5xl md:text-6xl leading-[0.95]">{ways[0].title}</h3>
+          <p class="mt-5 max-w-lg text-lg text-white/85 leading-relaxed">{ways[0].text}</p>
+
+          <div class="mt-10">
+            <span class="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-white text-[color:var(--color-primary)] font-medium group-hover:bg-[color:var(--color-accent)] group-hover:text-white transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.5-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.5-7 10-7 10z"/></svg>
+              Donar
+            </span>
+          </div>
+        </div>
+      </a>
+
+      <!-- VOLUNTARIADO -->
+      <a
+        href={ways[1].href}
+        class="group relative md:col-span-5 rounded-[2rem] overflow-hidden bg-[color:var(--color-surface)] border border-[color:var(--color-border)] min-h-[520px] flex flex-col transition-all hover:border-[color:var(--color-primary)]/40 hover:shadow-2xl hover:shadow-[color:var(--color-primary)]/10"
+      >
+        <div class="relative h-56 overflow-hidden">
+          <img src={ways[1].image} alt="" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"/>
+          <div class="absolute inset-0 bg-black/15"></div>
+        </div>
+
+        <div class="p-8 flex-1 flex flex-col">
+          <h3 class="font-display text-4xl leading-tight text-[color:var(--color-text)]">{ways[1].title}</h3>
+          <p class="mt-4 text-[color:var(--color-text-muted)] leading-relaxed flex-1">{ways[1].text}</p>
+
+          <div class="mt-6 pt-6 border-t border-[color:var(--color-border)]">
+            <span class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white text-[color:var(--color-primary)] border border-[color:var(--color-border)] font-medium text-sm group-hover:bg-[color:var(--color-primary)] group-hover:text-white group-hover:border-[color:var(--color-primary)] transition-colors">
+              {ways[1].cta}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="transition-transform group-hover:translate-x-1"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            </span>
+          </div>
+        </div>
+      </a>
+
+      <!-- COMPARTIR -->
+      <a
+        href={ways[2].href}
+        class="group relative md:col-span-12 rounded-[2rem] overflow-hidden bg-[color:var(--color-surface)] border border-[color:var(--color-border)] flex flex-col transition-all hover:border-[color:var(--color-primary)]/40 hover:shadow-2xl hover:shadow-[color:var(--color-primary)]/10"
+      >
+        <div class="p-8 flex-1 flex flex-col">
+          <h3 class="font-display text-4xl leading-tight text-[color:var(--color-text)]">{ways[2].title}</h3>
+          <p class="mt-4 text-[color:var(--color-text-muted)] leading-relaxed flex-1">{ways[2].text}</p>
+
+          <div class="mt-6 flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[color:var(--color-border)] text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-bg)]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              X
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[color:var(--color-border)] text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-bg)]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12c0-5.5-4.5-10-10-10S2 6.5 2 12c0 5 3.7 9.1 8.4 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.3c-1.2 0-1.6.8-1.6 1.6V12h2.8l-.4 2.9h-2.3v7C18.3 21.1 22 17 22 12z"/></svg>
+              Facebook
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[color:var(--color-border)] text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-bg)]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3.5L2 10.5l7 3 3 7L20.5 3.5z"/></svg>
+              WhatsApp
+            </span>
+          </div>
+
+          <div class="mt-6 pt-6 border-t border-[color:var(--color-border)] flex items-center justify-between">
+            <span class="text-xs text-[color:var(--color-text-muted)] italic">{ways[2].impact}</span>
+            <span class="inline-flex items-center gap-1 font-medium text-[color:var(--color-primary)] text-sm">
+              {ways[2].cta}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="transition-transform group-hover:translate-x-1"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            </span>
+          </div>
+        </div>
+      </a>
+
+    </div>
+
+  </div>
+</section>

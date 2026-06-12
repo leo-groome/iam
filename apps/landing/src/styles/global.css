@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1E3A8A;
+  --color-primary-light: #7BA7D9;
+  --color-primary-dark: #142A6B;
+  --color-accent: #DC2626;
+  --color-accent-soft: #FCA5A5;
+  --color-bg: #F5F7FB;
+  --color-surface: #FFFFFF;
+  --color-text: #0A0E1A;
+  --color-text-muted: #6B7280;
+  --color-border: #E5E7EB;
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "DM Serif Display", Georgia, serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+body {
+  min-height: 100vh;
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-primary);
+  color: white;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.container-x {
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .container-x { padding-inline: 2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

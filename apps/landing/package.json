@@ -1,0 +1,26 @@
+{
+  "name": "landing-iam",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "images:webp": "node scripts/convert-to-webp.mjs",
+    "images:webp:rewrite": "node scripts/convert-to-webp.mjs --rewrite",
+    "images:webp:clean": "node scripts/convert-to-webp.mjs --delete --rewrite"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "astro": "^6.4.5",
+    "gsap": "^3.15.0",
+    "tailwindcss": "^4.3.0"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5"
+  }
+}

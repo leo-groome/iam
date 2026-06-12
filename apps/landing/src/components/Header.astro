@@ -1,0 +1,141 @@
+---
+const links = [
+  { href: "#mision", label: "Misión" },
+  { href: "#problema", label: "El problema" },
+  { href: "#historias", label: "Historias" },
+  { href: "#ayudar", label: "Cómo ayudar" },
+];
+---
+
+<header
+  id="site-header"
+  class="fixed top-0 inset-x-0 z-50 transition-all duration-300"
+>
+  <div class="grid grid-cols-[1fr_auto_1fr] items-center h-20 gap-6 px-4 sm:px-6 lg:px-8">
+    <!-- Left: Logo -->
+    <a href="#top" class="flex items-center gap-3 group justify-self-start">
+      <img
+        src="/MISIONERAS_LOGO.svg"
+        alt="IAM — Infancia y Adolescencia Misioneras"
+        class="h-12 w-auto transition-transform group-hover:scale-105"
+      />
+      <span class="hidden xl:flex flex-col leading-tight">
+        <span class="font-display text-base font-semibold text-white nav-text">IAM</span>
+        <span class="text-[10px] uppercase tracking-widest text-white/70 nav-text-muted">Infancia y Adolescencia Misioneras</span>
+      </span>
+    </a>
+
+    <!-- Center: Nav links -->
+    <nav class="hidden md:flex items-center gap-8 justify-self-center">
+      {links.map(l => (
+        <a
+          href={l.href}
+          class="nav-link text-sm font-medium text-white/85 hover:text-white transition-colors relative"
+        >
+          {l.label}
+        </a>
+      ))}
+    </nav>
+
+    <!-- Right: CTA -->
+    <div class="flex items-center gap-3 justify-self-end">
+      <a
+        href="#ayudar"
+        class="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-[color:var(--color-primary)] text-sm font-semibold hover:bg-[color:var(--color-accent)] hover:text-white transition-all shadow-lg shadow-black/10 hover:shadow-xl hover:scale-[1.03] hover:-translate-y-0.5"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 21s-7-4.5-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.5-7 10-7 10z"/>
+        </svg>
+        Donar
+      </a>
+      <button
+        id="nav-toggle"
+        aria-label="Menú"
+        class="md:hidden p-2 rounded-md text-white"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile nav -->
+  <div
+    id="mobile-nav"
+    class="hidden md:hidden bg-[color:var(--color-surface)] border-t border-[color:var(--color-border)]"
+  >
+    <div class="container-x py-5 flex flex-col gap-3">
+      {links.map(l => (
+        <a href={l.href} class="text-base py-1 text-[color:var(--color-text)]">{l.label}</a>
+      ))}
+      <a href="#ayudar" class="mt-2 inline-flex justify-center items-center gap-2 px-4 py-3 rounded-full bg-[color:var(--color-primary)] text-white text-sm font-semibold">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 21s-7-4.5-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.5-7 10-7 10z"/>
+        </svg>
+        Donar
+      </a>
+    </div>
+  </div>
+</header>
+
+<style>
+  /* Default (over hero, transparent): white text */
+  #site-header .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -6px;
+    width: 0;
+    height: 2px;
+    background: currentColor;
+    transition: width 0.25s ease, left 0.25s ease;
+  }
+  #site-header .nav-link:hover::after {
+    width: 100%;
+    left: 0;
+  }
+
+  /* Scrolled: solid background + dark text */
+  #site-header.scrolled {
+    background: rgba(245, 247, 251, 0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.6);
+  }
+  #site-header.scrolled .nav-link {
+    color: var(--color-text);
+  }
+  #site-header.scrolled .nav-text {
+    color: var(--color-primary);
+  }
+  #site-header.scrolled .nav-text-muted {
+    color: var(--color-text-muted);
+  }
+  #site-header.scrolled #nav-toggle {
+    color: var(--color-text);
+  }
+  #site-header.scrolled a[href="#ayudar"].sm\:inline-flex {
+    background: var(--color-primary);
+    color: white;
+  }
+  #site-header.scrolled a[href="#ayudar"].sm\:inline-flex:hover {
+    background: var(--color-accent);
+    color: white;
+  }
+</style>
+
+<script>
+  const header = document.getElementById("site-header");
+  const btn = document.getElementById("nav-toggle");
+  const menu = document.getElementById("mobile-nav");
+
+  btn?.addEventListener("click", () => menu?.classList.toggle("hidden"));
+  document.querySelectorAll("#mobile-nav a").forEach(a =>
+    a.addEventListener("click", () => menu?.classList.add("hidden"))
+  );
+
+  const onScroll = () => {
+    if (window.scrollY > 60) header?.classList.add("scrolled");
+    else header?.classList.remove("scrolled");
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+</script>

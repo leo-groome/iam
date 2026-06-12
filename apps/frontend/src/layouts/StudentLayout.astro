@@ -22,9 +22,9 @@ const isActive = (href: string) =>
     {showHeader && (
       <header class="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-surface)]/85 border-b border-[var(--color-border)]">
         <div class="w-full pl-5 pr-4 sm:pl-6 sm:pr-6">
-          <div class="h-16 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+          <div class="h-20 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
             <a href="/catalogo" class="flex items-center justify-self-start" aria-label="Inicio">
-              <img src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-10 w-auto" />
+              <img src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-14 sm:h-16 w-auto" />
             </a>
 
             <nav class="hidden md:flex items-center gap-1 justify-self-center">
@@ -37,7 +37,7 @@ const isActive = (href: string) =>
             <div class="flex items-center gap-2 justify-self-end">
               <a href="/perfil"
                  title="Mi perfil"
-                 class={`flex items-center gap-2 pl-1 pr-1 sm:pr-3 py-1 rounded-full transition ${isActive('/perfil') ? 'bg-[var(--color-primary-soft)] ring-2 ring-[var(--color-primary)]/30' : 'hover:bg-[var(--color-app-bg)]'}`}>
+                 class={`hidden md:flex items-center gap-2 pl-1 pr-1 sm:pr-3 py-1 rounded-full transition ${isActive('/perfil') ? 'bg-[var(--color-primary-soft)] ring-2 ring-[var(--color-primary)]/30' : 'hover:bg-[var(--color-app-bg)]'}`}>
                 <span class="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white grid place-items-center font-semibold text-sm">A</span>
                 <span class={`hidden sm:inline text-sm font-medium ${isActive('/perfil') ? 'text-[var(--color-primary)]' : ''}`}>Alex</span>
               </a>

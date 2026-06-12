@@ -1,58 +1,49 @@
 ---
 import StudentLayout from "@/layouts/StudentLayout.astro";
 import CourseCard from "@/components/ui/CourseCard.astro";
+import GreetingHeader from "@/components/ui/GreetingHeader.vue";
 import { cursos } from "@/lib/mock";
 
 const enProgreso = cursos.filter(c => c.progress > 0 && c.progress < 100);
 const nuevos = cursos.filter(c => c.progress === 0);
 const completados = cursos.filter(c => c.progress === 100);
 
-// Coloca tus fotos en apps/frontend/public/bg/ con estos nombres (1.jpg ... 10.jpg)
-// Formato recomendado: JPG/WebP, ratio 4:5 (vertical), ~700px de ancho mínimo.
-const bgPhotos = [
-  "/bg/1.jpg",
-  "/bg/2.jpg",
-  "/bg/3.jpg",
-  "/bg/4.jpg",
-  "/bg/5.jpg",
-  "/bg/6.jpg",
-  "/bg/7.jpg",
-  "/bg/8.jpg",
-  "/bg/9.jpg",
-  "/bg/10.jpg",
+const IMG = "/Images";
+
+// Todas las imágenes utilizables (sin tiff, sin logo, sin screenshot). Sin repetir.
+const allPhotos: string[] = [
+  `${IMG}/img-01.png`, `${IMG}/img-02.png`, `${IMG}/img-03.jpg`, `${IMG}/img-04.png`,
+  `${IMG}/img-05.jpg`, `${IMG}/img-06.jpg`, `${IMG}/img-07.jpg`, `${IMG}/img-08.jpg`,
+  `${IMG}/img-09.jpg`, `${IMG}/img-10.jpg`, `${IMG}/img-11.jpg`, `${IMG}/img-13.png`,
+  `${IMG}/img-14.jpg`, `${IMG}/img-16.jpg`, `${IMG}/img-18.png`, `${IMG}/img-19.jpg`,
+  `${IMG}/img-20.jpg`, `${IMG}/img-21.jpg`, `${IMG}/img-22.jpg`, `${IMG}/img-23.jpg`,
+  `${IMG}/img-24.jpg`, `${IMG}/img-25.jpg`, `${IMG}/img-26.jpg`, `${IMG}/img-27.jpg`,
+  `${IMG}/img-28.jpg`, `${IMG}/img-29.jpg`, `${IMG}/img-30.jpg`, `${IMG}/img-31.jpg`,
+  `${IMG}/img-32.jpg`, `${IMG}/img-33.jpg`, `${IMG}/img-34.jpg`, `${IMG}/img-35.jpg`,
+  `${IMG}/img-36.jpg`, `${IMG}/img-37.jpg`, `${IMG}/img-38.jpg`, `${IMG}/img-39.jpg`,
+  `${IMG}/img-40.jpg`, `${IMG}/img-41.jpg`, `${IMG}/img-42.jpg`, `${IMG}/img-43.jpg`,
+  `${IMG}/img-44.jpg`, `${IMG}/img-45.jpg`, `${IMG}/img-46.jpg`, `${IMG}/img-47.jpg`,
+  `${IMG}/img-48.jpg`, `${IMG}/img-49.jpg`, `${IMG}/img-50.jpg`,
 ];
 
-type Tile = { src: string; top: string; left: string; w: string; rot: number; z: number };
-const tiles: Tile[] = [
-  { src: bgPhotos[0], top: '2%',  left: '3%',  w: '22vw', rot: -8,  z: 2 },
-  { src: bgPhotos[1], top: '6%',  left: '20%', w: '18vw', rot: 5,   z: 4 },
-  { src: bgPhotos[2], top: '1%',  left: '38%', w: '24vw', rot: -3,  z: 3 },
-  { src: bgPhotos[3], top: '10%', left: '60%', w: '20vw', rot: 7,   z: 5 },
-  { src: bgPhotos[4], top: '3%',  left: '78%', w: '22vw', rot: -6,  z: 2 },
+// Mezcla determinista para que el orden sea el mismo en cada render pero variado.
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const a = [...arr];
+  let s = seed;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 9301 + 49297) % 233280;
+    const j = Math.floor((s / 233280) * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
-  { src: bgPhotos[5], top: '24%', left: '0%',  w: '20vw', rot: 4,   z: 3 },
-  { src: bgPhotos[6], top: '22%', left: '16%', w: '17vw', rot: -7,  z: 5 },
-  { src: bgPhotos[7], top: '28%', left: '33%', w: '22vw', rot: 6,   z: 4 },
-  { src: bgPhotos[8], top: '20%', left: '55%', w: '19vw', rot: -4,  z: 2 },
-  { src: bgPhotos[9], top: '26%', left: '72%', w: '24vw', rot: 8,   z: 6 },
+// Selección curada: 36 fotos únicas (no todas), sin repetir.
+const photos: string[] = seededShuffle(allPhotos, 42).slice(0, 36);
 
-  { src: bgPhotos[2], top: '44%', left: '4%',  w: '23vw', rot: 6,   z: 4 },
-  { src: bgPhotos[5], top: '48%', left: '23%', w: '18vw', rot: -5,  z: 2 },
-  { src: bgPhotos[4], top: '42%', left: '40%', w: '21vw', rot: 4,   z: 5 },
-  { src: bgPhotos[7], top: '46%', left: '58%', w: '20vw', rot: -8,  z: 3 },
-  { src: bgPhotos[8], top: '50%', left: '76%', w: '22vw', rot: 5,   z: 4 },
-
-  { src: bgPhotos[0], top: '66%', left: '2%',  w: '21vw', rot: -6,  z: 3 },
-  { src: bgPhotos[3], top: '70%', left: '20%', w: '19vw', rot: 4,   z: 5 },
-  { src: bgPhotos[6], top: '64%', left: '37%', w: '23vw', rot: -3,  z: 2 },
-  { src: bgPhotos[9], top: '72%', left: '57%', w: '17vw', rot: 7,   z: 4 },
-  { src: bgPhotos[1], top: '68%', left: '73%', w: '22vw', rot: -5,  z: 3 },
-
-  { src: bgPhotos[5], top: '88%', left: '10%', w: '20vw', rot: 5,   z: 3 },
-  { src: bgPhotos[8], top: '90%', left: '32%', w: '18vw', rot: -7,  z: 4 },
-  { src: bgPhotos[2], top: '86%', left: '52%', w: '22vw', rot: 6,   z: 2 },
-  { src: bgPhotos[4], top: '92%', left: '74%', w: '19vw', rot: -4,  z: 3 },
-];
+// Rotaciones suaves y casi sin desplazamiento Y → se ve ≥ 90% de cada foto.
+const rots = [-4, 3, -2, 4, 2, -3, 5, -5, 3, -2, 4, -4];
+const yOffsets = [0, 4, -4, 6, -6, 2, -2, 5, -5, 0, 3, -3];
 ---
 <StudentLayout title="Catálogo">
   <style is:global>
@@ -60,30 +51,52 @@ const tiles: Tile[] = [
     html { background: var(--color-app-bg); }
   </style>
 
-  <div aria-hidden="true" class="fixed inset-0 pointer-events-none overflow-hidden" style="z-index: 0;">
-    <div class="relative w-full h-[180vh] opacity-70">
-      {tiles.map(t => (
-        <div
-          class="absolute rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/40 bg-[var(--color-primary-soft)]"
-          style={`top: ${t.top}; left: ${t.left}; width: ${t.w}; aspect-ratio: 4/5; transform: rotate(${t.rot}deg); z-index: ${t.z};`}
-        >
-          <img
-            src={t.src}
-            alt=""
-            class="w-full h-full object-cover"
-            loading="lazy"
-            onerror="this.style.display='none'"
-          />
-        </div>
-      ))}
+  <div class="relative min-h-screen -mb-32 pb-48">
+    <div
+      aria-hidden="true"
+      class="absolute inset-y-0 pointer-events-none overflow-hidden"
+      style="left: 50%; transform: translateX(-50%); width: 100vw; z-index: 0;"
+    >
+      <div
+        class="relative w-full h-full opacity-75 grid gap-8 sm:gap-12 p-6 sm:p-10"
+        style="grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));"
+      >
+        {photos.map((src, i) => (
+          <div
+            class="rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/50 bg-[var(--color-primary-soft)]"
+            style={`aspect-ratio: 4/5; transform: rotate(${rots[i % rots.length]}deg) translateY(${yOffsets[i % yOffsets.length]}px);`}
+          >
+            <img
+              src={src}
+              alt=""
+              class="w-full h-full object-cover"
+              loading="lazy"
+              onerror="this.style.display='none'"
+            />
+          </div>
+        ))}
+      </div>
+      <div class="absolute inset-0 bg-gradient-to-b from-[var(--color-app-bg)]/55 via-[var(--color-app-bg)]/40 to-[var(--color-app-bg)]/75"></div>
     </div>
-    <div class="absolute inset-0 bg-gradient-to-b from-[var(--color-app-bg)]/55 via-[var(--color-app-bg)]/40 to-[var(--color-app-bg)]/75"></div>
-  </div>
 
   <div class="relative" style="z-index: 1;">
     <header class="card px-6 py-5 sm:px-8 sm:py-6 mb-6">
-      <h1 class="text-4xl sm:text-5xl font-bold tracking-tight">Cursos</h1>
-      <p class="text-[var(--color-primary)] font-semibold mt-2 text-lg">Hola, Alex 👋</p>
+      <div class="grid md:grid-cols-[1fr_auto] gap-6 md:gap-10 items-center">
+        <div>
+          <h1 class="text-4xl sm:text-5xl font-bold tracking-tight">Cursos</h1>
+          <GreetingHeader client:load name="Alex" />
+        </div>
+
+        <figure class="relative md:max-w-sm md:border-l md:border-[var(--color-border)] md:pl-8 border-t md:border-t-0 border-[var(--color-border)] pt-5 md:pt-0">
+          <span class="absolute -top-3 md:-top-5 left-0 md:left-6 text-[var(--color-primary)] text-5xl leading-none select-none font-serif">“</span>
+          <blockquote class="text-[var(--color-text)] italic leading-relaxed text-sm sm:text-base">
+            ¿Puede una madre olvidar a su niño de pecho? Aunque ella se olvidara, yo no te olvidaría. Te llevo grabado en las palmas de mis manos.
+          </blockquote>
+          <figcaption class="text-xs text-[var(--color-primary)] mt-2 font-semibold tracking-wider uppercase">
+            Isaías 49:15-16
+          </figcaption>
+        </figure>
+      </div>
     </header>
 
     {enProgreso.length > 0 && (
@@ -116,5 +129,6 @@ const tiles: Tile[] = [
         </div>
       </section>
     )}
+  </div>
   </div>
 </StudentLayout>

@@ -1,0 +1,52 @@
+---
+const images = [
+  { src: "/images/img-11.webp", caption: "Misioneros en plaza", h: "tall" },
+  { src: "/images/img-22.webp", caption: "Mirar la vida con asombro", h: "short" },
+  { src: "/images/img-27.webp", caption: "Sostener lo más pequeño", h: "medium" },
+  { src: "/images/img-31.webp", caption: "Alegría de la inocencia", h: "tall" },
+  { src: "/images/img-36.webp", caption: "Ternura sin edad", h: "medium" },
+  { src: "/images/img-37.webp", caption: "Yo respeto toda vida humana", h: "short" },
+  { src: "/images/img-39.webp", caption: "Abrazar al no nacido", h: "medium" },
+  { src: "/images/img-41.webp", caption: "Familias misioneras", h: "tall" },
+  { src: "/images/img-45.webp", caption: "Decir sí juntos", h: "short" },
+  { src: "/images/img-49.webp", caption: "Comunidad en marcha", h: "medium" },
+  { src: "/images/img-08.webp", caption: "Descubrir juntos", h: "tall" },
+  { src: "/images/img-32.webp", caption: "Misioneros de la vida", h: "short" },
+];
+
+const heights: Record<string, string> = {
+  tall: "row-span-2 aspect-[3/4]",
+  medium: "aspect-square",
+  short: "aspect-[4/3]",
+};
+---
+
+<section class="relative py-24 md:py-32">
+  <div class="container-x">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+      <div class="max-w-xl">
+        <span class="text-xs uppercase tracking-widest text-[color:var(--color-accent)] font-medium">Galería</span>
+        <h2 class="font-display text-4xl md:text-5xl mt-4 leading-tight">
+          Rostros que <span class="italic text-[color:var(--color-primary)]">eligieron la vida.</span>
+        </h2>
+      </div>
+      <p class="md:max-w-sm text-[color:var(--color-text-muted)]">
+        Imágenes de familias, niños y misioneros que cada día son testimonio de esperanza
+        en distintos rincones del mundo.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-3 grid-flow-row-dense gap-3 md:gap-4 auto-rows-[180px] md:auto-rows-[220px]">
+      {images.map((img) => (
+        <figure class={`group relative overflow-hidden rounded-2xl bg-[color:var(--color-primary-light)]/20 ${heights[img.h]}`}>
+          <img
+            src={img.src}
+            alt={img.caption}
+            class="w-full h-full object-cover object-[center_45%] transition-transform duration-700 group-hover:scale-110"
+            loading="lazy"
+          />
+        </figure>
+      ))}
+    </div>
+  </div>
+</section>

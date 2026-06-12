@@ -1,0 +1,89 @@
+---
+const values = [
+  {
+    num: "01",
+    title: "Educar",
+    desc: "Formamos a niños, adolescentes y familias en el respeto profundo por la vida y la dignidad humana desde una mirada integral.",
+    quote: "El que enseña a un niño, enseña a una generación.",
+    image: "/images/img-21.webp",
+  },
+  {
+    num: "02",
+    title: "Acompañar",
+    desc: "Estamos junto a madres en situación vulnerable. Apoyo emocional, espiritual y material — sin juzgar, sin abandonar.",
+    quote: "Nadie debería elegir sola lo más importante de su vida.",
+    image: "/images/img-05.webp",
+  },
+  {
+    num: "03",
+    title: "Defender",
+    desc: "Damos voz a los más vulnerables — los no nacidos — y promovemos una cultura de la vida en la sociedad.",
+    quote: "Quien no habla por los que no pueden, los abandona dos veces.",
+    image: "/images/img-26.webp",
+  },
+];
+---
+
+<section id="mision" class="relative py-24 md:py-36 overflow-hidden">
+  <div class="container-x">
+    <!-- Editorial header -->
+    <div class="grid lg:grid-cols-12 gap-10 lg:gap-16 mb-16 md:mb-24">
+      <div class="lg:col-span-7">
+        <p class="text-xs uppercase tracking-[0.25em] text-[color:var(--color-accent)] font-medium mb-6">
+          ·· Nuestra misión
+        </p>
+        <h2 class="font-display text-5xl md:text-7xl lg:text-[5.5rem] leading-[0.95] text-[color:var(--color-text)]">
+          Misioneros<br/>
+          de la vida,<br/>
+          <em class="text-[color:var(--color-primary)]">desde la infancia.</em>
+        </h2>
+      </div>
+
+      <aside class="lg:col-span-5 lg:pt-16">
+        <div class="lg:border-l-2 lg:border-[color:var(--color-accent)] lg:pl-8">
+          <p class="font-display text-2xl md:text-3xl text-[color:var(--color-text)] leading-snug italic">
+            "Creemos que defender la vida no es una causa más:
+            <span class="text-[color:var(--color-primary)]">es la causa que las contiene a todas.</span>"
+          </p>
+          <p class="mt-6 text-sm text-[color:var(--color-text-muted)] leading-relaxed">
+            Por eso formamos misioneros desde pequeños — capaces de transformar su entorno
+            con amor, verdad y esperanza, en su escuela, su familia y su barrio.
+          </p>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Values: editorial rows -->
+    <div class="space-y-16 md:space-y-24">
+      {values.map((v, i) => (
+        <article class={`grid lg:grid-cols-12 gap-8 lg:gap-12 items-center ${i % 2 === 1 ? "lg:[direction:rtl]" : ""}`}>
+          <div class={`lg:col-span-5 ${i % 2 === 1 ? "lg:[direction:ltr]" : ""}`}>
+            <div class="relative aspect-[4/5] rounded-3xl overflow-hidden bg-[color:var(--color-primary-light)]/20">
+              <img
+                src={v.image}
+                alt={v.title}
+                class="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
+          </div>
+
+          <div class={`lg:col-span-7 ${i % 2 === 1 ? "lg:[direction:ltr] lg:pr-8" : "lg:pl-8"}`}>
+            <h3 class="font-display text-5xl md:text-6xl text-[color:var(--color-text)] leading-[0.95]">
+              {v.title}.
+            </h3>
+            <p class="mt-6 text-lg text-[color:var(--color-text-muted)] leading-relaxed max-w-lg">
+              {v.desc}
+            </p>
+
+            <blockquote class="mt-8 pl-6 border-l-2 border-[color:var(--color-accent)] max-w-md">
+              <p class="font-display italic text-xl text-[color:var(--color-primary)] leading-snug">
+                "{v.quote}"
+              </p>
+            </blockquote>
+          </div>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>

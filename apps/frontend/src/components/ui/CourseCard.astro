@@ -14,14 +14,13 @@ const url = href ?? `/curso/${id}`;
 const buttonLabel = cta ?? (progress > 0 ? "Continuar" : "Comenzar");
 ---
 <a href={url} class="card overflow-hidden block hover:border-[var(--color-primary)] transition group flex flex-col md:flex-row">
-  <div class="relative shrink-0 overflow-hidden bg-[var(--color-primary-soft)] aspect-[16/9] md:aspect-auto md:w-[42%] md:max-w-xs">
-    {cover ? (
-      <img src={cover} alt={title} loading="lazy" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-    ) : (
-      <div class="w-full h-full grid place-items-center text-[var(--color-primary)]">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
-      </div>
-    )}
+  <div class="relative shrink-0 overflow-hidden bg-white border-r border-[var(--color-border)] aspect-[16/9] md:aspect-auto md:w-[42%] md:max-w-xs grid place-items-center p-6">
+    <img
+      src="/MISIONERAS_LOGO.svg"
+      alt={title}
+      loading="lazy"
+      class="max-w-[75%] max-h-[75%] w-auto h-auto object-contain group-hover:scale-105 transition duration-500"
+    />
     {progress === 100 && (
       <span class="absolute top-3 right-3 chip bg-emerald-500/95 text-white">✓ Completado</span>
     )}
