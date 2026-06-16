@@ -3,22 +3,25 @@ const values = [
   {
     num: "01",
     title: "Educar",
-    desc: "Formamos a niños, adolescentes y familias en el respeto profundo por la vida y la dignidad humana desde una mirada integral.",
-    quote: "El que enseña a un niño, enseña a una generación.",
+    desc: "Evangelizamos y formamos desde una mirada integral, desde la concepción hasta la vida eterna.",
+    quote: "El amor... inspira y guía toda la acción educativa.",
+    quoteSource: "San Juan Pablo II, Familiaris consortio, 36",
     image: "/images/img-21.webp",
   },
   {
     num: "02",
     title: "Acompañar",
-    desc: "Estamos junto a madres en situación vulnerable. Apoyo emocional, espiritual y material — sin juzgar, sin abandonar.",
-    quote: "Nadie debería elegir sola lo más importante de su vida.",
+    desc: "Estamos junto a madres, enfermos, abandonados y quienes sufren. Apoyo emocional, espiritual y material — sin juzgar, sin abandonar.",
+    quote: "Que el Señor nos libre de mirar el dolor ajeno como si no nos perteneciera.",
+    quoteSource: "Papa León XIV",
     image: "/images/img-05.webp",
   },
   {
     num: "03",
-    title: "Defender",
-    desc: "Damos voz a los más vulnerables — los no nacidos — y promovemos una cultura de la vida en la sociedad.",
+    title: "Proteger",
+    desc: "Protegemos la vida en todas sus etapas: desde el niño por nacer hasta el anciano y el enfermo. Cada persona merece ser vista, reconocida y cuidada.",
     quote: "Quien no habla por los que no pueden, los abandona dos veces.",
+    quoteSource: "",
     image: "/images/img-26.webp",
   },
 ];
@@ -80,6 +83,11 @@ const values = [
               <p class="font-display italic text-xl text-[color:var(--color-primary)] leading-snug">
                 "{v.quote}"
               </p>
+              {v.quoteSource && (
+                <footer class="mt-3 text-sm text-[color:var(--color-text-muted)] not-italic">
+                  — {v.quoteSource}
+                </footer>
+              )}
             </blockquote>
           </div>
         </article>

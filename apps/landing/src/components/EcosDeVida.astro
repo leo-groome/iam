@@ -1,0 +1,234 @@
+---
+import { ecos, categories } from "../data/ecos";
+---
+
+<section id="ecos" class="relative py-24 md:py-36 overflow-hidden bg-[color:var(--color-surface)]">
+  <!-- Decorative sound-wave lines (background) -->
+  <div class="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+    <svg class="absolute top-12 -left-20 w-[600px] h-[200px] opacity-[0.04] text-[color:var(--color-primary)]" viewBox="0 0 600 200" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M0 100 Q30 40,60 100 T120 100 T180 100 T240 100 T300 100 T360 100 T420 100 T480 100 T540 100 T600 100"/>
+      <path d="M0 100 Q30 60,60 100 T120 100 T180 100 T240 100 T300 100 T360 100 T420 100 T480 100 T540 100 T600 100" transform="translate(0,20)"/>
+      <path d="M0 100 Q30 30,60 100 T120 100 T180 100 T240 100 T300 100 T360 100 T420 100 T480 100 T540 100 T600 100" transform="translate(0,-20)"/>
+    </svg>
+    <svg class="absolute bottom-16 -right-16 w-[500px] h-[180px] opacity-[0.03] text-[color:var(--color-primary)]" viewBox="0 0 500 180" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M0 90 Q25 30,50 90 T100 90 T150 90 T200 90 T250 90 T300 90 T350 90 T400 90 T450 90 T500 90"/>
+      <path d="M0 90 Q25 50,50 90 T100 90 T150 90 T200 90 T250 90 T300 90 T350 90 T400 90 T450 90 T500 90" transform="translate(0,18)"/>
+    </svg>
+    <!-- Subtle gradient blob -->
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-[color:var(--color-primary-light)]/8 blur-3xl"></div>
+  </div>
+
+  <div class="container-x relative">
+    <!-- Editorial header -->
+    <div class="grid lg:grid-cols-12 gap-8 lg:gap-16 mb-14 md:mb-20">
+      <div class="lg:col-span-7">
+        <p class="text-xs uppercase tracking-[0.25em] text-[color:var(--color-accent)] font-medium mb-6">
+          ·· Ecos de Vida
+        </p>
+        <h2 class="font-display text-5xl md:text-7xl lg:text-[5.5rem] leading-[0.95] text-[color:var(--color-text)]">
+          Escucha.<br/>
+          <em class="text-[color:var(--color-primary)]">Reflexiona.</em>
+        </h2>
+      </div>
+
+      <aside class="lg:col-span-5 lg:pt-16">
+        <div class="lg:border-l-2 lg:border-[color:var(--color-accent)] lg:pl-8">
+          <p class="text-base md:text-lg text-[color:var(--color-text-muted)] leading-relaxed">
+            Breves cápsulas de audio para nutrir tu formación y tu misión.
+            Bioética, ciencia, espiritualidad y fertilidad — todo en un solo lugar.
+          </p>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Category filter pills -->
+    <div class="mb-10 md:mb-14 flex flex-wrap gap-2.5" id="ecos-filters" role="tablist" aria-label="Filtrar ecos por categoría">
+      <button
+        data-category="Todos"
+        class="eco-pill eco-pill--active"
+        role="tab"
+        aria-selected="true"
+      >
+        Todos
+      </button>
+      {categories.map(cat => (
+        <button
+          data-category={cat}
+          class="eco-pill"
+          role="tab"
+          aria-selected="false"
+        >
+          {cat}
+        </button>
+      ))}
+    </div>
+
+    <!-- Audio items list -->
+    <div class="space-y-3" id="ecos-list">
+      {ecos.map((eco, i) => (
+        <article
+          data-eco-category={eco.category}
+          class={`eco-item group relative flex items-center gap-4 md:gap-6 p-4 md:p-5 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] transition-all duration-300 hover:border-[color:var(--color-primary-light)] hover:shadow-lg hover:shadow-[color:var(--color-primary)]/5 cursor-pointer ${i >= 5 ? "hidden" : ""}`}
+          data-eco-index={i}
+        >
+          <!-- Left accent bar -->
+          <div class="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-[color:var(--color-primary)] opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+          <!-- Play button -->
+          <div class="relative shrink-0 w-12 h-12 md:w-14 md:h-14 rounded-full bg-[color:var(--color-primary)]/8 flex items-center justify-center group-hover:bg-[color:var(--color-primary)] transition-colors duration-300">
+            <svg class="w-5 h-5 md:w-6 md:h-6 text-[color:var(--color-primary)] group-hover:text-white transition-colors duration-300 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5.14v14.72a1 1 0 0 0 1.5.86l11-7.36a1 1 0 0 0 0-1.72l-11-7.36A1 1 0 0 0 8 5.14z"/>
+            </svg>
+            <!-- Subtle pulse ring on hover -->
+            <div class="absolute inset-0 rounded-full border-2 border-[color:var(--color-primary)] opacity-0 group-hover:opacity-20 group-hover:scale-125 transition-all duration-500"></div>
+          </div>
+
+          <!-- Content -->
+          <div class="flex-1 min-w-0">
+            <h3 class="font-medium text-base md:text-lg text-[color:var(--color-text)] leading-snug truncate group-hover:text-[color:var(--color-primary)] transition-colors duration-300">
+              {eco.title}
+            </h3>
+            <div class="flex items-center gap-3 mt-1.5">
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-medium uppercase tracking-wider bg-[color:var(--color-bg)] text-[color:var(--color-text-muted)] border border-[color:var(--color-border)]">
+                {eco.category}
+              </span>
+              <span class="text-xs text-[color:var(--color-text-muted)]">{eco.date}</span>
+            </div>
+          </div>
+
+          <!-- Duration -->
+          <div class="shrink-0 flex items-center gap-1.5 text-sm text-[color:var(--color-text-muted)] font-medium tabular-nums">
+            <svg class="w-3.5 h-3.5 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+            {eco.duration}
+          </div>
+
+          <!-- Mini waveform decoration -->
+          <div class="hidden md:flex items-center gap-[3px] shrink-0 h-6 opacity-30 group-hover:opacity-70 transition-opacity duration-300" aria-hidden="true">
+            <span class="w-[2px] h-2 bg-[color:var(--color-primary)] rounded-full"></span>
+            <span class="w-[2px] h-4 bg-[color:var(--color-primary)] rounded-full"></span>
+            <span class="w-[2px] h-3 bg-[color:var(--color-primary)] rounded-full"></span>
+            <span class="w-[2px] h-5 bg-[color:var(--color-primary)] rounded-full"></span>
+            <span class="w-[2px] h-2 bg-[color:var(--color-primary)] rounded-full"></span>
+            <span class="w-[2px] h-4 bg-[color:var(--color-primary)] rounded-full"></span>
+            <span class="w-[2px] h-3 bg-[color:var(--color-primary)] rounded-full"></span>
+          </div>
+        </article>
+      ))}
+    </div>
+
+    <!-- "Ver todos" CTA -->
+    <div class="mt-12 md:mt-16 text-center">
+      <a
+        href="#"
+        class="group inline-flex items-center gap-3 px-8 py-4 rounded-full border-2 border-[color:var(--color-primary)] text-[color:var(--color-primary)] font-semibold text-sm hover:bg-[color:var(--color-primary)] hover:text-white transition-all duration-300"
+      >
+        Todos los Ecos de Vida
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="transition-transform group-hover:translate-x-1">
+          <path d="M5 12h14M13 5l7 7-7 7"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Filter pills */
+  .eco-pill {
+    padding: 0.5rem 1.25rem;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    border: 1.5px solid var(--color-border);
+    color: var(--color-text-muted);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+  }
+
+  .eco-pill:hover {
+    border-color: var(--color-primary-light);
+    color: var(--color-primary);
+    background: rgba(30, 58, 138, 0.04);
+  }
+
+  .eco-pill--active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+
+  .eco-pill--active:hover {
+    background: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    color: white;
+  }
+
+  /* Smooth show/hide transitions for items */
+  .eco-item {
+    opacity: 1;
+    max-height: 200px;
+    transform: translateY(0);
+    transition: opacity 0.35s ease, max-height 0.35s ease, transform 0.35s ease,
+                margin 0.35s ease, padding 0.35s ease, border-color 0.3s ease,
+                box-shadow 0.3s ease;
+  }
+
+  .eco-item--hidden {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+    overflow: hidden;
+    margin: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-color: transparent !important;
+    pointer-events: none;
+  }
+</style>
+
+<script>
+  const MAX_VISIBLE = 5;
+  const filtersContainer = document.getElementById("ecos-filters");
+  const pills = filtersContainer?.querySelectorAll<HTMLButtonElement>(".eco-pill");
+  const items = document.querySelectorAll<HTMLElement>(".eco-item");
+
+  function filterEcos(category: string) {
+    // Update pill active state
+    pills?.forEach(pill => {
+      const isActive = pill.dataset.category === category;
+      pill.classList.toggle("eco-pill--active", isActive);
+      pill.setAttribute("aria-selected", String(isActive));
+    });
+
+    // Filter and limit items
+    let visibleCount = 0;
+    items.forEach(item => {
+      const itemCategory = item.dataset.ecoCategory;
+      const matchesFilter = category === "Todos" || itemCategory === category;
+
+      if (matchesFilter && visibleCount < MAX_VISIBLE) {
+        item.classList.remove("eco-item--hidden", "hidden");
+        visibleCount++;
+      } else {
+        item.classList.add("eco-item--hidden");
+        // Remove hidden class so transition works, then re-add after transition
+        item.classList.remove("hidden");
+      }
+    });
+  }
+
+  // Attach click handlers
+  pills?.forEach(pill => {
+    pill.addEventListener("click", () => {
+      const category = pill.dataset.category;
+      if (category) filterEcos(category);
+    });
+  });
+
+  // Initialize: show first 5 on load
+  filterEcos("Todos");
+</script>
