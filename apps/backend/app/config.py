@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     database_url: str
     stack_project_id: str
-    stack_secret_server_key: str
+    stack_secret_server_key: str = ""
     stack_jwks_url: str
     r2_account_id: str
     r2_access_key_id: str
