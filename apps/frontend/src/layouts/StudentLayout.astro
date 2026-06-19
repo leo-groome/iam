@@ -2,6 +2,9 @@
 import "@/styles/global.css";
 interface Props { title?: string; courseName?: string; progress?: number; showHeader?: boolean; wide?: boolean }
 const { title = "Plataforma", courseName, progress, showHeader = true, wide = false } = Astro.props;
+const user = Astro.locals.user;
+const displayName = user?.fullName ?? 'Perfil';
+const initials = displayName.charAt(0).toUpperCase();
 
 const pathname = Astro.url.pathname;
 const isActive = (href: string) =>
@@ -38,8 +41,8 @@ const isActive = (href: string) =>
               <a href="/perfil"
                  title="Mi perfil"
                  class={`hidden md:flex items-center gap-2 pl-1 pr-1 sm:pr-3 py-1 rounded-full transition ${isActive('/perfil') ? 'bg-[var(--color-primary-soft)] ring-2 ring-[var(--color-primary)]/30' : 'hover:bg-[var(--color-app-bg)]'}`}>
-                <span class="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white grid place-items-center font-semibold text-sm">A</span>
-                <span class={`hidden sm:inline text-sm font-medium ${isActive('/perfil') ? 'text-[var(--color-primary)]' : ''}`}>Alex</span>
+                <span class="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white grid place-items-center font-semibold text-sm">{initials}</span>
+                <span class={`hidden sm:inline text-sm font-medium ${isActive('/perfil') ? 'text-[var(--color-primary)]' : ''}`}>{displayName}</span>
               </a>
             </div>
           </div>

@@ -1,12 +1,22 @@
 ---
 import StudentLayout from "@/layouts/StudentLayout.astro";
-import CourseCard from "@/components/ui/CourseCard.astro";
+import CatalogIsland from "@/components/ui/CatalogIsland.vue";
 import GreetingHeader from "@/components/ui/GreetingHeader.vue";
-import { cursos } from "@/lib/mock";
+import { apiGet, ApiError, type CourseList } from "@/lib/api";
 
-const enProgreso = cursos.filter(c => c.progress > 0 && c.progress < 100);
-const nuevos = cursos.filter(c => c.progress === 0);
-const completados = cursos.filter(c => c.progress === 100);
+// TODO Fase C: Validar user autenticado en middleware y redirigir a /registro si no
+
+let courses: CourseList = { items: [], next_cursor: null }
+let fetchError: string | null = null
+
+try {
+  courses = await apiGet('/api/v1/courses', { request: Astro.request }) as CourseList
+} catch (e) {
+  if (e instanceof ApiError && e.status === 401) {
+    return Astro.redirect('/registro?next=/catalogo')
+  }
+  fetchError = e instanceof Error ? e.message : 'Error desconocido'
+}
 
 const IMG = "/Images";
 
@@ -84,7 +94,7 @@ const yOffsets = [0, 4, -4, 6, -6, 2, -2, 5, -5, 0, 3, -3];
       <div class="grid md:grid-cols-[1fr_auto] gap-6 md:gap-10 items-center">
         <div>
           <h1 class="text-4xl sm:text-5xl font-bold tracking-tight">Cursos</h1>
-          <GreetingHeader client:load name="Alex" />
+          <GreetingHeader client:load name={Astro.locals.user?.fullName ?? ''} />
         </div>
 
         <figure class="relative md:max-w-sm md:border-l md:border-[var(--color-border)] md:pl-8 border-t md:border-t-0 border-[var(--color-border)] pt-5 md:pt-0">
@@ -99,36 +109,7 @@ const yOffsets = [0, 4, -4, 6, -6, 2, -2, 5, -5, 0, 3, -3];
       </div>
     </header>
 
-    {enProgreso.length > 0 && (
-      <section class="mb-10">
-        <h2 class="text-lg font-semibold mb-3">Continuar donde lo dejé</h2>
-        <div class="grid gap-4">
-          {enProgreso.map(c => (
-            <CourseCard id={c.id} title={c.title} description={c.description} duration={c.duration} progress={c.progress} cover={c.cover} />
-          ))}
-        </div>
-      </section>
-    )}
-
-    <section class="mb-10">
-      <h2 class="text-lg font-semibold mb-3">Cursos disponibles</h2>
-      <div class="grid gap-4">
-        {nuevos.map(c => (
-          <CourseCard id={c.id} title={c.title} description={c.description} duration={c.duration} cover={c.cover} />
-        ))}
-      </div>
-    </section>
-
-    {completados.length > 0 && (
-      <section>
-        <h2 class="text-lg font-semibold mb-3">Ya completados</h2>
-        <div class="grid gap-4">
-          {completados.map(c => (
-            <CourseCard id={c.id} title={c.title} description={c.description} duration={c.duration} progress={100} cover={c.cover} cta="Ver certificado" href={`/curso/${c.id}/certificado`} />
-          ))}
-        </div>
-      </section>
-    )}
+    <CatalogIsland client:load courses={courses.items || []} error={fetchError} />
   </div>
   </div>
 </StudentLayout>

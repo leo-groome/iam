@@ -1,7 +1,24 @@
 ---
+export const prerender = false;
+
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { cursos } from "@/lib/mock";
+import { apiGet, ApiError } from "@/lib/api";
+import type { components } from "@/lib/types.gen";
+
+type CourseAdminListItem = components["schemas"]["CourseAdminListItem"];
+
+let courses: CourseAdminListItem[] = [];
+let fetchError: string | null = null;
+
+try {
+  courses = (await apiGet("/api/v1/admin/courses", {
+    request: Astro.request,
+  })) as CourseAdminListItem[];
+} catch (e) {
+  fetchError = e instanceof ApiError ? e.message : "Error al cargar cursos";
+}
 ---
+
 <AdminLayout title="Cursos" section="cursos">
   <header class="flex items-center justify-between mb-6">
     <div>
@@ -11,30 +28,46 @@ import { cursos } from "@/lib/mock";
     <a href="/admin/cursos/nuevo" class="btn btn-primary">+ Crear curso</a>
   </header>
 
-  <div class="card overflow-hidden">
-    <table class="w-full text-sm">
-      <thead class="bg-[var(--color-app-bg)] text-left text-[var(--color-text-muted)]">
-        <tr>
-          <th class="px-4 py-3 font-medium">Título</th>
-          <th class="px-4 py-3 font-medium">Módulos</th>
-          <th class="px-4 py-3 font-medium">Edad</th>
-          <th class="px-4 py-3 font-medium">Estado</th>
-          <th class="px-4 py-3 font-medium"></th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-[var(--color-border)]">
-        {cursos.map(c => (
-          <tr class="hover:bg-[var(--color-app-bg)]">
-            <td class="px-4 py-3 font-medium">{c.title}</td>
-            <td class="px-4 py-3">{c.modulos.length}</td>
-            <td class="px-4 py-3 text-[var(--color-text-muted)]">{c.ageMin}–{c.ageMax}</td>
-            <td class="px-4 py-3"><span class="chip">Publicado</span></td>
-            <td class="px-4 py-3 text-right">
-              <a href={`/admin/cursos/${c.id}`} class="text-[var(--color-primary)] font-medium">Editar</a>
-            </td>
+  {fetchError && (
+    <div class="card p-6 text-center text-[var(--color-error)] mb-6" role="alert">
+      {fetchError}
+    </div>
+  )}
+
+  {!fetchError && courses.length === 0 && (
+    <div class="card p-12 text-center text-[var(--color-text-muted)]">
+      No hay cursos creados. Crea el primero.
+    </div>
+  )}
+
+  {courses.length > 0 && (
+    <div class="card overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-[var(--color-app-bg)] text-left text-[var(--color-text-muted)]">
+          <tr>
+            <th class="px-4 py-3 font-medium">Título</th>
+            <th class="px-4 py-3 font-medium">Módulos</th>
+            <th class="px-4 py-3 font-medium">Estado</th>
+            <th class="px-4 py-3 font-medium"></th>
           </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody class="divide-y divide-[var(--color-border)]">
+          {courses.map((c) => (
+            <tr class="hover:bg-[var(--color-app-bg)]">
+              <td class="px-4 py-3 font-medium">{c.title}</td>
+              <td class="px-4 py-3 text-[var(--color-text-muted)]">—</td>
+              <td class="px-4 py-3">
+                <span class="chip">{c.status}</span>
+              </td>
+              <td class="px-4 py-3 text-right">
+                <a href={`/admin/cursos/${c.id}`} class="text-[var(--color-primary)] font-medium">
+                  Editar
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
 </AdminLayout>

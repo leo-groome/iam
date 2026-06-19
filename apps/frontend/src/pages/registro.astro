@@ -1,7 +1,16 @@
 ---
+// SSR required: middleware redirects authenticated users away from this page.
+// A static prerender would bypass the middleware check entirely.
+export const prerender = false
+
 import PublicLayout from "@/layouts/PublicLayout.astro";
 import AuthSplit from "@/components/ui/AuthSplit.vue";
+
+// Pass ?next= through to the client component for post-auth redirect.
+// Validate it starts with / to prevent open-redirect via query param.
+const rawNext = Astro.url.searchParams.get('next') ?? ''
+const nextUrl = rawNext.startsWith('/') ? rawNext : '/catalogo'
 ---
 <PublicLayout title="Crear cuenta">
-  <AuthSplit client:load initialMode="register" />
+  <AuthSplit client:load initialMode="register" nextUrl={nextUrl} />
 </PublicLayout>

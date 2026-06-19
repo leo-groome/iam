@@ -1,26 +1,37 @@
 ---
+export const prerender = false
+
 import StudentLayout from "@/layouts/StudentLayout.astro";
 import ExamRunner from "@/components/ui/ExamRunner.vue";
-import { cursos, findCurso, preguntasMock } from "@/lib/mock";
-
-export function getStaticPaths() {
-  return cursos.flatMap(c =>
-    c.modulos.flatMap(m => m.temas.filter(t => t.hasExam).map(t => ({ params: { id: c.id, temaId: t.id } })))
-  );
-}
+import { apiGet, ApiError } from "@/lib/api";
+import type { TopicDetail } from "@/lib/api";
 
 const { id, temaId } = Astro.params;
-const curso = findCurso(id!);
-if (!curso) return Astro.redirect('/catalogo');
 
-const tema = curso.modulos.flatMap(m => m.temas).find(t => t.id === temaId);
-if (!tema) return Astro.redirect(`/curso/${id}`);
+if (!id || !temaId) return Astro.redirect('/catalogo');
+
+// SSR guard: verify topic exists and user is enrolled (403 = not enrolled)
+let topicTitle = 'Examen'
+try {
+  const topic = (await apiGet('/api/v1/topics/{topic_id}', {
+    params: { topic_id: temaId },
+    request: Astro.request,
+  })) as TopicDetail
+  topicTitle = topic.title
+} catch (err) {
+  if (err instanceof ApiError) {
+    if (err.status === 401) return Astro.redirect(`/registro?next=${encodeURIComponent(Astro.url.pathname)}`)
+    if (err.status === 403) return Astro.redirect(`/curso/${id}`)
+    if (err.status === 404) return Astro.redirect(`/curso/${id}`)
+  }
+  // Other errors: let page render — ExamRunner will surface its own error state
+}
 ---
-<StudentLayout title={`Examen · ${tema.title}`} courseName={curso.title} progress={curso.progress}>
+<StudentLayout title={`Examen · ${topicTitle}`}>
   <p class="text-sm text-[var(--color-primary)] font-medium">Cuestionario</p>
-  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-6">{tema.title}</h1>
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-6">{topicTitle}</h1>
 
-  <ExamRunner client:load preguntas={preguntasMock} cursoId={id!} temaId={temaId!} minPercent={70} />
+  <ExamRunner client:load topicId={temaId} cursoId={id} />
 
   <div class="h-32"></div>
 </StudentLayout>

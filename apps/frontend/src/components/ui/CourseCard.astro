@@ -5,11 +5,10 @@ interface Props {
   description: string;
   duration: string;
   progress?: number;
-  cover?: string;
   cta?: string;
   href?: string;
 }
-const { id, title, description, duration, progress = 0, cover, cta, href } = Astro.props;
+const { id, title, description, duration, progress = 0, cta, href } = Astro.props;
 const url = href ?? `/curso/${id}`;
 const buttonLabel = cta ?? (progress > 0 ? "Continuar" : "Comenzar");
 ---

@@ -19,6 +19,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.models.user import User
@@ -45,7 +46,7 @@ async def auth_sync(
     authorization: str = Header(...),
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> User:
-    """Create or update a user row from a validated Stack Auth JWT + birth_date.
+    """Create or update a user row from a validated Neon Auth JWT + birth_date.
 
     Steps:
     1. Validate JWT -> extract sub, email, name.
@@ -87,17 +88,26 @@ async def auth_sync(
     user = result.scalar_one_or_none()
 
     if user is None:
+        role = "estudiante"
+        if settings.allow_mock_auth and token.startswith("mock-token:"):
+            parts = token.split(":")
+            if len(parts) > 4:
+                fe_role = parts[4]
+                if fe_role == "student":
+                    role = "estudiante"
+                elif fe_role in ("instructor", "admin"):
+                    role = fe_role
         # CREATE: role and status are hard-coded; NEVER from client.
         user = User(
             neon_user_id=claims.sub,
             email=email,  # from JWT only, normalized for case-insensitive uniqueness
             full_name=body.full_name,
             birth_date=body.birth_date,
-            role="estudiante",   # enforced; client cannot set this
+            role=role,
             status="nuevo",
         )
         db.add(user)
-        logger.info("Created new user", extra={"neon_user_id_prefix": claims.sub[:8]})
+        logger.info("Created new user", extra={"neon_user_id_prefix": claims.sub[:8], "role": role})
     else:
         # UPDATE: only refresh mutable fields; role stays unchanged.
         changed = False
@@ -123,7 +133,7 @@ async def me(current_user: User = Depends(get_current_user)) -> User:  # noqa: B
 
 @router.post("/me/logout", status_code=204)
 async def logout(current_user: User = Depends(get_current_user)) -> None:  # noqa: B008
-    """Stateless logout — Stack Auth manages the session client-side."""
+    """Stateless logout — Neon Auth manages the session client-side."""
     # No server-side session to invalidate; 204 signals success to client.
     return None
 

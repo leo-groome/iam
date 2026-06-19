@@ -42,7 +42,7 @@ async def get_current_user(
     authorization: str = Header(...),
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> User:
-    """Validate Stack Auth JWT and return the corresponding DB user.
+    """Validate Neon Auth JWT and return the corresponding DB user.
 
     Raises:
         401: token is missing, malformed, expired, or has invalid signature.

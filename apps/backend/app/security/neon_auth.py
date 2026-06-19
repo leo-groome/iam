@@ -1,9 +1,9 @@
-"""Stack Auth (Neon Auth) JWT validation via JWKS.
+"""Neon Auth JWT validation via JWKS.
 
 Security invariants:
 - JWKS is cached with 1h TTL; on signature failure we refetch ONCE (key rotation).
 - JWT raw value is NEVER logged; only `sub` (hashed if needed) is safe to emit.
-- Algorithm is pinned to RS256; alg:none and HS* are rejected at decode level.
+- Algorithm is pinned to EdDSA; alg:none and HS* are rejected at decode level.
 - 401 messages to the client are generic; details go to structured logs only.
 """
 
@@ -13,6 +13,7 @@ import hashlib
 import logging
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 import jwt
 from jwt import PyJWKClient, PyJWKClientError
@@ -42,9 +43,9 @@ def _get_jwks_client(*, force_refresh: bool = False) -> PyJWKClient:
     ttl_expired = (now - _jwks_loaded_at) > _JWKS_TTL_SECONDS
 
     if _jwks_client is None or ttl_expired or force_refresh:
-        logger.info("Fetching JWKS from Stack Auth", extra={"url": settings.stack_jwks_url})
+        logger.info("Fetching JWKS from Neon Auth", extra={"url": settings.neon_auth_jwks_url})
         _jwks_client = PyJWKClient(
-            settings.stack_jwks_url,
+            settings.neon_auth_jwks_url,
             lifespan=_JWKS_TTL_SECONDS,
             headers={"User-Agent": "iam-backend/1.0"},
         )
@@ -59,7 +60,7 @@ def _get_jwks_client(*, force_refresh: bool = False) -> PyJWKClient:
 
 
 class StackAuthClaims(BaseModel):
-    """Validated, trusted claims extracted from a Stack Auth JWT."""
+    """Validated, trusted claims extracted from a Neon Auth JWT."""
 
     sub: str  # neon_user_id — primary identifier
     email: str
@@ -70,7 +71,12 @@ class StackAuthClaims(BaseModel):
 # Token verification
 # ---------------------------------------------------------------------------
 
-_ALLOWED_ALGORITHMS = ["RS256"]
+_ALLOWED_ALGORITHMS = ["EdDSA"]
+
+
+def _auth_origin() -> str:
+    parsed = urlsplit(settings.neon_auth_url)
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 def _log_sub(sub: str) -> str:
@@ -79,11 +85,18 @@ def _log_sub(sub: str) -> str:
 
 
 async def verify_stack_token(token: str) -> StackAuthClaims:
-    """Decode and validate a Stack Auth JWT.
+    """Decode and validate a Neon Auth JWT.
 
     Raises:
         jwt.exceptions.PyJWTError subclasses → caller converts to HTTP 401.
     """
+    if settings.allow_mock_auth and token.startswith("mock-token:"):
+        parts = token.split(":")
+        sub = parts[1] if len(parts) > 1 else "mock_sub"
+        email = parts[2] if len(parts) > 2 else "mock@example.com"
+        name = parts[3] if len(parts) > 3 else "Mock User"
+        return StackAuthClaims(sub=sub, email=email, name=name)
+
     # Fetch signing key — attempt once with cached client, retry on key mismatch.
     for attempt in range(2):
         client = _get_jwks_client(force_refresh=(attempt == 1))
@@ -103,14 +116,14 @@ async def verify_stack_token(token: str) -> StackAuthClaims:
             token,
             signing_key.key,
             algorithms=_ALLOWED_ALGORITHMS,
-            # Stack Auth issues tokens with project-scoped audience.
-            # The aud claim equals the Stack project ID.
-            audience=settings.stack_project_id,
+            audience=_auth_origin(),
+            issuer=_auth_origin(),
             options={
-                "require": ["sub", "exp", "iat", "aud"],
+                "require": ["sub", "exp", "iat", "aud", "iss"],
                 "verify_exp": True,
                 "verify_iat": True,
                 "verify_aud": True,
+                "verify_iss": True,
                 "verify_signature": True,
             },
         )
@@ -128,7 +141,7 @@ async def verify_stack_token(token: str) -> StackAuthClaims:
 
     email = payload.get("email", "")
     if not email:
-        # Stack Auth always includes email; missing = malformed token
+        # Neon Auth JWTs include email; missing = malformed token.
         logger.warning("JWT missing email claim", extra={"sub_hash": _log_sub(sub)})
         raise jwt.InvalidTokenError("Missing email claim")
 

@@ -1,22 +1,50 @@
 ---
-import AdminLayout from "@/layouts/AdminLayout.astro";
-import { cursos, findCurso } from "@/lib/mock";
+export const prerender = false;
 
-export function getStaticPaths() {
-  return [...cursos.map(c => ({ params: { id: c.id } })), { params: { id: 'nuevo' } }];
-}
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { apiGet, ApiError } from "@/lib/api";
+import type { components } from "@/lib/types.gen";
+
+type CourseAdminResponse = components["schemas"]["CourseAdminResponse"];
+type ModuleAdminItem = components["schemas"]["ModuleAdminItem"];
 
 const { id } = Astro.params;
-const isNew = id === 'nuevo';
-const curso = !isNew ? findCurso(id!) : null;
+const isNew = id === "nuevo";
+
+let curso: CourseAdminResponse | null = null;
+let fetchError: string | null = null;
+
+if (!isNew) {
+  try {
+    curso = (await apiGet("/api/v1/admin/courses/{course_id}", {
+      params: { course_id: id! },
+      request: Astro.request,
+    })) as CourseAdminResponse;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) {
+      return Astro.redirect("/admin/cursos");
+    }
+    fetchError = e instanceof ApiError ? e.message : "Error al cargar el curso";
+  }
+}
 ---
+
 <AdminLayout title={isNew ? "Nuevo curso" : curso?.title ?? "Curso"} section="cursos">
   <a href="/admin/cursos" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Cursos</a>
+
+  {fetchError && (
+    <div class="card p-6 text-center text-[var(--color-error)] mb-6" role="alert">
+      {fetchError}
+    </div>
+  )}
+
   <header class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">{isNew ? "Crear nuevo curso" : `Editar: ${curso?.title}`}</h1>
+    <h1 class="text-2xl font-bold">
+      {isNew ? "Crear nuevo curso" : `Editar: ${curso?.title}`}
+    </h1>
     <div class="flex gap-2">
-      <button class="btn btn-secondary">Guardar borrador</button>
-      <button class="btn btn-primary">Publicar</button>
+      <button class="btn btn-secondary" type="button">Guardar borrador</button>
+      <button class="btn btn-primary" type="button">Publicar</button>
     </div>
   </header>
 
@@ -24,17 +52,30 @@ const curso = !isNew ? findCurso(id!) : null;
     <div class="card p-6 lg:col-span-2 space-y-4">
       <div>
         <label class="label">Título del curso</label>
-        <input class="input" minlength="5" maxlength="80" value={curso?.title ?? ""} placeholder="Ej. Comunicación empática" />
+        <input
+          class="input"
+          minlength="5"
+          maxlength="80"
+          value={curso?.title ?? ""}
+          placeholder="Ej. Comunicación empática"
+        />
         <p class="help">5–80 caracteres.</p>
       </div>
       <div>
         <label class="label">Descripción corta</label>
-        <input class="input" maxlength="160" value={curso?.subtitle ?? ""} placeholder="Una línea que resuma el curso" />
+        <input
+          class="input"
+          maxlength="160"
+          value={curso?.short_desc ?? ""}
+          placeholder="Una línea que resuma el curso"
+        />
         <p class="help">Hasta 160 caracteres. Se muestra en la tarjeta.</p>
       </div>
       <div>
         <label class="label">Descripción larga</label>
-        <textarea class="input min-h-32" maxlength="2000" placeholder="Markdown soportado">{curso?.description ?? ""}</textarea>
+        <textarea class="input min-h-32" maxlength="2000" placeholder="Markdown soportado">
+          {curso?.long_desc ?? ""}
+        </textarea>
       </div>
       <div>
         <label class="label">Imagen de portada</label>
@@ -50,19 +91,25 @@ const curso = !isNew ? findCurso(id!) : null;
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Mínima</label>
-            <input type="number" class="input" min="13" max="99" value={curso?.ageMin ?? 18} />
+            <input type="number" class="input" min="13" max="99" value={curso?.age_min ?? 18} />
           </div>
           <div>
             <label class="label">Máxima</label>
-            <input type="number" class="input" min="13" max="99" value={curso?.ageMax ?? 99} />
+            <input type="number" class="input" min="13" max="99" value={curso?.age_max ?? 99} />
           </div>
         </div>
       </div>
       <div class="card p-6">
         <h3 class="font-semibold mb-3">Configuración</h3>
         <div class="space-y-2 text-sm">
-          <label class="flex items-center justify-between"><span>Visible en catálogo</span><input type="checkbox" checked /></label>
-          <label class="flex items-center justify-between"><span>Genera certificado</span><input type="checkbox" checked /></label>
+          <label class="flex items-center justify-between">
+            <span>Visible en catálogo</span>
+            <input type="checkbox" checked />
+          </label>
+          <label class="flex items-center justify-between">
+            <span>Genera certificado</span>
+            <input type="checkbox" checked />
+          </label>
         </div>
       </div>
     </div>
@@ -72,20 +119,32 @@ const curso = !isNew ? findCurso(id!) : null;
     <section class="mt-8">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-xl font-bold">Módulos</h2>
-        <a href={`/admin/cursos/${curso.id}/modulos/nuevo`} class="btn btn-secondary">+ Agregar módulo</a>
+        <a href={`/admin/cursos/${curso.id}/modulos/nuevo`} class="btn btn-secondary">
+          + Agregar módulo
+        </a>
       </div>
-      <div class="space-y-3">
-        {curso.modulos.map((m, i) => (
-          <div class="card p-4 flex items-center justify-between gap-3">
-            <div>
-              <p class="text-xs text-[var(--color-text-muted)]">Módulo {i + 1}</p>
-              <p class="font-semibold">{m.title}</p>
-              <p class="text-sm text-[var(--color-text-muted)] mt-1">{m.temas.length} temas · {m.duration}</p>
+      {curso.modules.length === 0 ? (
+        <div class="card p-8 text-center text-[var(--color-text-muted)]">
+          Sin módulos todavía. Agrega el primero.
+        </div>
+      ) : (
+        <div class="space-y-3">
+          {curso.modules.map((m: ModuleAdminItem, i: number) => (
+            <div class="card p-4 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs text-[var(--color-text-muted)]">Módulo {i + 1}</p>
+                <p class="font-semibold">{m.title}</p>
+                <p class="text-sm text-[var(--color-text-muted)] mt-1">
+                  {m.topics.length} temas
+                </p>
+              </div>
+              <a href={`/admin/cursos/${curso!.id}/modulos/${m.id}`} class="btn btn-secondary">
+                Editar
+              </a>
             </div>
-            <a href={`/admin/cursos/${curso.id}/modulos/${m.id}`} class="btn btn-secondary">Editar</a>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   )}
 </AdminLayout>

@@ -1,30 +1,57 @@
 ---
-import StudentLayout from "@/layouts/StudentLayout.astro";
-import { cursos, findCurso } from "@/lib/mock";
+export const prerender = false
 
-export function getStaticPaths() {
-  return cursos.flatMap(c =>
-    c.modulos.flatMap(m => m.temas.filter(t => t.hasExam).map(t => ({ params: { id: c.id, temaId: t.id } })))
-  );
-}
+import StudentLayout from "@/layouts/StudentLayout.astro";
+import { apiGet, ApiError } from "@/lib/api";
+import type { TopicDetail } from "@/lib/api";
 
 const { id, temaId } = Astro.params;
-const curso = findCurso(id!);
-if (!curso) return Astro.redirect('/catalogo');
 
-const allTemas = curso.modulos.flatMap(m => m.temas);
-const idx = allTemas.findIndex(t => t.id === temaId);
-const next = allTemas[idx + 1];
+if (!id || !temaId) return Astro.redirect('/catalogo');
+
+// Read score + pass from query string (written by ExamRunner CTA on approval)
+const scoreParam = Astro.url.searchParams.get('score')
+const passParam = Astro.url.searchParams.get('pass')
+const score = scoreParam ? parseInt(scoreParam, 10) : null
+const passed = passParam === '1'
+
+// Guard: must arrive with a valid approved score
+if (score === null || isNaN(score) || !passed) {
+  return Astro.redirect(`/curso/${id}/tema/${temaId}/examen`)
+}
+
+// SSR: fetch topic for title (best-effort — fallback to generic label)
+let topicTitle = 'Tema completado'
+
+try {
+  const topic = (await apiGet('/api/v1/topics/{topic_id}', {
+    params: { topic_id: temaId },
+    request: Astro.request,
+  })) as TopicDetail
+  topicTitle = topic.title
+} catch (err) {
+  if (err instanceof ApiError && err.status === 401) {
+    return Astro.redirect(`/registro?next=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`)
+  }
+  // Non-fatal: render with generic fallback title
+}
 ---
-<StudentLayout title="Resultado" courseName={curso.title} progress={curso.progress}>
+<StudentLayout title={`Resultado · ${topicTitle}`}>
   <div class="card p-8 text-center max-w-md mx-auto mt-8">
-    <div class="text-6xl mb-3">🎉</div>
-    <h1 class="text-3xl font-bold">¡Bien hecho!</h1>
-    <p class="text-[var(--color-text-muted)] mt-2">Tema aprobado. Sigues avanzando.</p>
-    <a href={next ? `/curso/${id}/tema/${next.id}` : `/curso/${id}/certificado`}
-       class="btn btn-primary btn-block mt-6">
-      {next ? 'Continuar al siguiente tema' : 'Ver mi certificado'}
+    <div class="w-20 h-20 mx-auto rounded-full bg-emerald-100 text-emerald-600 grid place-items-center mb-4">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+        <path d="M20 6L9 17l-5-5"/>
+      </svg>
+    </div>
+    <h1 class="text-3xl font-bold">Bien hecho</h1>
+    <p class="text-[var(--color-text-muted)] mt-2">{topicTitle} aprobado.</p>
+    <p class="text-5xl font-extrabold text-[var(--color-primary)] mt-4">{score}</p>
+    <p class="text-sm text-[var(--color-text-muted)] mt-1">Calificacion obtenida</p>
+    <a href={`/curso/${id}`} class="btn btn-primary btn-block mt-6">
+      Continuar al curso
     </a>
-    <a href={`/curso/${id}`} class="btn btn-ghost btn-block mt-2">Volver al curso</a>
+    <a href={`/curso/${id}/tema/${temaId}/examen`} class="btn btn-ghost btn-block mt-2">
+      Volver al examen
+    </a>
   </div>
 </StudentLayout>

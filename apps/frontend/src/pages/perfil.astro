@@ -1,39 +1,89 @@
 ---
+export const prerender = false;
+
 import StudentLayout from "@/layouts/StudentLayout.astro";
-import { cursos } from "@/lib/mock";
+import { apiGet, ApiError } from "@/lib/api";
+import type { components } from "@/lib/types.gen";
 
-const completados = cursos.filter(c => c.progress === 100);
+type UserPublic = components["schemas"]["UserPublic"];
+type CourseCard = components["schemas"]["CourseCard"];
+type CourseCardListResponse = components["schemas"]["CourseCardListResponse"];
+
+let user: UserPublic | null = null;
+let fetchError: string | null = null;
+let enrolledCourses: CourseCard[] = [];
+
+try {
+  user = (await apiGet("/api/v1/auth/me", { request: Astro.request })) as UserPublic;
+} catch (e) {
+  if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+    return Astro.redirect("/registro");
+  }
+  fetchError = e instanceof Error ? e.message : "Error al cargar el perfil";
+}
+
+if (user) {
+  try {
+    const list = (await apiGet("/api/v1/courses", {
+      request: Astro.request,
+    })) as CourseCardListResponse;
+    enrolledCourses = list.items ?? [];
+  } catch {
+    enrolledCourses = [];
+  }
+}
 ---
+
 <StudentLayout title="Mi perfil">
-  <h1 class="text-3xl font-bold mb-6">Mi perfil</h1>
+  {fetchError && (
+    <div class="card p-6 text-center text-[var(--color-error)] mb-6" role="alert">
+      {fetchError}
+    </div>
+  )}
 
-  <div class="card p-6 mb-6 flex items-center gap-4">
-    <div class="w-16 h-16 rounded-full bg-[var(--color-primary)] text-white grid place-items-center text-2xl font-bold">A</div>
-    <div>
-      <p class="font-bold text-lg">Alex Hernández</p>
-      <p class="text-[var(--color-text-muted)] text-sm">alex@correo.com</p>
-      <p class="text-[var(--color-text-muted)] text-xs mt-1">Edad: 28 años</p>
-    </div>
-  </div>
+  {user && (
+    <>
+      <h1 class="text-3xl font-bold mb-6">Mi perfil</h1>
 
-  <h2 class="text-lg font-semibold mb-3">Mis certificados</h2>
-  {completados.length === 0 ? (
-    <div class="card p-8 text-center text-[var(--color-text-muted)]">
-      Aún no tienes certificados. ¡Completa tu primer curso!
-    </div>
-  ) : (
-    <div class="space-y-3 mb-8">
-      {completados.map(c => (
-        <a href={`/curso/${c.id}/certificado`} class="card p-4 flex items-center gap-3 hover:border-[var(--color-primary)] transition">
-          <div class="w-12 h-12 rounded-xl bg-[var(--color-primary-soft)] text-[var(--color-primary)] grid place-items-center text-xl">🎓</div>
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold truncate">{c.title}</p>
-            <p class="text-sm text-[var(--color-text-muted)]">Completado</p>
-          </div>
-          <span class="text-[var(--color-primary)]">→</span>
-        </a>
-      ))}
-    </div>
+      <div class="card p-6 mb-6 flex items-center gap-4">
+        <div
+          class="w-16 h-16 rounded-full bg-[var(--color-primary)] text-white grid place-items-center text-2xl font-bold"
+          aria-hidden="true"
+        >
+          {user.full_name.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <p class="font-bold text-lg">{user.full_name}</p>
+          <p class="text-[var(--color-text-muted)] text-sm">{user.email}</p>
+          <p class="text-[var(--color-text-muted)] text-xs mt-1 capitalize">{user.role}</p>
+        </div>
+      </div>
+
+      <h2 class="text-lg font-semibold mb-3">Mis certificados</h2>
+      {enrolledCourses.length === 0 ? (
+        <div class="card p-8 text-center text-[var(--color-text-muted)]">
+          Aún no tienes certificados. ¡Completa tu primer curso!
+        </div>
+      ) : (
+        <div class="space-y-3 mb-8">
+          {enrolledCourses.map((c) => (
+            <a
+              href={`/curso/${c.slug}/certificado`}
+              class="card p-4 flex items-center gap-3 hover:border-[var(--color-primary)] transition"
+            >
+              <div class="w-12 h-12 rounded-xl bg-[var(--color-primary-soft)] text-[var(--color-primary)] grid place-items-center text-xl">
+                🎓
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-semibold truncate">{c.title}</p>
+                <p class="text-sm text-[var(--color-text-muted)]">Completado</p>
+              </div>
+              <span class="text-[var(--color-primary)]" aria-hidden="true">→</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </>
   )}
 
   <a href="/" class="btn btn-secondary btn-block">Cerrar sesión</a>

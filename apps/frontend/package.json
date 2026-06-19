@@ -9,11 +9,15 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "type-check": "astro check"
+    "type-check": "astro check",
+    "gen:api": "openapi-typescript http://localhost:8000/openapi.json -o src/lib/types.gen.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",
+    "@astrojs/vercel": "^8.0.0",
     "@astrojs/vue": "^5.0.13",
+    "@neondatabase/neon-js": "0.6.2-beta",
     "@tailwindcss/vite": "^4.1.7",
     "astro": "^5.7.10",
     "lucide-vue-next": "^0.469.0",
@@ -25,6 +29,8 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5"
+    "@playwright/test": "^1.61.0",
+    "@types/node": "^22.10.5",
+    "openapi-typescript": "^7.4.4"
   }
 }

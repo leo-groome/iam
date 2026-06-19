@@ -1,26 +1,59 @@
 ---
-import AdminLayout from "@/layouts/AdminLayout.astro";
-import { cursos, findCurso } from "@/lib/mock";
+export const prerender = false;
 
-export function getStaticPaths() {
-  const paths = [];
-  for (const c of cursos) {
-    paths.push({ params: { id: c.id, modId: 'nuevo' } });
-    for (const m of c.modulos) paths.push({ params: { id: c.id, modId: m.id } });
-  }
-  return paths;
-}
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { apiGet, ApiError } from "@/lib/api";
+import type { components } from "@/lib/types.gen";
+
+type ModuleResponse = components["schemas"]["ModuleResponse"];
+type TopicAdminItem = components["schemas"]["TopicAdminItem"];
 
 const { id, modId } = Astro.params;
-const isNew = modId === 'nuevo';
-const curso = findCurso(id!);
-const mod = !isNew ? curso?.modulos.find(m => m.id === modId) : null;
+const isNew = modId === "nuevo";
+
+let mod: ModuleResponse | null = null;
+let topics: TopicAdminItem[] = [];
+let fetchError: string | null = null;
+
+if (!isNew) {
+  try {
+    mod = (await apiGet("/api/v1/admin/modules/{module_id}", {
+      params: { module_id: modId! },
+      request: Astro.request,
+    })) as ModuleResponse;
+
+    // Fetch the parent course to get topics list (ModuleAdminItem has topics)
+    const course = (await apiGet("/api/v1/admin/courses/{course_id}", {
+      params: { course_id: id! },
+      request: Astro.request,
+    })) as components["schemas"]["CourseAdminResponse"];
+    const modAdmin = course.modules.find((m) => m.id === modId);
+    topics = modAdmin?.topics ?? [];
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) {
+      return Astro.redirect(`/admin/cursos/${id}`);
+    }
+    fetchError = e instanceof ApiError ? e.message : "Error al cargar el módulo";
+  }
+}
 ---
+
 <AdminLayout title={isNew ? "Nuevo módulo" : mod?.title ?? "Módulo"} section="cursos">
-  <a href={`/admin/cursos/${id}`} class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Curso</a>
+  <a href={`/admin/cursos/${id}`} class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">
+    ← Curso
+  </a>
+
+  {fetchError && (
+    <div class="card p-6 text-center text-[var(--color-error)] mb-6" role="alert">
+      {fetchError}
+    </div>
+  )}
+
   <header class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">{isNew ? "Nuevo módulo" : `Editar: ${mod?.title}`}</h1>
-    <button class="btn btn-primary">Guardar</button>
+    <h1 class="text-2xl font-bold">
+      {isNew ? "Nuevo módulo" : `Editar: ${mod?.title}`}
+    </h1>
+    <button class="btn btn-primary" type="button">Guardar</button>
   </header>
 
   <div class="card p-6 mb-6 space-y-4">
@@ -38,20 +71,40 @@ const mod = !isNew ? curso?.modulos.find(m => m.id === modId) : null;
     <section>
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-xl font-bold">Temas</h2>
-        <a href={`/admin/cursos/${id}/modulos/${modId}/temas/nuevo`} class="btn btn-secondary">+ Agregar tema</a>
+        <a
+          href={`/admin/cursos/${id}/modulos/${modId}/temas/nuevo`}
+          class="btn btn-secondary"
+        >
+          + Agregar tema
+        </a>
       </div>
-      <div class="space-y-3">
-        {mod.temas.map((t, i) => (
-          <div class="card p-4 flex items-center justify-between gap-3">
-            <div>
-              <p class="text-xs text-[var(--color-text-muted)]">Tema {i + 1} · {t.type}</p>
-              <p class="font-semibold">{t.title}</p>
-              <p class="text-sm text-[var(--color-text-muted)]">{t.duration} · {t.hasExam ? 'Con examen' : 'Sin examen'}</p>
+      {topics.length === 0 ? (
+        <div class="card p-8 text-center text-[var(--color-text-muted)]">
+          Sin temas todavía. Agrega el primero.
+        </div>
+      ) : (
+        <div class="space-y-3">
+          {topics.map((t: TopicAdminItem, i: number) => (
+            <div class="card p-4 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs text-[var(--color-text-muted)]">
+                  Tema {i + 1} · {t.content_type}
+                </p>
+                <p class="font-semibold">{t.title}</p>
+                <p class="text-sm text-[var(--color-text-muted)]">
+                  {t.has_exam ? "Con examen" : "Sin examen"}
+                </p>
+              </div>
+              <a
+                href={`/admin/cursos/${id}/modulos/${modId}/temas/${t.id}`}
+                class="btn btn-secondary"
+              >
+                Editar
+              </a>
             </div>
-            <a href={`/admin/cursos/${id}/modulos/${modId}/temas/${t.id}`} class="btn btn-secondary">Editar</a>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   )}
 </AdminLayout>

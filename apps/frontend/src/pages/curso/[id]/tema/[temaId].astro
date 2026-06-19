@@ -1,57 +1,111 @@
 ---
+export const prerender = false
+
 import StudentLayout from "@/layouts/StudentLayout.astro";
 import LearningPlayer from "@/components/ui/LearningPlayer.vue";
-import { cursos, findCurso } from "@/lib/mock";
+import { apiGet, ApiError } from "@/lib/api";
+import type { CourseDetail, CourseProgress } from "@/lib/api";
 
-export function getStaticPaths() {
-  return cursos.flatMap(c =>
-    c.modulos.flatMap(m => m.temas.map(t => ({ params: { id: c.id, temaId: t.id } })))
-  );
+type TopicView = {
+  id: string
+  title: string
+  content_type: string
+  content_body: string | null
+  duration_seconds: number | null
+  has_exam: boolean
+  exam_min_score: number
+  state: string
 }
 
-const { id, temaId } = Astro.params;
-const curso = findCurso(id!);
-if (!curso) return Astro.redirect('/catalogo');
+const { id: slug, temaId } = Astro.params
 
-const allTemas = curso.modulos.flatMap(m => m.temas.map(t => ({ ...t, moduloTitle: m.title })));
-const idx = allTemas.findIndex(t => t.id === temaId);
-const tema = allTemas[idx];
-if (!tema) return Astro.redirect(`/curso/${id}`);
+// Fetch topic detail
+let topic: TopicView
+try {
+  topic = await apiGet('/api/v1/topics/{topic_id}', {
+    params: { topic_id: temaId! },
+    request: Astro.request,
+  }) as TopicView
+} catch (err) {
+  if (err instanceof ApiError && err.status === 401) {
+    return Astro.redirect(`/registro?next=${encodeURIComponent(Astro.url.pathname)}`)
+  }
+  if (err instanceof ApiError && err.status === 403) {
+    return Astro.redirect(`/curso/${slug}?toast=locked`)
+  }
+  if (err instanceof ApiError && err.status === 404) {
+    return Astro.redirect(`/curso/${slug}`)
+  }
+  throw err
+}
 
-const nextTema = allTemas[idx + 1];
-const examUrl = `/curso/${id}/tema/${temaId}/examen`;
-const nextUrl = nextTema ? `/curso/${id}/tema/${nextTema.id}` : `/curso/${id}/certificado`;
+// Fetch course for nav context — non-critical
+let course: CourseDetail | null = null
+let progress: CourseProgress | null = null
+try {
+  course = await apiGet('/api/v1/courses/{slug}', {
+    params: { slug: slug! },
+    request: Astro.request,
+  }) as CourseDetail
+  progress = await apiGet('/api/v1/courses/{slug}/progress', {
+    params: { slug: slug! },
+    request: Astro.request,
+  }) as CourseProgress
+} catch {
+  // Non-critical — render without nav context
+}
 
-const isRepaso = Astro.url.searchParams.get('repaso') === '1';
+// Build prev/next navigation from course modules
+let nextTopicId: string | null = null
+if (course) {
+  const allTopics = course.modules.flatMap(m => m.topics)
+  const idx = allTopics.findIndex(t => t.id === temaId)
+  nextTopicId = allTopics[idx + 1]?.id ?? null
+}
+
+const examUrl = `/curso/${slug}/tema/${temaId}/examen`
+const nextUrl = nextTopicId
+  ? `/curso/${slug}/tema/${nextTopicId}`
+  : `/curso/${slug}/certificado`
+
+const isRepaso = Astro.url.searchParams.get('repaso') === '1'
+
+const contentType = (topic.content_type as 'video' | 'pdf' | 'imagen' | 'texto') ?? 'texto'
+
+const durationLabel = topic.duration_seconds
+  ? `${Math.ceil(topic.duration_seconds / 60)} min`
+  : null
 ---
-<StudentLayout title={tema.title} courseName={curso.title} progress={curso.progress}>
-  <a href={`/curso/${id}`} class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Volver al curso</a>
+<StudentLayout
+  title={topic.title}
+  courseName={course?.title}
+  progress={progress?.course_pct ?? 0}
+>
+  <a href={`/curso/${slug}`} class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Volver al curso</a>
 
   {isRepaso && (
-    <div class="card p-4 mb-4 bg-amber-50 border-amber-200">
-      <p class="text-amber-800 text-sm font-medium">📖 Repaso del tema</p>
+    <div class="card p-4 mb-4 bg-amber-50 border-amber-200 border">
+      <p class="text-amber-800 text-sm font-medium">Repaso del tema</p>
       <p class="text-amber-700 text-sm mt-1">Vuelve a ver el contenido completo para reintentar el cuestionario.</p>
     </div>
   )}
 
-  <p class="text-sm text-[var(--color-primary)] font-medium">{tema.moduloTitle}</p>
-  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mt-1 mb-2">{tema.title}</h1>
-  <p class="text-[var(--color-text-muted)] mb-6">{tema.duration} · {tema.hasExam ? 'Con examen' : 'Sin examen'}</p>
+  <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mt-1 mb-2">{topic.title}</h1>
+  <p class="text-[var(--color-text-muted)] mb-6">
+    {durationLabel && <span>{durationLabel} · </span>}
+    {topic.has_exam ? 'Con examen' : 'Sin examen'}
+  </p>
 
   <LearningPlayer
     client:load
-    type={tema.type}
+    topicId={temaId!}
+    contentType={contentType}
     examUrl={examUrl}
     nextUrl={nextUrl}
-    hasExam={tema.hasExam}
+    hasExam={topic.has_exam}
   >
-    <h2>Introducción</h2>
-    <p>El acompañamiento social es una práctica que requiere atención, escucha activa y respeto absoluto por la dignidad de la persona. En este tema veremos los pilares fundamentales para hacerlo bien.</p>
-    <h3>Pilar 1: Atención</h3>
-    <p>Estar presente sin distracciones. Mirar a los ojos. Notar el lenguaje corporal.</p>
-    <h3>Pilar 2: Escucha</h3>
-    <p>Sin interrumpir. Sin juzgar. Validando emociones.</p>
-    <h3>Pilar 3: Orientación</h3>
-    <p>Solo cuando se solicite. Con información clara y verificada.</p>
+    {topic.content_body && (
+      <Fragment set:html={topic.content_body} />
+    )}
   </LearningPlayer>
 </StudentLayout>
