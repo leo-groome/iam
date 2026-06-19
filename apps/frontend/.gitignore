@@ -4,3 +4,9 @@ dist
 .env
 .env.production
 .DS_Store
+
+# Playwright test output
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
