@@ -16,8 +16,8 @@ const curso = !isNew ? findCurso(id) : null;
   <header class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">{{ isNew ? "Crear nuevo curso" : `Editar: ${curso?.title}` }}</h1>
     <div class="flex gap-2">
-      <button class="btn btn-secondary">Guardar borrador</button>
-      <button class="btn btn-primary">Publicar</button>
+      <button class="btn btn-secondary" type="button">Guardar borrador</button>
+      <button class="btn btn-primary" type="button">Publicar</button>
     </div>
   </header>
 
@@ -62,8 +62,14 @@ const curso = !isNew ? findCurso(id) : null;
       <div class="card p-6">
         <h3 class="font-semibold mb-3">Configuración</h3>
         <div class="space-y-2 text-sm">
-          <label class="flex items-center justify-between"><span>Visible en catálogo</span><input type="checkbox" checked /></label>
-          <label class="flex items-center justify-between"><span>Genera certificado</span><input type="checkbox" checked /></label>
+          <label class="flex items-center justify-between">
+            <span>Visible en catálogo</span>
+            <input type="checkbox" checked />
+          </label>
+          <label class="flex items-center justify-between">
+            <span>Genera certificado</span>
+            <input type="checkbox" checked />
+          </label>
         </div>
       </div>
     </div>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { apiPost, mediaFetch, ApiError } from '@/lib/api'
+import type { PlayTokenResponse } from '@/lib/api'
 
 const props = defineProps<{
   type: 'video' | 'pdf' | 'imagen' | 'texto';
@@ -22,14 +24,14 @@ function toggleFullscreen() {
   const el = videoWrap.value;
   if (!el) return;
   if (!document.fullscreenElement) {
-    el.requestFullscreen?.().catch(() => {});
+    el.requestFullscreen?.().catch(() => {})
   } else {
-    document.exitFullscreen?.().catch(() => {});
+    document.exitFullscreen?.().catch(() => {})
   }
 }
 
-function onFsChange() {
-  isFullscreen.value = !!document.fullscreenElement;
+function onFsChange(): void {
+  isFullscreen.value = !!document.fullscreenElement
 }
 
 onMounted(() => {
@@ -41,34 +43,19 @@ onUnmounted(() => {
   if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
 });
 
-const canContinue = computed(() => progress.value >= 95);
-const buttonLabel = computed(() => {
-  if (!canContinue.value) return progress.value > 0 ? 'Sigue viendo...' : 'Comenzar';
-  return props.hasExam ? 'Hacer cuestionario' : 'Siguiente tema';
-});
-const buttonHref = computed(() => props.hasExam ? props.examUrl : (props.nextUrl ?? '#'));
-
-function togglePlay() {
-  if (canContinue.value && props.type === 'video') return;
-  playing.value = !playing.value;
-  if (playing.value && props.type === 'video') {
-    timer = window.setInterval(() => {
-      currentTime.value += 1;
-      progress.value = Math.min(100, Math.round((currentTime.value / duration) * 100));
-      if (progress.value >= 100) {
-        playing.value = false;
-        clearInterval(timer);
-      }
-    }, 100);
-  } else {
-    clearInterval(timer);
+// ─── Scroll tracking for non-video ───────────────────────────────────────────
+function setupScrollTracking(): void {
+  scrollHandler = () => {
+    const h = document.documentElement.scrollHeight - window.innerHeight
+    const pct = h > 0 ? Math.min(100, Math.round((window.scrollY / h) * 100)) : 100
+    if (pct >= 95 && !contentDone.value) markContentDone()
   }
+  window.addEventListener('scroll', scrollHandler, { passive: true })
 }
 
-function formatTime(s: number) {
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${r.toString().padStart(2, '0')}`;
+// ─── Texto: manual completion ─────────────────────────────────────────────────
+async function onTextMarkDone(): Promise<void> {
+  await markContentDone()
 }
 
 onMounted(() => {
@@ -79,34 +66,75 @@ onMounted(() => {
     };
     window.addEventListener('scroll', scrollHandler);
   }
-});
+})
 </script>
 
 <template>
   <div>
-    <div v-if="type === 'video'" class="card overflow-hidden mb-6">
+    <!-- Error banner -->
+    <div
+      v-if="mediaError"
+      class="rounded-xl px-4 py-3 text-sm border flex gap-3 items-start bg-red-50 border-red-200 text-red-800 mb-4"
+      role="alert"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      <span>{{ mediaError }}</span>
+    </div>
+
+    <!-- Loading skeleton -->
+    <div v-if="loadingToken" class="card overflow-hidden mb-6 animate-pulse">
+      <div class="aspect-video bg-[var(--color-app-bg)]"></div>
+    </div>
+
+    <!-- VIDEO -->
+    <div v-else-if="contentType === 'video'" class="card overflow-hidden mb-6">
       <div
         ref="videoWrap"
         :class="[
-          'bg-[var(--color-text)] relative grid place-items-center',
-          isFullscreen ? 'w-screen h-screen' : 'aspect-video'
+          'bg-black relative',
+          isFullscreen ? 'w-screen h-screen' : 'aspect-video',
         ]"
       >
+        <video
+          ref="videoEl"
+          class="w-full h-full object-contain"
+          :src="mediaBlobUrl ?? undefined"
+          @play="onVideoPlay"
+          @pause="onVideoPause"
+          @timeupdate="onVideoTimeUpdate"
+          @ended="onVideoEnded"
+          preload="metadata"
+          playsinline
+        />
+
+        <!-- Big center play button when paused -->
         <button
-          @click="togglePlay"
-          class="w-20 h-20 rounded-full bg-white/95 grid place-items-center text-[var(--color-primary)] shadow-2xl hover:scale-105 transition"
-          :aria-label="playing ? 'Pausar' : 'Reproducir'"
+          v-if="!playing && mediaBlobUrl"
+          @click="toggleVideoPlayback"
+          class="absolute inset-0 w-full h-full grid place-items-center bg-black/20 group"
+          aria-label="Reproducir"
         >
-          <svg v-if="!playing" width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          <svg v-else width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+          <span class="w-20 h-20 rounded-full bg-white/95 grid place-items-center text-[var(--color-primary)] shadow-2xl group-hover:scale-105 transition">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </span>
         </button>
+
+        <!-- Bottom controls bar -->
         <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
           <div class="flex items-center gap-3 text-white text-xs">
-            <span>{{ formatTime(currentTime) }}</span>
+            <button
+              @click="toggleVideoPlayback"
+              class="text-white/90 hover:text-white p-1.5 rounded-md hover:bg-white/10 transition"
+              :aria-label="playing ? 'Pausar' : 'Reproducir'"
+            >
+              <svg v-if="!playing" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+            </button>
+            <span>{{ formatTime(videoCurrentTime) }}</span>
             <div class="flex-1 h-1.5 bg-white/20 rounded-full overflow-hidden">
-              <div class="h-full bg-white transition-all" :style="{ width: progress + '%' }"></div>
+              <div class="h-full bg-white transition-all" :style="{ width: videoProgress + '%' }"></div>
             </div>
-            <span>{{ formatTime(duration) }}</span>
+            <span>{{ formatTime(videoDuration) }}</span>
             <button
               @click.stop="toggleFullscreen"
               class="text-white/90 hover:text-white p-1.5 rounded-md hover:bg-white/10 transition"
@@ -121,29 +149,60 @@ onMounted(() => {
       </div>
       <div class="p-4 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-        Ve el video completo. No puedes adelantar.
+        Ve el video completo para desbloquear el siguiente paso.
       </div>
     </div>
 
-    <div v-else-if="type === 'pdf'" class="card p-6 mb-6 prose max-w-none">
-      <div class="aspect-[3/4] bg-[var(--color-app-bg)] grid place-items-center rounded-lg text-[var(--color-text-muted)]">
+    <!-- PDF -->
+    <div v-else-if="contentType === 'pdf'" class="card mb-6 overflow-hidden">
+      <iframe
+        v-if="mediaBlobUrl"
+        :src="mediaBlobUrl"
+        class="w-full aspect-[3/4] border-0"
+        title="Documento PDF"
+      />
+      <div v-else class="aspect-[3/4] grid place-items-center text-[var(--color-text-muted)] p-6">
         <div class="text-center">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-          <p>Visor de PDF</p>
+          <p>Cargando documento...</p>
         </div>
       </div>
     </div>
 
-    <div v-else-if="type === 'imagen'" class="card p-6 mb-6">
-      <div class="aspect-[4/3] bg-[var(--color-app-bg)] grid place-items-center rounded-lg text-[var(--color-text-muted)]">
-        Infografía
+    <!-- IMAGEN -->
+    <div v-else-if="contentType === 'imagen'" class="card p-6 mb-6">
+      <img
+        v-if="mediaBlobUrl"
+        :src="mediaBlobUrl"
+        alt="Infografía del tema"
+        class="w-full rounded-lg"
+        loading="lazy"
+      />
+      <div v-else class="aspect-[4/3] bg-[var(--color-app-bg)] grid place-items-center rounded-lg text-[var(--color-text-muted)]">
+        Cargando imagen...
       </div>
     </div>
 
+    <!-- TEXTO -->
     <article v-else class="card p-6 sm:p-8 mb-6 prose max-w-none">
       <slot />
+      <div class="mt-8 pt-6 border-t border-[var(--color-border)] not-prose">
+        <button
+          v-if="!contentDone"
+          @click="onTextMarkDone"
+          :disabled="markingDone"
+          class="btn btn-primary w-full sm:w-auto disabled:opacity-50"
+        >
+          {{ markingDone ? 'Guardando...' : 'Marcar como leído' }}
+        </button>
+        <p v-else class="text-sm text-emerald-600 font-medium flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Contenido completado
+        </p>
+      </div>
     </article>
 
+    <!-- Sticky CTA bar -->
     <div class="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] p-4 z-20">
       <div class="max-w-3xl mx-auto">
         <router-link v-if="canContinue" :to="buttonHref" :class="['btn btn-block btn-primary']">

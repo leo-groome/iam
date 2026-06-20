@@ -1,0 +1,13 @@
+name = "iam-media-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "iam-media"
+
+[vars]
+ALLOWED_ORIGINS = "https://app.iam.example"
+
+# Deploy secrets via CLI — never commit real values:
+#   wrangler secret put MEDIA_JWT_SECRET
