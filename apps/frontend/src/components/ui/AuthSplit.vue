@@ -76,7 +76,7 @@ function toggle() {
               <div class="relative flex justify-center"><span class="bg-[var(--color-app-bg)] px-2 text-xs text-[var(--color-text-muted)]">o entra con tu correo</span></div>
             </div>
 
-            <form action="/catalogo" class="space-y-3">
+            <form @submit.prevent="$router.push('/catalogo')" class="space-y-3">
               <div>
                 <label class="label" for="login-email">Correo</label>
                 <input id="login-email" type="email" class="input" placeholder="tu@correo.com" />
@@ -108,7 +108,7 @@ function toggle() {
               <p class="text-[var(--color-text-muted)] mt-1">Es gratis y rápido.</p>
             </div>
 
-            <form action="/catalogo" class="space-y-3">
+            <form @submit.prevent="$router.push('/catalogo')" class="space-y-3">
               <div>
                 <label class="label" for="reg-nombre">Nombre completo</label>
                 <input id="reg-nombre" type="text" class="input" placeholder="Tu nombre" required minlength="3" maxlength="80" />

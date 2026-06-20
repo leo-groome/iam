@@ -4,27 +4,23 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "astro dev",
-    "start": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro",
-    "type-check": "astro check"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.4",
-    "@astrojs/vue": "^5.0.13",
-    "@tailwindcss/vite": "^4.1.7",
-    "astro": "^5.7.10",
     "lucide-vue-next": "^0.469.0",
-    "nanostores": "^0.11.4",
-    "pinia": "^2.3.1",
-    "tailwindcss": "^4.1.7",
-    "typescript": "^5.7.3",
+    "pinia": "^3.0.0",
     "vue": "^3.5.13",
+    "vue-router": "^4.5.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5"
+    "@tailwindcss/vite": "^4.1.7",
+    "@types/node": "^22.10.5",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "tailwindcss": "^4.1.7",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0"
   }
 }

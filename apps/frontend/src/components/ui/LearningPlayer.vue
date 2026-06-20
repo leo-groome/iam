@@ -13,6 +13,7 @@ const playing = ref(false);
 const duration = 180; // mock 3 min
 const currentTime = ref(0);
 let timer: number | undefined;
+let scrollHandler: (() => void) | undefined;
 
 const videoWrap = ref<HTMLElement | null>(null);
 const isFullscreen = ref(false);
@@ -37,6 +38,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', onFsChange);
   if (timer) clearInterval(timer);
+  if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
 });
 
 const canContinue = computed(() => progress.value >= 95);
@@ -71,10 +73,11 @@ function formatTime(s: number) {
 
 onMounted(() => {
   if (props.type !== 'video') {
-    window.addEventListener('scroll', () => {
+    scrollHandler = () => {
       const h = document.documentElement.scrollHeight - window.innerHeight;
       progress.value = h > 0 ? Math.min(100, Math.round((window.scrollY / h) * 100)) : 100;
-    });
+    };
+    window.addEventListener('scroll', scrollHandler);
   }
 });
 </script>
@@ -143,12 +146,12 @@ onMounted(() => {
 
     <div class="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] p-4 z-20">
       <div class="max-w-3xl mx-auto">
-        <a
-          :href="canContinue ? buttonHref : undefined"
-          :class="['btn btn-block', canContinue ? 'btn-primary' : 'btn-primary opacity-50 pointer-events-none']"
-        >
+        <router-link v-if="canContinue" :to="buttonHref" :class="['btn btn-block btn-primary']">
           {{ buttonLabel }}
-        </a>
+        </router-link>
+        <span v-else :class="['btn btn-block btn-primary opacity-50 pointer-events-none']">
+          {{ buttonLabel }}
+        </span>
       </div>
     </div>
   </div>

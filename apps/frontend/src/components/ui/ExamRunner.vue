@@ -104,9 +104,9 @@ const aprobado = computed(() => score.value >= props.minPercent);
       <h2 class="text-3xl font-bold">¡Aprobado!</h2>
       <p class="text-5xl font-extrabold text-[var(--color-primary)] mt-4">{{ score }}</p>
       <p class="text-[var(--color-text-muted)] mt-2">Calificación mínima: {{ minPercent }}</p>
-      <a :href="`/curso/${cursoId}/tema/${temaId}/resultado?score=${score}&pass=1`" class="btn btn-primary btn-block mt-6">
+      <router-link :to="`/curso/${cursoId}/tema/${temaId}/resultado?score=${score}&pass=1`" class="btn btn-primary btn-block mt-6">
         Continuar al siguiente tema
-      </a>
+      </router-link>
     </div>
     <div v-else>
       <div class="w-20 h-20 mx-auto rounded-full bg-amber-100 text-amber-600 grid place-items-center mb-4">
@@ -116,9 +116,9 @@ const aprobado = computed(() => score.value >= props.minPercent);
       <p class="text-[var(--color-text-muted)] mt-1">Vamos a repasar juntos.</p>
       <p class="text-5xl font-extrabold text-[var(--color-text-muted)] mt-4">{{ score }}</p>
       <p class="text-[var(--color-text-muted)] mt-2">Necesitas al menos {{ minPercent }} para aprobar.</p>
-      <a :href="`/curso/${cursoId}/tema/${temaId}?repaso=1`" class="btn btn-primary btn-block mt-6">
+      <router-link :to="`/curso/${cursoId}/tema/${temaId}?repaso=1`" class="btn btn-primary btn-block mt-6">
         Volver a ver el video
-      </a>
+      </router-link>
     </div>
   </div>
 </template>
