@@ -18,7 +18,9 @@ from pydantic import BaseModel, Field, field_validator
 # Request schemas
 # ---------------------------------------------------------------------------
 
-_FULL_NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÿ\s]+$")
+# Allow ASCII + Latin-1 + Latin Extended-A/B letters, spaces, hyphens,
+# apostrophes and periods (e.g. "José-Luis", "D'Angelo", "J. Smith").
+_FULL_NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿĀ-ɏ\s\-'.]+$")
 
 
 class SyncRequest(BaseModel):

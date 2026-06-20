@@ -3,18 +3,21 @@ import { useAuthStore } from '@/stores/auth'
 
 const routes: Array<RouteRecordRaw> = [
   // Públicas
+  { path: '/', redirect: '/login' },
   {
-    path: '/',
-    name: 'Home',
-    component: () => import('@/views/public/index.vue'),
+    path: '/login',
+    name: 'Login',
+    component: () => import('@/views/public/login.vue'),
     meta: { layout: 'PublicLayout' }
   },
   {
-    path: '/registro',
-    name: 'Registro',
-    component: () => import('@/views/public/registro.vue'),
+    path: '/signup',
+    name: 'Signup',
+    component: () => import('@/views/public/signup.vue'),
     meta: { layout: 'PublicLayout' }
   },
+  // Compat: rutas legacy redirigen a /login y /signup
+  { path: '/registro', redirect: (to) => ({ path: '/signup', query: to.query }) },
   {
     path: '/terminos',
     name: 'Terminos',
@@ -176,14 +179,14 @@ router.beforeEach(async (to, _from, next) => {
   const isInstructor = store.isInstructor
 
   // Auth pages: redirect authenticated users away
-  if ((to.path === '/registro' || to.path === '/login') && isAuthenticated) {
+  if ((to.path === '/login' || to.path === '/signup' || to.path === '/registro') && isAuthenticated) {
     const nextPath = (to.query.next as string) || '/catalogo'
     return next(nextPath)
   }
 
   // Private routes: require authentication
   if (to.meta.requiresAuth && !isAuthenticated) {
-    return next({ path: '/registro', query: { next: to.fullPath } })
+    return next({ path: '/login', query: { next: to.fullPath } })
   }
 
   // Admin routes: require admin or instructor

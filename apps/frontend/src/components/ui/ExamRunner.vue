@@ -37,7 +37,7 @@ onMounted(async () => {
   } catch (err) {
     if (err instanceof ApiError) {
       if (err.status === 401) {
-        window.location.href = '/registro'
+        window.location.href = '/login'
         return
       }
       fetchError.value = err.status === 429
@@ -89,7 +89,7 @@ async function submitExam() {
   } catch (err) {
     if (err instanceof ApiError) {
       if (err.status === 401) {
-        window.location.href = '/registro'
+        window.location.href = '/login'
         return
       }
       if (err.status === 429) {

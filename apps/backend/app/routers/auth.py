@@ -87,6 +87,20 @@ async def auth_sync(
     result = await db.execute(select(User).where(User.neon_user_id == claims.sub))
     user = result.scalar_one_or_none()
 
+    # Fallback: row may exist under the same email but a different neon_user_id
+    # (user re-registered in Neon Auth after a prior signup). Email ownership is
+    # guaranteed by Neon Auth's OTP verification before this endpoint runs, so
+    # rebinding neon_user_id to the new sub is safe and correct.
+    if user is None:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if user is not None and user.neon_user_id != claims.sub:
+            logger.info(
+                "Rebinding existing user to new Neon sub",
+                extra={"neon_user_id_prefix": claims.sub[:8]},
+            )
+            user.neon_user_id = claims.sub
+
     if user is None:
         role = "estudiante"
         if settings.allow_mock_auth and token.startswith("mock-token:"):
@@ -132,7 +146,7 @@ async def me(current_user: User = Depends(get_current_user)) -> User:  # noqa: B
 
 
 @router.post("/me/logout", status_code=204)
-async def logout(current_user: User = Depends(get_current_user)) -> None:  # noqa: B008
+async def logout(_user: User = Depends(get_current_user)) -> None:  # noqa: B008
     """Stateless logout — Neon Auth manages the session client-side."""
     # No server-side session to invalidate; 204 signals success to client.
     return None
@@ -144,5 +158,5 @@ async def me_alias(current_user: User = Depends(get_current_user)) -> User:  # n
 
 
 @me_router.post("/me/logout", status_code=204)
-async def logout_alias(current_user: User = Depends(get_current_user)) -> None:  # noqa: B008
-    return await logout(current_user)
+async def logout_alias(_user: User = Depends(get_current_user)) -> None:  # noqa: B008
+    return None

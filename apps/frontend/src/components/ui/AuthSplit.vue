@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { z } from 'zod'
 import {
   assertAuthConfigured,
@@ -14,6 +15,7 @@ import { ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
+const router = useRouter()
 
 // ---------------------------------------------------------------------------
 // Props
@@ -34,8 +36,9 @@ const isCompletingOAuthProfile = ref(false)
 const toast = ref<{ type: 'error' | 'success'; message: string } | null>(null)
 
 function toggle() {
-  mode.value = mode.value === 'login' ? 'register' : 'login'
+  const target = mode.value === 'login' ? '/signup' : '/login'
   toast.value = null
+  router.push({ path: target, query: router.currentRoute.value.query })
 }
 
 function showToast(type: 'error' | 'success', message: string) {
@@ -67,7 +70,11 @@ onMounted(() => {
   }
   isReady.value = true
 
-  if (mode.value === 'register' && hasAuthConfig() && !isMockAuthAllowed()) {
+  // Only enter "complete your profile" mode when the user actually returned
+  // from an OAuth callback (?oauth=1). Otherwise a leftover Neon session would
+  // hijack the regular signup form.
+  const cameFromOAuth = new URLSearchParams(window.location.search).get('oauth') === '1'
+  if (mode.value === 'register' && cameFromOAuth && hasAuthConfig() && !isMockAuthAllowed()) {
     authClient.getSession().then(({ data }) => {
       isCompletingOAuthProfile.value = Boolean(data?.session && data?.user)
     }).catch(() => {
@@ -150,8 +157,8 @@ async function handleGoogleLogin() {
     await authClient.signIn.social({
       provider: 'google',
       callbackURL: window.location.origin + nextRedirect,
-      newUserCallbackURL: window.location.origin + '/registro',
-      errorCallbackURL: window.location.origin + '/registro',
+      newUserCallbackURL: window.location.origin + '/signup?oauth=1',
+      errorCallbackURL: window.location.origin + '/login',
     })
   } catch (err: unknown) {
     showToast('error', 'No se pudo iniciar el flujo con Google. Intenta de nuevo.')
