@@ -484,7 +484,7 @@ function classifyAuthError(err: unknown): string {
               <div class="relative flex justify-center"><span class="bg-[var(--color-app-bg)] px-2 text-xs text-[var(--color-text-muted)]">o entra con tu correo</span></div>
             </div>
 
-            <form @submit.prevent="$router.push('/catalogo')" class="space-y-3">
+            <form class="space-y-3" novalidate @submit.prevent="handleLogin">
               <div>
                 <label class="label" for="login-email">Correo</label>
                 <input
@@ -549,7 +549,34 @@ function classifyAuthError(err: unknown): string {
               </p>
             </div>
 
-            <form @submit.prevent="$router.push('/catalogo')" class="space-y-3">
+            <form class="space-y-3" novalidate @submit.prevent="handleRegister">
+              <div v-if="pendingRegistration" class="space-y-3">
+                <p class="text-sm text-[var(--color-text-muted)]">
+                  Enviamos un código a <strong class="text-[var(--color-text)]">{{ pendingRegistration.email }}</strong>.
+                </p>
+                <div>
+                  <label class="label" for="reg-verification-code">Código de verificación</label>
+                  <input
+                    id="reg-verification-code"
+                    v-model="verificationCode"
+                    type="text"
+                    inputmode="numeric"
+                    pattern="[0-9]{6}"
+                    maxlength="6"
+                    class="input text-center tracking-[0.35em]"
+                    :class="{ 'border-red-400': regErrors.verificationCode }"
+                    placeholder="000000"
+                    autocomplete="one-time-code"
+                    required
+                  />
+                  <p v-if="regErrors.verificationCode" class="mt-1 text-xs text-red-600">{{ regErrors.verificationCode }}</p>
+                </div>
+                <button type="button" class="text-sm text-[var(--color-primary)] font-semibold hover:underline" :disabled="isLoading" @click="resendVerificationCode">
+                  Reenviar código
+                </button>
+              </div>
+
+              <template v-else>
               <div>
                 <label class="label" for="reg-nombre">Nombre completo</label>
                 <input
