@@ -1,15 +1,10 @@
 /**
- * Typed HTTP client for the IAM backend API.
+ * Typed HTTP client for the IAM backend API (client-side SPA only).
  *
- * Usage (SSR, inside an Astro page):
- *   const courses = await apiGet('/api/v1/courses', { request: Astro.request })
- *
- * Usage (CSR, inside a Vue component):
+ * Usage (Vue component):
  *   const courses = await apiGet('/api/v1/courses')
  *
- * Token resolution order:
- *   Server-side: reads the short-lived `neon-auth-token` cookie from the incoming Request.
- *   Client-side: asks Neon Auth for a fresh JWT and mirrors it into that cookie.
+ * Token resolution: asks Neon Auth for a fresh JWT via getAuthToken().
  *
  * All 4xx/5xx responses throw ApiError with a typed `code` field.
  * Worker R2 media streams use `mediaFetch(url, token)` — token in Bearer header only.
@@ -92,23 +87,7 @@ async function throwApiError(res: Response): Promise<never> {
 // Token extraction
 // ---------------------------------------------------------------------------
 
-/**
- * Server-side: parse the `neon-auth-token` cookie from an incoming
- * Astro/Fetch Request's Cookie header.
- */
-function extractTokenFromRequest(req: Request): string | null {
-  const cookieHeader = req.headers.get('cookie') ?? ''
-  for (const part of cookieHeader.split(';')) {
-    const [key, ...rest] = part.trim().split('=')
-    if (key?.trim() === AUTH_TOKEN_COOKIE) {
-      return decodeURIComponent(rest.join('=').trim()) || null
-    }
-  }
-  return null
-}
-
-async function resolveToken(req?: Request): Promise<string | null> {
-  if (req) return extractTokenFromRequest(req)
+async function resolveToken(): Promise<string | null> {
   return getAuthToken()
 }
 
@@ -127,11 +106,6 @@ export interface ApiFetchOptions {
   query?: Record<string, string | number | boolean | null | undefined>
   /** Request body — will be JSON.stringified. */
   body?: unknown
-  /**
-   * Pass Astro.request when calling from SSR context so the Bearer token
-   * can be extracted from the incoming httpOnly cookie.
-   */
-  request?: Request
 }
 
 /**
@@ -144,7 +118,7 @@ export async function apiFetch<P extends keyof paths>(
   path: P,
   options: ApiFetchOptions = {},
 ): Promise<unknown> {
-  const { method = 'GET', params, query, body, request } = options
+  const { method = 'GET', params, query, body } = options
 
   // 1. Interpolate path params
   let resolvedPath: string = path as string
@@ -173,7 +147,7 @@ export async function apiFetch<P extends keyof paths>(
     headers['Content-Type'] = 'application/json'
   }
 
-  const token = await resolveToken(request)
+  const token = await resolveToken()
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }

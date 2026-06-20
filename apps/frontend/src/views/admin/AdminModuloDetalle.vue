@@ -1,22 +1,37 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router';
-const route = useRoute();
-import { cursos, findCurso } from "@/lib/mock";
+import { onMounted, ref } from 'vue';
+import { coursesService } from '@/services/courses.service';
 
-const id = route.params.id as string;
+const route = useRoute();
+const slug = route.params.slug as string;
 const modId = route.params.modId as string;
 
-
 const isNew = modId === 'nuevo';
-const curso = findCurso(id);
-const mod = !isNew ? curso?.modulos.find(m => m.id === modId) : null;
+const curso = ref(null);
+const mod = ref(null);
+const loading = ref(false);
+
+onMounted(async () => {
+  loading.value = true;
+  try {
+    curso.value = await coursesService.getBySlug(slug);
+    if (!isNew) {
+      mod.value = curso.value?.modules.find(m => m.id === modId);
+    }
+  } catch (err) {
+    console.error('Error loading course:', err);
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
 <template>
   <div class="page-container">
 
 
-  <router-link :to="`/admin/cursos/${id}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Curso</router-link>
+  <router-link :to="`/admin/cursos/${slug}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Curso</router-link>
   <header class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">{{ isNew ? "Nuevo módulo" : `Editar: ${mod?.title}` }}</h1>
     <button class="btn btn-primary">Guardar</button>
@@ -27,16 +42,12 @@ const mod = !isNew ? curso?.modulos.find(m => m.id === modId) : null;
       <label class="label">Título</label>
       <input class="input" minlength="3" maxlength="60" :value="mod?.title ?? ''" />
     </div>
-    <div>
-      <label class="label">Descripción</label>
-      <textarea class="input">{{ mod?.description ?? '' }}</textarea>
-    </div>
   </div>
 
   <section v-if="!isNew && mod">
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-xl font-bold">Temas</h2>
-      <router-link :to="`/admin/cursos/${id}/modulos/${modId}/temas/nuevo`" class="btn btn-secondary">+ Agregar tema</router-link>
+      <router-link :to="`/admin/cursos/${slug}/modulos/${modId}/temas/nuevo`" class="btn btn-secondary">+ Agregar tema</router-link>
     </div>
     <div class="space-y-3">
       <div v-for="(t, i) in mod.temas" :key="t.id" class="card p-4 flex items-center justify-between gap-3">

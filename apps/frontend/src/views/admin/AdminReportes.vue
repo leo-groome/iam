@@ -1,9 +1,5 @@
 <script setup lang="ts">
-const temas = [
-  { tema: 'Mirar con atención', curso: 'Acompañamiento social', tasa: 92 },
-  { tema: 'Protocolo de canalización', curso: 'Acompañamiento social', tasa: 54 },
-  { tema: 'Contención básica', curso: 'Primeros auxilios emocionales', tasa: 71 },
-];
+// TODO: endpoint backend pendiente (/api/v1/reports o similar)
 </script>
 
 <template>
@@ -12,44 +8,12 @@ const temas = [
 
   <header class="mb-6">
     <h1 class="text-3xl font-bold">Reportes</h1>
-    <p class="text-[var(--color-text-muted)]">Exporta datos y revisa el desempeño por tema.</p>
+    <p class="text-[var(--color-text-muted)]">Próximamente: Exporta datos y revisa el desempeño por tema.</p>
   </header>
 
-  <div class="grid sm:grid-cols-3 gap-4 mb-8">
-    <button class="card p-5 text-left hover:border-[var(--color-primary)] transition">
-      <p class="text-3xl mb-1">📊</p>
-      <p class="font-semibold">Estudiantes</p>
-      <p class="text-sm text-[var(--color-text-muted)]">Exportar CSV</p>
-    </button>
-    <button class="card p-5 text-left hover:border-[var(--color-primary)] transition">
-      <p class="text-3xl mb-1">🎓</p>
-      <p class="font-semibold">Finalizaciones</p>
-      <p class="text-sm text-[var(--color-text-muted)]">Exportar Excel</p>
-    </button>
-    <button class="card p-5 text-left hover:border-[var(--color-primary)] transition">
-      <p class="text-3xl mb-1">📝</p>
-      <p class="font-semibold">Calificaciones</p>
-      <p class="text-sm text-[var(--color-text-muted)]">Exportar CSV</p>
-    </button>
-  </div>
-
-  <div class="card p-6">
-    <h2 class="font-semibold mb-1">Tasa de aprobación por tema</h2>
-    <p class="text-sm text-[var(--color-text-muted)] mb-4">Identifica temas problemáticos (tasa &lt; 70% en amarillo).</p>
-    <div class="space-y-3">
-      <div v-for="t in temas" :key="t.tema">
-        <div class="flex justify-between text-sm mb-1">
-          <div>
-            <span class="font-medium">{{ t.tema }}</span>
-            <span class="text-[var(--color-text-muted)] ml-2 text-xs">{{ t.curso }}</span>
-          </div>
-          <span :class="['font-semibold', t.tasa < 70 ? 'text-amber-600' : 'text-emerald-600']">{{ t.tasa }}%</span>
-        </div>
-        <div class="h-2 bg-[var(--color-app-bg)] rounded-full overflow-hidden">
-          <div :class="['h-full', t.tasa < 70 ? 'bg-amber-500' : 'bg-emerald-500']" :style="`width: ${t.tasa}%`"></div>
-        </div>
-      </div>
-    </div>
+  <div class="card p-8 text-center text-[var(--color-text-muted)]">
+    <p class="text-lg font-medium">Sin datos disponibles aún</p>
+    <p class="text-sm mt-1">Los reportes se habilitarán próximamente.</p>
   </div>
 
 

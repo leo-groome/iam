@@ -1,36 +1,41 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ExamRunner from '@/components/ui/ExamRunner.vue';
-import { findCurso, preguntasMock } from '@/lib/mock';
+import { coursesService } from '@/services/courses.service';
 
 const route = useRoute();
 const router = useRouter();
 
-const id = route.params.id as string;
-const temaId = route.params.temaId as string;
+const slug = route.params.slug as string;
+const topicId = route.params.topicId as string;
 
-const curso = findCurso(id);
-if (!curso) {
-  router.replace('/catalogo');
-}
+const curso = ref(null);
+const tema = ref(null);
+const loading = ref(true);
 
-const tema = computed(() => {
-  if (!curso) return null;
-  return curso.modulos.flatMap(m => m.temas).find(t => t.id === temaId);
+onMounted(async () => {
+  try {
+    curso.value = await coursesService.getBySlug(slug);
+    tema.value = curso.value?.modules.flatMap(m => m.topics).find(t => t.id === topicId);
+    if (!tema.value) {
+      router.replace(`/curso/${slug}`);
+    }
+  } catch (err) {
+    console.error(err);
+    router.replace('/catalogo');
+  } finally {
+    loading.value = false;
+  }
 });
-
-if (curso && !tema.value) {
-  router.replace(`/curso/${id}`);
-}
 </script>
 
 <template>
-  <div v-if="curso && tema">
+  <div v-if="!loading && curso && tema">
     <p class="text-sm text-[var(--color-primary)] font-medium">Cuestionario</p>
     <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-6">{{ tema.title }}</h1>
 
-    <ExamRunner :preguntas="preguntasMock" :cursoId="id" :temaId="temaId" :minPercent="70" />
+    <ExamRunner :topicId="topicId" :cursoSlug="slug" />
 
     <div class="h-32"></div>
   </div>

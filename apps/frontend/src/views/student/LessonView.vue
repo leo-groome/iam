@@ -1,41 +1,46 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import LearningPlayer from '@/components/ui/LearningPlayer.vue';
-import { findCurso } from '@/lib/mock';
+import { coursesService } from '@/services/courses.service';
 
 const route = useRoute();
 const router = useRouter();
 
-const id = route.params.id as string;
-const temaId = route.params.temaId as string;
+const slug = route.params.slug as string;
+const topicId = route.params.topicId as string;
 const isRepaso = route.query.repaso === '1';
 
-const curso = findCurso(id);
-if (!curso) {
-  router.replace('/catalogo');
-}
+const curso = ref(null);
+const allTemas = ref([]);
+const loading = ref(true);
 
-const allTemas = computed(() => {
-  if (!curso) return [];
-  return curso.modulos.flatMap(m => m.temas.map(t => ({ ...t, moduloTitle: m.title })));
+onMounted(async () => {
+  try {
+    curso.value = await coursesService.getBySlug(slug);
+    allTemas.value = curso.value?.modules.flatMap(m => m.topics.map(t => ({ ...t, moduloTitle: m.title }))) || [];
+    if (!allTemas.value.find(t => t.id === topicId)) {
+      router.replace(`/curso/${slug}`);
+    }
+  } catch (err) {
+    console.error(err);
+    router.replace('/catalogo');
+  } finally {
+    loading.value = false;
+  }
 });
 
-const idx = computed(() => allTemas.value.findIndex(t => t.id === temaId));
+const idx = computed(() => allTemas.value.findIndex(t => t.id === topicId));
 const tema = computed(() => allTemas.value[idx.value]);
 
-if (curso && !tema.value) {
-  router.replace(`/curso/${id}`);
-}
-
 const nextTema = computed(() => allTemas.value[idx.value + 1]);
-const examUrl = computed(() => `/curso/${id}/tema/${temaId}/examen`);
-const nextUrl = computed(() => nextTema.value ? `/curso/${id}/tema/${nextTema.value.id}` : `/curso/${id}/certificado`);
+const examUrl = computed(() => `/curso/${slug}/tema/${topicId}/examen`);
+const nextUrl = computed(() => nextTema.value ? `/curso/${slug}/tema/${nextTema.value.id}` : `/curso/${slug}/certificado`);
 </script>
 
 <template>
-  <div v-if="curso && tema">
-    <router-link :to="`/curso/${id}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Volver al curso</router-link>
+  <div v-if="!loading && curso && tema">
+    <router-link :to="`/curso/${slug}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Volver al curso</router-link>
 
     <div v-if="isRepaso" class="card p-4 mb-4 bg-amber-50 border-amber-200">
       <p class="text-amber-800 text-sm font-medium">📖 Repaso del tema</p>
@@ -44,22 +49,15 @@ const nextUrl = computed(() => nextTema.value ? `/curso/${id}/tema/${nextTema.va
 
     <p class="text-sm text-[var(--color-primary)] font-medium">{{ tema.moduloTitle }}</p>
     <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mt-1 mb-2">{{ tema.title }}</h1>
-    <p class="text-[var(--color-text-muted)] mb-6">{{ tema.duration }} · {{ tema.hasExam ? 'Con examen' : 'Sin examen' }}</p>
+    <p class="text-[var(--color-text-muted)] mb-6">{{ tema.duration_seconds }}s · {{ tema.has_exam ? 'Con examen' : 'Sin examen' }}</p>
 
     <LearningPlayer
-      :type="tema.type"
+      :tema="tema"
       :examUrl="examUrl"
       :nextUrl="nextUrl"
-      :hasExam="tema.hasExam"
+      :hasExam="tema.has_exam"
     >
-      <h2>Introducción</h2>
-      <p>El acompañamiento social es una práctica que requiere atención, escucha activa y respeto absoluto por la dignidad de la persona. En este tema veremos los pilares fundamentales para hacerlo bien.</p>
-      <h3>Pilar 1: Atención</h3>
-      <p>Estar presente sin distracciones. Mirar a los ojos. Notar el lenguaje corporal.</p>
-      <h3>Pilar 2: Escucha</h3>
-      <p>Sin interrumpir. Sin juzgar. Validando emociones.</p>
-      <h3>Pilar 3: Orientación</h3>
-      <p>Solo cuando se solicite. Con información clara y verificada.</p>
+      <div v-html="tema.content_body"></div>
     </LearningPlayer>
   </div>
 </template>

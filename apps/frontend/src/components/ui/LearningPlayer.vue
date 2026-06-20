@@ -4,7 +4,7 @@ import { apiPost, mediaFetch, ApiError } from '@/lib/api'
 import type { PlayTokenResponse } from '@/lib/api'
 
 const props = defineProps<{
-  type: 'video' | 'pdf' | 'imagen' | 'texto';
+  tema?: { duration_seconds?: number; content_body?: string };
   examUrl: string;
   nextUrl?: string;
   hasExam: boolean;
@@ -12,7 +12,7 @@ const props = defineProps<{
 
 const progress = ref(0);
 const playing = ref(false);
-const duration = 180; // mock 3 min
+const duration = computed(() => props.tema?.duration_seconds || 180);
 const currentTime = ref(0);
 let timer: number | undefined;
 let scrollHandler: (() => void) | undefined;

@@ -1,11 +1,26 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router';
-const route = useRoute();
-import { cursos, findCurso } from "@/lib/mock";
+import { onMounted, ref } from 'vue';
+import { coursesService } from '@/services/courses.service';
 
-const id = route.params.id as string;
-const isNew = id === 'nuevo';
-const curso = !isNew ? findCurso(id) : null;
+const route = useRoute();
+const slug = route.params.slug as string;
+const isNew = slug === 'nuevo';
+const curso = ref(null);
+const loading = ref(false);
+
+onMounted(async () => {
+  if (!isNew) {
+    loading.value = true;
+    try {
+      curso.value = await coursesService.getBySlug(slug);
+    } catch (err) {
+      console.error('Error loading course:', err);
+    } finally {
+      loading.value = false;
+    }
+  }
+});
 </script>
 
 <template>
@@ -30,12 +45,12 @@ const curso = !isNew ? findCurso(id) : null;
       </div>
       <div>
         <label class="label">Descripción corta</label>
-        <input class="input" maxlength="160" :value="curso?.subtitle ?? ''" placeholder="Una línea que resuma el curso" />
+        <input class="input" maxlength="160" :value="curso?.short_desc ?? ''" placeholder="Una línea que resuma el curso" />
         <p class="help">Hasta 160 caracteres. Se muestra en la tarjeta.</p>
       </div>
       <div>
         <label class="label">Descripción larga</label>
-        <textarea class="input min-h-32" maxlength="2000" placeholder="Markdown soportado">{{ curso?.description ?? '' }}</textarea>
+        <textarea class="input min-h-32" maxlength="2000" placeholder="Markdown soportado">{{ curso?.long_desc ?? '' }}</textarea>
       </div>
       <div>
         <label class="label">Imagen de portada</label>
@@ -51,11 +66,11 @@ const curso = !isNew ? findCurso(id) : null;
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Mínima</label>
-            <input type="number" class="input" min="13" max="99" :value="curso?.ageMin ?? 18" />
+            <input type="number" class="input" min="13" max="99" :value="curso?.age_min ?? 18" />
           </div>
           <div>
             <label class="label">Máxima</label>
-            <input type="number" class="input" min="13" max="99" :value="curso?.ageMax ?? 99" />
+            <input type="number" class="input" min="13" max="99" :value="curso?.age_max ?? 99" />
           </div>
         </div>
       </div>

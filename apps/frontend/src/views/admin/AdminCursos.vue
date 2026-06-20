@@ -1,5 +1,20 @@
 <script setup lang="ts">
-import { cursos } from "@/lib/mock";
+import { onMounted, ref } from 'vue';
+import { coursesService } from '@/services/courses.service';
+
+const courses = ref([]);
+const loading = ref(true);
+
+onMounted(async () => {
+  try {
+    const data = await coursesService.getAll();
+    courses.value = data.items || [];
+  } catch (err) {
+    console.error('Error loading courses:', err);
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
 <template>
@@ -26,13 +41,13 @@ import { cursos } from "@/lib/mock";
         </tr>
       </thead>
       <tbody class="divide-y divide-[var(--color-border)]">
-        <tr v-for="c in cursos" :key="c.id" class="hover:bg-[var(--color-app-bg)]">
+        <tr v-for="c in courses" :key="c.id" class="hover:bg-[var(--color-app-bg)]">
           <td class="px-4 py-3 font-medium">{{ c.title }}</td>
-          <td class="px-4 py-3">{{ c.modulos.length }}</td>
-          <td class="px-4 py-3 text-[var(--color-text-muted)]">{{ c.ageMin }}–{{ c.ageMax }}</td>
-          <td class="px-4 py-3"><span class="chip">Publicado</span></td>
+          <td class="px-4 py-3">{{ c.modules.length }}</td>
+          <td class="px-4 py-3 text-[var(--color-text-muted)]">{{ c.age_min }}–{{ c.age_max }}</td>
+          <td class="px-4 py-3"><span class="chip">{{ c.status }}</span></td>
           <td class="px-4 py-3 text-right">
-            <router-link :to="`/admin/cursos/${c.id}`" class="text-[var(--color-primary)] font-medium">Editar</router-link>
+            <router-link :to="`/admin/cursos/${c.slug}`" class="text-[var(--color-primary)] font-medium">Editar</router-link>
           </td>
         </tr>
       </tbody>

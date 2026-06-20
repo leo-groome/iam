@@ -1,22 +1,34 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { findCurso } from '@/lib/mock';
+import { useAuthStore } from '@/stores/auth';
+import { coursesService } from '@/services/courses.service';
 
 const route = useRoute();
 const router = useRouter();
-const id = route.params.id as string;
+const authStore = useAuthStore();
+const slug = route.params.slug as string;
 
-const curso = findCurso(id);
-if (!curso) {
-  router.replace('/catalogo');
-}
+const curso = ref(null);
+const loading = ref(true);
 
-const studentName = "Alex Hernández";
+onMounted(async () => {
+  try {
+    curso.value = await coursesService.getBySlug(slug);
+  } catch (err) {
+    console.error(err);
+    router.replace('/catalogo');
+  } finally {
+    loading.value = false;
+  }
+});
+
+const studentName = authStore.user?.full_name || 'Estudiante';
 const today = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
 </script>
 
 <template>
-  <div v-if="curso">
+  <div v-if="!loading && curso">
     <div class="text-center mb-8">
       <div class="text-6xl mb-3">🎓</div>
       <h1 class="text-4xl font-bold tracking-tight">¡Felicidades!</h1>

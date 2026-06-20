@@ -1,19 +1,35 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router';
-const route = useRoute();
-import { cursos, preguntasMock } from "@/lib/mock";
+import { onMounted, ref } from 'vue';
+import { coursesService } from '@/services/courses.service';
 
-const id = route.params.id as string;
+const route = useRoute();
+const slug = route.params.slug as string;
 const modId = route.params.modId as string;
-const temaId = route.params.temaId as string;
+const topicId = route.params.topicId as string;
 const qId = route.params.qId as string;
 
-
 const isNew = qId === 'nueva';
-const pregunta = !isNew ? preguntasMock.find(p => p.id === qId) : null;
-const opts = pregunta?.opciones ?? ["", "", ""];
-const correctIdx = pregunta?.correcta ?? 0;
-const backUrl = `/admin/cursos/${id}/modulos/${modId}/temas/${temaId}/preguntas`;
+const pregunta = ref(null);
+const loading = ref(false);
+
+onMounted(async () => {
+  if (!isNew) {
+    loading.value = true;
+    try {
+      const curso = await coursesService.getBySlug(slug);
+      const mod = curso?.modules.find(m => m.id === modId);
+      const tema = mod?.topics.find(t => t.id === topicId);
+      // TODO: fetch question by qId from tema
+    } catch (err) {
+      console.error('Error loading question:', err);
+    } finally {
+      loading.value = false;
+    }
+  }
+});
+
+const backUrl = `/admin/cursos/${slug}/modulos/${modId}/temas/${topicId}/preguntas`;
 </script>
 
 <template>

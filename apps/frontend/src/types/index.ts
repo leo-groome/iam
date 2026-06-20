@@ -1,11 +1,11 @@
 // ===== Auth Types =====
 export interface User {
   id: string;
-  nombre: string;
   email: string;
-  edad: number;
-  rol: 'estudiante' | 'admin';
-  avatarUrl?: string;
+  full_name: string;
+  birth_date?: string;
+  role: 'admin' | 'instructor' | 'estudiante';
+  status: string;
 }
 
 export interface LoginCredentials {

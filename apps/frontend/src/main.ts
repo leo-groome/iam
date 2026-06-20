@@ -1,15 +1,20 @@
-import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import App from './App.vue';
-import router from './router';
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
+import router from './router'
+import { useAuthStore } from './stores/auth'
 
 // Load global styles
-import './styles/global.css';
+import './styles/global.css'
 
-const app = createApp(App);
-const pinia = createPinia();
+const app = createApp(App)
+const pinia = createPinia()
 
-app.use(pinia);
-app.use(router);
+app.use(pinia)
+app.use(router)
 
-app.mount('#app');
+// Initialize auth before mounting so router guards see populated state
+const auth = useAuthStore(pinia)
+await auth.init()
+
+app.mount('#app')

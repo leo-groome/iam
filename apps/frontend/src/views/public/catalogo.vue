@@ -1,16 +1,31 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 import CourseCard from "@/components/ui/CourseCard.vue";
 import GreetingHeader from "@/components/ui/GreetingHeader.vue";
-import { cursos } from "@/lib/mock";
+import { coursesService } from "@/services/courses.service";
+import { useAuthStore } from '@/stores/auth';
 
-const enProgreso = cursos.filter(c => c.progress > 0 && c.progress < 100);
-const nuevos = cursos.filter(c => c.progress === 0);
-const completados = cursos.filter(c => c.progress === 100);
+const authStore = useAuthStore();
+const courses = ref([]);
+const loading = ref(true);
+
+onMounted(async () => {
+  try {
+    const data = await coursesService.getAll();
+    courses.value = data.items || [];
+  } catch (err) {
+    console.error('Error loading courses:', err);
+  } finally {
+    loading.value = false;
+  }
+});
+
+const enProgreso = computed(() => courses.value.filter(c => c.progress_pct > 0 && c.progress_pct < 100));
+const nuevos = computed(() => courses.value.filter(c => c.progress_pct === 0));
+const completados = computed(() => courses.value.filter(c => c.progress_pct === 100));
 
 const IMG = "/Images";
 
-// Todas las imágenes utilizables (sin tiff, sin logo, sin screenshot). Sin repetir.
 const allPhotos: string[] = [
   `${IMG}/img-01.png`, `${IMG}/img-02.png`, `${IMG}/img-03.jpg`, `${IMG}/img-04.png`,
   `${IMG}/img-05.jpg`, `${IMG}/img-06.jpg`, `${IMG}/img-07.jpg`, `${IMG}/img-08.jpg`,
@@ -26,7 +41,6 @@ const allPhotos: string[] = [
   `${IMG}/img-48.jpg`, `${IMG}/img-49.jpg`, `${IMG}/img-50.jpg`,
 ];
 
-// Mezcla determinista para que el orden sea el mismo en cada render pero variado.
 function seededShuffle<T>(arr: T[], seed: number): T[] {
   const a = [...arr];
   let s = seed;
@@ -78,7 +92,7 @@ const yOffsets = [0, 4, -4, 6, -6, 2, -2, 5, -5, 0, 3, -3];
         <div class="grid md:grid-cols-[1fr_auto] gap-6 md:gap-10 items-center">
           <div>
             <h1 class="text-4xl sm:text-5xl font-bold tracking-tight">Cursos</h1>
-            <GreetingHeader name="Alex" />
+            <GreetingHeader :name="authStore.user?.full_name?.split(' ')[0] || 'Estudiante'" />
           </div>
 
           <figure class="relative md:max-w-sm md:border-l md:border-[var(--color-border)] md:pl-8 border-t md:border-t-0 border-[var(--color-border)] pt-5 md:pt-0">
@@ -96,21 +110,21 @@ const yOffsets = [0, 4, -4, 6, -6, 2, -2, 5, -5, 0, 3, -3];
       <section v-if="enProgreso.length > 0" class="mb-10">
         <h2 class="text-lg font-semibold mb-3">Continuar donde lo dejé</h2>
         <div class="grid gap-4">
-          <CourseCard v-for="c in enProgreso" :key="c.id" :id="c.id" :title="c.title" :description="c.description" :duration="c.duration" :progress="c.progress" :cover="c.cover" />
+          <CourseCard v-for="c in enProgreso" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="c.progress_pct" :cover="c.cover_key || '/placeholder.jpg'" />
         </div>
       </section>
 
       <section class="mb-10">
         <h2 class="text-lg font-semibold mb-3">Cursos disponibles</h2>
         <div class="grid gap-4">
-          <CourseCard v-for="c in nuevos" :key="c.id" :id="c.id" :title="c.title" :description="c.description" :duration="c.duration" :cover="c.cover" />
+          <CourseCard v-for="c in nuevos" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :cover="c.cover_key || '/placeholder.jpg'" />
         </div>
       </section>
 
       <section v-if="completados.length > 0">
         <h2 class="text-lg font-semibold mb-3">Ya completados</h2>
         <div class="grid gap-4">
-          <CourseCard v-for="c in completados" :key="c.id" :id="c.id" :title="c.title" :description="c.description" :duration="c.duration" :progress="100" :cover="c.cover" cta="Ver certificado" :href="`/curso/${c.id}/certificado`" />
+          <CourseCard v-for="c in completados" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="100" :cover="c.cover_key || '/placeholder.jpg'" cta="Ver certificado" :href="`/curso/${c.slug}/certificado`" />
         </div>
       </section>
     </div>

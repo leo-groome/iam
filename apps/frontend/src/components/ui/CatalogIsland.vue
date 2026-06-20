@@ -33,7 +33,7 @@ onMounted(() => {
   islandReady.value = true
 })
 
-// Computed filters (same as original catalogo.astro)
+// Computed filters
 
 const enProgreso = computed(() =>
   catalogStore.courses.filter(c => {

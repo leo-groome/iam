@@ -1,74 +1,238 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import { authService } from '@/services/auth.service';
-import type { User, LoginCredentials, RegisterData } from '@/types';
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import {
+  getAuthToken,
+  refreshAuthTokenCookie,
+  verifyEmailOtp,
+  isMockAuthAllowed,
+  logout as authClientLogout,
+  authClient,
+  AUTH_TOKEN_COOKIE,
+} from '@/lib/auth-client'
+import { apiGet, apiPost, ApiError } from '@/lib/api'
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface AppUser {
+  id: string
+  email: string
+  full_name: string
+  role: 'admin' | 'instructor' | 'estudiante'
+  status: string
+}
+
+// ---------------------------------------------------------------------------
+// Mock token parser
+// Format: mock-token:<sub>:<email>:<name>:<role>
+// ---------------------------------------------------------------------------
+
+function parseMockToken(token: string): AppUser | null {
+  if (!token.startsWith('mock-token:')) return null
+  const parts = token.split(':')
+  // parts[0] = 'mock-token', [1] = sub, [2] = email, [3] = name, [4] = role
+  if (parts.length < 5) return null
+  const [, sub, email, name, role] = parts
+  return {
+    id: sub ?? 'mock_id',
+    email: email ?? 'mock@example.com',
+    full_name: name ?? 'Mock User',
+    role: (role === 'admin' ? 'admin' : role === 'instructor' ? 'instructor' : 'estudiante') as AppUser['role'],
+    status: 'active',
+  }
+}
+
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  for (const part of document.cookie.split(';')) {
+    const [key, ...rest] = part.trim().split('=')
+    if (key === name) return decodeURIComponent(rest.join('='))
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<User | null>(null);
-  const token = ref<string | null>(localStorage.getItem('auth_token'));
-  const loading = ref(false);
-  const error = ref<string | null>(null);
+  const user = ref<AppUser | null>(null)
+  const token = ref<string | null>(null)
+  const loading = ref(false)
+  const initialized = ref(false)
+  const error = ref<string | null>(null)
 
-  const isAuthenticated = computed(() => !!token.value);
-  const isAdmin = computed(() => user.value?.rol === 'admin');
-  const userName = computed(() => user.value?.nombre ?? 'Usuario');
-  const userInitial = computed(() => userName.value.charAt(0).toUpperCase());
+  // Getters
+  const isAuthenticated = computed(() => !!user.value)
+  const isAdmin = computed(() => user.value?.role === 'admin')
+  const isInstructor = computed(() => user.value?.role === 'instructor' || user.value?.role === 'admin')
 
-  async function login(credentials: LoginCredentials) {
-    loading.value = true;
-    error.value = null;
+  // ---------------------------------------------------------------------------
+  // fetchMe — hits /api/v1/auth/me to populate user
+  // ---------------------------------------------------------------------------
+  async function fetchMe(): Promise<void> {
     try {
-      const response = await authService.login(credentials);
-      user.value = response.user;
-      token.value = response.token;
-      localStorage.setItem('auth_token', response.token);
-    } catch (e: any) {
-      error.value = e.message || 'Error al iniciar sesión';
-      throw e;
+      const data = await apiGet('/api/v1/auth/me')
+      user.value = data as AppUser
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // User authenticated but not yet synced — keep token, leave user=null
+        return
+      }
+      // 401 / other errors: clear state
+      user.value = null
+      token.value = null
+      throw err
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // init — called once on app bootstrap
+  // ---------------------------------------------------------------------------
+  async function init(): Promise<void> {
+    if (initialized.value) return
+
+    loading.value = true
+    error.value = null
+
+    try {
+      // Dev mock path
+      if (isMockAuthAllowed()) {
+        const mockCookie = getCookie(AUTH_TOKEN_COOKIE)
+        if (mockCookie?.startsWith('mock-token:')) {
+          const parsed = parseMockToken(mockCookie)
+          if (parsed) {
+            user.value = parsed
+            token.value = mockCookie
+            return
+          }
+        }
+      }
+
+      // Real auth path
+      const resolvedToken = await getAuthToken()
+      if (resolvedToken) {
+        token.value = resolvedToken
+        await fetchMe()
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Auth init failed'
     } finally {
-      loading.value = false;
+      loading.value = false
+      initialized.value = true
     }
   }
 
-  async function register(data: RegisterData) {
-    loading.value = true;
-    error.value = null;
+  // ---------------------------------------------------------------------------
+  // login
+  // ---------------------------------------------------------------------------
+  async function login(email: string, password: string): Promise<void> {
+    loading.value = true
+    error.value = null
     try {
-      const response = await authService.register(data);
-      user.value = response.user;
-      token.value = response.token;
-      localStorage.setItem('auth_token', response.token);
-    } catch (e: any) {
-      error.value = e.message || 'Error al crear cuenta';
-      throw e;
+      const { error: signInError } = await authClient.signIn.email({ email, password })
+      if (signInError) throw signInError
+      const t = await refreshAuthTokenCookie()
+      token.value = t
+      await fetchMe()
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Login failed'
+      throw err
     } finally {
-      loading.value = false;
+      loading.value = false
     }
   }
 
-  async function fetchUser() {
-    if (!token.value) return;
+  // ---------------------------------------------------------------------------
+  // register
+  // ---------------------------------------------------------------------------
+  async function register(
+    email: string,
+    password: string,
+    name: string,
+  ): Promise<{ status: 'pending_verification' }> {
+    loading.value = true
+    error.value = null
     try {
-      user.value = await authService.me();
-    } catch {
-      logout();
+      const { error: signUpError } = await authClient.signUp.email({ email, password, name })
+      if (signUpError) throw signUpError
+      return { status: 'pending_verification' }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Register failed'
+      throw err
+    } finally {
+      loading.value = false
     }
   }
 
-  function logout() {
-    user.value = null;
-    token.value = null;
-    localStorage.removeItem('auth_token');
+  // ---------------------------------------------------------------------------
+  // verifyOtp — verify email OTP and sync profile to backend
+  // ---------------------------------------------------------------------------
+  async function verifyOtp(
+    email: string,
+    otp: string,
+    full_name: string,
+    birth_date: string,
+  ): Promise<void> {
+    loading.value = true
+    error.value = null
+    try {
+      // Try OTP verify endpoint first
+      const verifiedToken = await verifyEmailOtp(email, otp)
+
+      if (!verifiedToken) {
+        // Fallback: sign in via emailOtp
+        const { error: otpError } = await authClient.signIn.emailOtp({ email, otp })
+        if (otpError) throw otpError
+      }
+
+      const t = await refreshAuthTokenCookie()
+      token.value = t
+
+      await apiPost('/api/v1/auth/sync', {
+        body: { full_name, birth_date },
+      })
+
+      await fetchMe()
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Verification failed'
+      throw err
+    } finally {
+      loading.value = false
+    }
   }
 
-  // Auto-fetch user on init if token exists
-  if (token.value && !user.value) {
-    fetchUser();
+  // ---------------------------------------------------------------------------
+  // logout
+  // ---------------------------------------------------------------------------
+  async function logout(): Promise<void> {
+    try {
+      await authClientLogout()
+    } finally {
+      user.value = null
+      token.value = null
+    }
+    // Caller is responsible for redirect
   }
 
   return {
-    user, token, loading, error,
-    isAuthenticated, isAdmin, userName, userInitial,
-    login, register, fetchUser, logout,
-  };
-});
+    // state
+    user,
+    token,
+    loading,
+    initialized,
+    error,
+    // getters
+    isAuthenticated,
+    isAdmin,
+    isInstructor,
+    // actions
+    init,
+    login,
+    register,
+    verifyOtp,
+    fetchMe,
+    logout,
+  }
+})

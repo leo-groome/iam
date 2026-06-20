@@ -4,17 +4,16 @@ import { z } from 'zod'
 import {
   assertAuthConfigured,
   authClient,
-  clearAuthTokenCookie,
   hasAuthConfig,
-  isJwtLike,
   isMockAuthAllowed,
   refreshAuthTokenCookie,
   sendEmailVerificationOtp,
-  setAuthTokenCookie,
   setMockAuthToken,
-  verifyEmailOtp,
 } from '@/lib/auth-client'
-import { apiPost, ApiError } from '@/lib/api'
+import { ApiError } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 
 // ---------------------------------------------------------------------------
 // Props
@@ -127,18 +126,12 @@ async function handleLogin() {
   try {
     if (isMockAuthAllowed()) {
       setMockAuthToken(parsed.data.email, 'Student User')
+      await authStore.init()
       window.location.href = nextRedirect
       return
     }
 
-    assertAuthConfigured()
-    const { error } = await authClient.signIn.email({
-      email: parsed.data.email,
-      password: parsed.data.password,
-    })
-    if (error) throw error
-
-    await refreshAuthTokenCookie()
+    await authStore.login(parsed.data.email, parsed.data.password)
     window.location.href = nextRedirect
   } catch (err: unknown) {
     showToast('error', classifyAuthError(err))
@@ -152,6 +145,8 @@ async function handleGoogleLogin() {
   isLoading.value = true
   try {
     assertAuthConfigured()
+    // OAuth redirects externally; on return the router's beforeEach will call init()
+    // which hydrates the store. callbackURL lands on a protected page, triggering fetchMe.
     await authClient.signIn.social({
       provider: 'google',
       callbackURL: window.location.origin + nextRedirect,
@@ -185,24 +180,6 @@ const verificationSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, 'Ingresa el código de 6 dígitos'),
 })
 
-async function finishRegistration(profile: { fullName: string; birthDate: string }, token?: string | null) {
-  if (isJwtLike(token)) {
-    setAuthTokenCookie(token)
-  } else {
-    clearAuthTokenCookie()
-    await refreshAuthTokenCookie()
-  }
-
-  await apiPost('/api/v1/auth/sync', {
-    body: {
-      full_name: profile.fullName,
-      birth_date: profile.birthDate,
-    },
-  })
-
-  window.location.href = nextRedirect
-}
-
 async function handleVerifyRegistration() {
   clearToast()
   regErrors.value = {}
@@ -218,32 +195,14 @@ async function handleVerifyRegistration() {
 
   isLoading.value = true
   try {
-    assertAuthConfigured()
-
-    const verifiedToken = await verifyEmailOtp(pending.email, parsed.data.code)
-
-    let sessionToken = verifiedToken
-    if (!sessionToken) {
-      const { data, error: otpSignInError } = await authClient.signIn.emailOtp({
-        email: pending.email,
-        otp: parsed.data.code,
-      })
-      if (otpSignInError) throw otpSignInError
-      sessionToken = typeof data?.token === 'string' ? data.token : null
-    }
-
-    if (!sessionToken) {
-      const { error: signInError } = await authClient.signIn.email({
-        email: pending.email,
-        password: pending.password,
-      })
-      if (signInError) throw signInError
-    }
-
-    await finishRegistration({
-      fullName: pending.fullName,
-      birthDate: pending.birthDate,
-    }, sessionToken)
+    await authStore.verifyOtp(
+      pending.email,
+      parsed.data.code,
+      pending.fullName,
+      pending.birthDate,
+    )
+    // fetchMe was already called inside verifyOtp — user is populated
+    window.location.href = nextRedirect
   } catch (err: unknown) {
     console.error('[auth] verification failed:', err)
     if (err instanceof ApiError && err.status === 401) {
@@ -301,33 +260,39 @@ async function handleRegister() {
   isLoading.value = true
   try {
     if (isCompletingOAuthProfile.value) {
+      // OAuth profile completion: session cookie already set by OAuth provider,
+      // just get the JWT, sync the profile, then hydrate user.
+      const { apiPost: syncPost } = await import('@/lib/api')
       await refreshAuthTokenCookie()
+      await syncPost('/api/v1/auth/sync', {
+        body: { full_name: parsed.data.fullName, birth_date: parsed.data.birthDate },
+      })
+      await authStore.fetchMe()
+      window.location.href = nextRedirect
+      return
     } else if (isMockAuthAllowed()) {
       setMockAuthToken(parsed.data.email, parsed.data.fullName)
-    } else {
-      assertAuthConfigured()
-      const { error } = await authClient.signUp.email({
-        name: parsed.data.fullName,
-        email: parsed.data.email,
-        password: parsed.data.password,
-      })
-      if (error) throw error
-
-      pendingRegistration.value = {
-        fullName: parsed.data.fullName,
-        email: parsed.data.email,
-        password: parsed.data.password,
-        birthDate: parsed.data.birthDate,
-      }
-      verificationCode.value = ''
-      showToast('success', 'Te enviamos un código de verificación a tu correo.')
+      // Redirect — router beforeEach will call init() which picks up the new mock token
+      window.location.href = nextRedirect
       return
+    } else {
+      const result = await authStore.register(
+        parsed.data.email,
+        parsed.data.password,
+        parsed.data.fullName,
+      )
+      if (result.status === 'pending_verification') {
+        pendingRegistration.value = {
+          fullName: parsed.data.fullName,
+          email: parsed.data.email,
+          password: parsed.data.password,
+          birthDate: parsed.data.birthDate,
+        }
+        verificationCode.value = ''
+        showToast('success', 'Te enviamos un código de verificación a tu correo.')
+        return
+      }
     }
-
-    await finishRegistration({
-      fullName: parsed.data.fullName,
-      birthDate: parsed.data.birthDate,
-    })
   } catch (err: unknown) {
     console.error('[auth] register failed:', err)
     if (err instanceof ApiError) {

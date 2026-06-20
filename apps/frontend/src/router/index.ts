@@ -1,4 +1,5 @@
-import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
+import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const routes: Array<RouteRecordRaw> = [
   // Públicas
@@ -9,22 +10,10 @@ const routes: Array<RouteRecordRaw> = [
     meta: { layout: 'PublicLayout' }
   },
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/admin/AdminLogin.vue'),
-    meta: { layout: 'PublicLayout' }
-  },
-  {
     path: '/registro',
     name: 'Registro',
     component: () => import('@/views/public/registro.vue'),
     meta: { layout: 'PublicLayout' }
-  },
-  {
-    path: '/catalogo',
-    name: 'Catalogo',
-    component: () => import('@/views/public/catalogo.vue'),
-    meta: { layout: 'StudentLayout', requiresAuth: true }
   },
   {
     path: '/terminos',
@@ -39,7 +28,13 @@ const routes: Array<RouteRecordRaw> = [
     meta: { layout: 'PublicLayout' }
   },
 
-  // Panel de Estudiante (requiere auth idealmente)
+  // Panel de Estudiante
+  {
+    path: '/catalogo',
+    name: 'Catalogo',
+    component: () => import('@/views/public/catalogo.vue'),
+    meta: { layout: 'StudentLayout', requiresAuth: true }
+  },
   {
     path: '/perfil',
     name: 'Perfil',
@@ -126,8 +121,6 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/admin/AdminConfiguracion.vue'),
     meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true }
   },
-
-  // Admin sub-rutas (módulos, temas, preguntas)
   {
     path: '/admin/cursos/:id/modulos/:modId',
     name: 'AdminModuloDetalle',
@@ -160,48 +153,58 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/public/404.vue'),
     meta: { layout: 'PublicLayout' }
   }
-];
+]
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
   scrollBehavior(_to, _from, savedPosition) {
-    return savedPosition ?? { top: 0 };
+    return savedPosition ?? { top: 0 }
   }
-});
+})
 
-// Auth Guards Básicos
-router.beforeEach((to, _from, next) => {
-  // Aquí irá la lógica real usando pinia store:
-  // import { useAuthStore } from '@/stores/auth';
-  // const authStore = useAuthStore();
-  // const isAuthenticated = authStore.isAuthenticated;
-  // const isAdmin = authStore.isAdmin;
+// Auth Guards
+router.beforeEach(async (to, _from, next) => {
+  const store = useAuthStore()
 
-  const isAuthenticated = false; // Mock — reemplazar con store
-  const isAdmin = false; // Mock — reemplazar con store
-
-  // Bypass auth en desarrollo para no bloquear las vistas
-  if (to.meta.requiresAuth && !isAuthenticated && import.meta.env.PROD) {
-    next({ name: 'Login' });
-  } else if (to.meta.requiresAdmin && !isAdmin && import.meta.env.PROD) {
-    next({ name: 'Home' });
-  } else {
-    next();
+  if (!store.initialized) {
+    await store.init()
   }
-});
 
-export default router;
+  const isAuthenticated = store.isAuthenticated
+  const isAdmin = store.isAdmin
+  const isInstructor = store.isInstructor
+
+  // Auth pages: redirect authenticated users away
+  if ((to.path === '/registro' || to.path === '/login') && isAuthenticated) {
+    const nextPath = (to.query.next as string) || '/catalogo'
+    return next(nextPath)
+  }
+
+  // Private routes: require authentication
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    return next({ path: '/registro', query: { next: to.fullPath } })
+  }
+
+  // Admin routes: require admin or instructor
+  if (to.meta.requiresAdmin && !isAdmin && !isInstructor) {
+    return next('/catalogo')
+  }
+
+  next()
+})
+
+export default router
 
 // Vue Router meta type augmentation
 declare module 'vue-router' {
   interface RouteMeta {
-    layout?: 'PublicLayout' | 'StudentLayout' | 'AdminLayout';
-    requiresAuth?: boolean;
-    requiresAdmin?: boolean;
-    showHeader?: boolean;
-    wide?: boolean;
-    progress?: number;
-    courseName?: string;
+    layout?: 'PublicLayout' | 'StudentLayout' | 'AdminLayout'
+    requiresAuth?: boolean
+    requiresAdmin?: boolean
+    showHeader?: boolean
+    wide?: boolean
+    progress?: number
+    courseName?: string
   }
 }

@@ -21,15 +21,15 @@
             </router-link>
           </nav>
 
-          <div class="flex items-center gap-2 justify-self-end">
+          <div v-if="authStore.user" class="flex items-center gap-2 justify-self-end">
             <router-link
               to="/perfil"
               title="Mi perfil"
               class="hidden md:flex items-center gap-2 pl-1 pr-1 sm:pr-3 py-1 rounded-full transition"
               :class="isActive('/perfil') ? 'bg-[var(--color-primary-soft)] ring-2 ring-[var(--color-primary)]/30' : 'hover:bg-[var(--color-app-bg)]'"
             >
-              <span class="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white grid place-items-center font-semibold text-sm">A</span>
-              <span class="hidden sm:inline text-sm font-medium" :class="{ 'text-[var(--color-primary)]': isActive('/perfil') }">Alex</span>
+              <span class="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white grid place-items-center font-semibold text-sm">{{ initial }}</span>
+              <span class="hidden sm:inline text-sm font-medium" :class="{ 'text-[var(--color-primary)]': isActive('/perfil') }">{{ displayName }}</span>
             </router-link>
           </div>
         </div>
@@ -81,8 +81,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
+const authStore = useAuthStore();
+
+const displayName = computed(() => authStore.user?.full_name ?? '');
+const initial = computed(() => displayName.value.charAt(0).toUpperCase() || '·');
 
 // These could eventually be connected to a Pinia store if they need to be dynamically updated by child views
 const showHeader = computed(() => route.meta.showHeader !== false);

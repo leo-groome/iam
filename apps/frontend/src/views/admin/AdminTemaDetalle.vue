@@ -1,24 +1,40 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router';
+import { onMounted, ref } from 'vue';
+import { coursesService } from '@/services/courses.service';
+
 const route = useRoute();
-import { cursos, findCurso } from "@/lib/mock";
-
-const id = route.params.id as string;
+const slug = route.params.slug as string;
 const modId = route.params.modId as string;
-const temaId = route.params.temaId as string;
+const topicId = route.params.topicId as string;
 
+const isNew = topicId === 'nuevo';
+const curso = ref(null);
+const mod = ref(null);
+const tema = ref(null);
+const loading = ref(false);
 
-const isNew = temaId === 'nuevo';
-const curso = findCurso(id);
-const mod = curso?.modulos.find(m => m.id === modId);
-const tema = !isNew ? mod?.temas.find(t => t.id === temaId) : null;
+onMounted(async () => {
+  loading.value = true;
+  try {
+    curso.value = await coursesService.getBySlug(slug);
+    mod.value = curso.value?.modules.find(m => m.id === modId);
+    if (!isNew) {
+      tema.value = mod.value?.topics.find(t => t.id === topicId);
+    }
+  } catch (err) {
+    console.error('Error loading course:', err);
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
 <template>
   <div class="page-container">
 
 
-  <router-link :to="`/admin/cursos/${id}/modulos/${modId}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Módulo</router-link>
+  <router-link :to="`/admin/cursos/${slug}/modulos/${modId}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Módulo</router-link>
   <header class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">{{ isNew ? "Nuevo tema" : `Editar: ${tema?.title}` }}</h1>
     <button class="btn btn-primary">Guardar</button>
