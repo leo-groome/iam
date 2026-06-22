@@ -1,10 +1,10 @@
 # IAM — Plataforma de Cursos (Infancia y Adolescencia Misionera)
 
 ## Stack
-- **Frontend:** Astro (SSR) + Vue 3 + Tailwind — deploy en Vercel
+- **Frontend:** Vue 3 SPA + Vue Router + Pinia + Tailwind (Vite) — deploy en Vercel
 - **Backend:** FastAPI (Python 3.12) + SQLAlchemy 2.0 async + asyncpg — deploy en Railway
 - **DB:** PostgreSQL en Neon.com (`postgresql+asyncpg://`)
-- **Auth:** Neon Auth — JWT validado en `/api/v1/auth/me`, propagado como `Astro.locals.user`
+- **Auth:** Neon Auth — JWT validado en `/api/v1/auth/me`, expuesto via Pinia `useAuthStore()`
 - **Storage:** Cloudflare R2 (media/certificados)
 - **Email:** Resend
 
@@ -12,7 +12,7 @@
 ```
 apps/
   backend/   FastAPI app
-  frontend/  Astro + Vue app
+  frontend/  Vue 3 SPA
 ```
 
 ## Dev
@@ -28,10 +28,24 @@ cd apps/backend && set -a && source .env && set +a && uv run alembic upgrade hea
 ```
 
 ## Auth flow
-1. Frontend recibe JWT de Neon Auth → guarda en cookie `neon-auth-token`
-2. Middleware Astro (`src/middleware.ts`) llama `/api/v1/auth/me` en cada request SSR
-3. Usuario disponible en todas las páginas como `Astro.locals.user` (`{ id, email, fullName, role, status }`)
-4. Rutas privadas: `/catalogo`, `/curso/*`, `/perfil`, `/admin/*`
+1. Frontend obtiene JWT vía Neon Auth (lib `@stackframe/js`)
+2. `apiFetch` en `src/lib/api.ts` añade `Authorization: Bearer <token>` a cada request
+3. `useAuthStore` (Pinia) mantiene `user` reactivo cargado desde `/api/v1/auth/me`
+4. Router guard en `src/router/index.ts` redirige a `/login` si `requiresAuth` y no hay sesión
+5. Rutas privadas: `/catalogo`, `/curso/:slug/*`, `/perfil`, `/admin/*`
+
+## Frontend — convenciones de servicios
+- `src/services/courses.service.ts` — endpoints **públicos** (estudiantes): `GET /api/v1/courses`, `/api/v1/courses/:slug`, exámenes de tema
+- `src/services/admin.service.ts` — endpoints **admin/instructor**: cursos, módulos, temas, preguntas, opciones, estudiantes, reportes
+- Todos los paths llevan prefijo completo `/api/v1/...`
+- IDs de rutas admin son **UUIDs** (`:id`, `:modId`, `:temaId`, `:qId`); rutas de estudiante usan **slug** (`:slug`, `:topicId`)
+
+## Admin panel
+- `/admin/cursos/:id` → editar curso (sin restricción de edad)
+- `/admin/cursos/:id/modulos/:modId` → editar módulo: descripción + lista de Clases (temas) + sección "Examen Diagnóstico del Módulo"
+- `/admin/cursos/:id/modulos/:modId/temas/:temaId` → editar tema: content_type (video/pdf/imagen/texto), duración, has_exam, exam_min_score, content_body
+- `/admin/cursos/:id/modulos/:modId/temas/:temaId/preguntas/:qId` → editar pregunta de tema (3-5 opciones, exactamente 1 correcta)
+- `/admin/cursos/:id/modulos/:modId/examen-diagnostico/:qId` → editar pregunta diagnóstica a nivel módulo (reusa `AdminPreguntaDetalle.vue`)
 
 ## DB — convenciones
 - SSL inyectado via `connect_args={"ssl": "require"}` en el engine (no en la URL)
@@ -42,3 +56,20 @@ cd apps/backend && set -a && source .env && set +a && uv run alembic upgrade hea
 
 ## Modelos principales
 `User` · `Course` · `Module` · `Topic` · `Question` · `Option` · `Enrollment` · `TopicProgress` · `ExamAttempt` · `Certificate` · `AdminAudit`
+
+### Notas sobre el dominio
+- **Sin restricción por edad:** `Course.age_min`/`age_max` aún existen en DB pero ya no se filtran ni se exponen en UI. Todos los cursos publicados son visibles a todos los usuarios.
+- **`Question` XOR:** una pregunta pertenece a `topic_id` (examen de clase) o `module_id` (examen diagnóstico del módulo), nunca a ambos.
+- **Validaciones:** preguntas requieren 3-5 opciones, exactamente 1 marcada `is_correct=true`. Topics con progress no se pueden borrar (HTTP 409).
+
+## Endpoints admin clave
+```
+GET    /api/v1/admin/topics/{id}                    → topic + preguntas + opciones
+GET    /api/v1/admin/questions/{id}                 → pregunta con opciones
+GET    /api/v1/admin/modules/{id}/questions         → preguntas del examen diagnóstico
+POST   /api/v1/admin/modules/{id}/questions         → crear pregunta diagnóstica
+POST   /api/v1/admin/topics/{id}/questions          → crear pregunta de clase
+PATCH  /api/v1/admin/questions/{id}                 → editar enunciado (NO afecta intentos históricos)
+DELETE /api/v1/admin/questions/{id}                 → soft-delete (`archived_at`)
+PATCH  /api/v1/admin/options/{id}                   → editar texto/correctitud
+```

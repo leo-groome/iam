@@ -1,6 +1,21 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue';
 import StatCard from "@/components/ui/StatCard.vue";
 import Banner from "@/components/ui/Banner.vue";
+import { adminService } from '@/services/admin.service';
+
+const kpis = ref<any>(null);
+const loading = ref(true);
+
+onMounted(async () => {
+  try {
+    kpis.value = await adminService.getDashboardKpis();
+  } catch (err) {
+    console.error('Error loading dashboard KPIs:', err);
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
 <template>
@@ -12,15 +27,15 @@ import Banner from "@/components/ui/Banner.vue";
     <p class="text-[var(--color-text-muted)]">Vista general de la plataforma.</p>
   </header>
 
-  <Banner kind="warning" title="3 estudiantes atorados">
+  <Banner v-if="kpis?.stuck_students > 0" kind="warning" :title="`${kpis?.stuck_students} estudiantes atorados`">
     Tienen 3+ intentos fallidos en el mismo tema. Revisa quiénes necesitan apoyo.
   </Banner>
 
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-    <StatCard label="Estudiantes" value="248" delta="+12 esta semana" trend="up" />
-    <StatCard label="Cursos activos" value="3" />
-    <StatCard label="Tasa de finalización" value="62%" delta="+4 pts" trend="up" />
-    <StatCard label="Promedio" value="84/100" delta="−2 pts" trend="down" />
+    <StatCard label="Estudiantes" :value="String(kpis?.total_students ?? '-')" delta="+12 esta semana" trend="up" />
+    <StatCard label="Cursos activos" :value="String(kpis?.active_courses ?? '-')" />
+    <StatCard label="Tasa de finalización" :value="`${kpis?.completion_rate ?? '-'}%`" delta="+4 pts" trend="up" />
+    <StatCard label="Promedio" :value="`${kpis?.avg_exam_score ?? '-'}/100`" delta="−2 pts" trend="down" />
   </div>
 
   <div class="grid lg:grid-cols-2 gap-6 mt-6">

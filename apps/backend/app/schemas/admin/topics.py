@@ -48,6 +48,13 @@ class TopicResponse(BaseModel):
     archived_at: str | None = None
 
 
+from app.schemas.admin.questions import QuestionResponse  # noqa: E402
+
+
+class TopicWithQuestionsResponse(TopicResponse):
+    questions: list[QuestionResponse] = []
+
+
 class TopicReorderBody(BaseModel):
     module_id: uuid.UUID
     order: list[uuid.UUID] = Field(..., min_length=1)

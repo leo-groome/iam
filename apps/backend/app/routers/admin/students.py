@@ -57,4 +57,41 @@ async def get_student(
     user = await crud.get_student_detail(db, student_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
-    return StudentDetail.model_validate(user)
+
+    # Manually construct StudentDetail to populate course_title and course_slug
+    from app.schemas.admin.students import EnrollmentSummary, ExamAttemptSummary, TopicProgressSummary
+
+    enrollments_data = [
+        EnrollmentSummary(
+            id=e.id,
+            course_id=e.course_id,
+            started_at=e.started_at,
+            completed_at=e.completed_at,
+            progress_cached=e.progress_cached,
+            course_title=getattr(e.course, "title", None) if e.course else None,
+            course_slug=getattr(e.course, "slug", None) if e.course else None,
+        )
+        for e in user.enrollments
+    ]
+
+    topic_progress_data = [
+        TopicProgressSummary.model_validate(tp)
+        for tp in user.topic_progress
+    ]
+
+    exam_attempts_data = [
+        ExamAttemptSummary.model_validate(ea)
+        for ea in user.exam_attempts
+    ]
+
+    return StudentDetail(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        status=user.status,
+        created_at=user.created_at,
+        enrollments=enrollments_data,
+        topic_progress=topic_progress_data,
+        exam_attempts=exam_attempts_data,
+    )

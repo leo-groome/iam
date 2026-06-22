@@ -36,26 +36,15 @@ async def get_courses_for_user(
     cursor: str | None,
     limit: int,
 ) -> tuple[list[Course], str | None]:
-    age = _user_age(user)
-
     enrolled_subq = (
         select(Enrollment.course_id).where(Enrollment.user_id == user.id).scalar_subquery()
-    )
-
-    age_eligible = or_(
-        Course.age_min.is_(None),
-        Course.age_min <= age,
-    )
-    age_max_ok = or_(
-        Course.age_max.is_(None),
-        Course.age_max >= age,
     )
 
     stmt = (
         select(Course)
         .where(
             or_(
-                (Course.status == "publicado") & age_eligible & age_max_ok,
+                Course.status == "publicado",
                 (Course.status == "archivado") & (Course.id.in_(enrolled_subq)),
             )
         )
@@ -98,9 +87,4 @@ async def get_course_by_slug(db: AsyncSession, slug: str) -> Course | None:
 async def is_course_eligible_for_user(course: Course, user: User, enrolled: bool) -> bool:
     if course.status == "archivado":
         return enrolled
-    if course.status != "publicado":
-        return False
-    age = _user_age(user)
-    if course.age_min is not None and age < course.age_min:
-        return False
-    return course.age_max is None or age <= course.age_max
+    return course.status == "publicado"

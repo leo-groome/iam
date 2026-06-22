@@ -45,37 +45,37 @@ const routes: Array<RouteRecordRaw> = [
     meta: { layout: 'StudentLayout', requiresAuth: true }
   },
   {
-    path: '/curso/:id',
+    path: '/curso/:slug',
     name: 'CourseDashboard',
     component: () => import('@/views/student/CourseDashboard.vue'),
     meta: { layout: 'StudentLayout', requiresAuth: true }
   },
   {
-    path: '/curso/:id/tema/:temaId',
+    path: '/curso/:slug/tema/:topicId',
     name: 'LessonView',
     component: () => import('@/views/student/LessonView.vue'),
     meta: { layout: 'StudentLayout', requiresAuth: true }
   },
   {
-    path: '/curso/:id/tema/:temaId/examen',
+    path: '/curso/:slug/tema/:topicId/examen',
     name: 'ExamView',
     component: () => import('@/views/student/ExamView.vue'),
     meta: { layout: 'StudentLayout', requiresAuth: true }
   },
   {
-    path: '/curso/:id/tema/:temaId/resultado',
+    path: '/curso/:slug/tema/:topicId/resultado',
     name: 'ExamResult',
     component: () => import('@/views/student/ExamResult.vue'),
     meta: { layout: 'StudentLayout', requiresAuth: true }
   },
   {
-    path: '/curso/:id/progreso',
+    path: '/curso/:slug/progreso',
     name: 'CourseProgress',
     component: () => import('@/views/student/CourseProgress.vue'),
     meta: { layout: 'StudentLayout', requiresAuth: true }
   },
   {
-    path: '/curso/:id/certificado',
+    path: '/curso/:slug/certificado',
     name: 'CourseCertificate',
     component: () => import('@/views/student/CourseCertificate.vue'),
     meta: { layout: 'StudentLayout', requiresAuth: true }
@@ -145,6 +145,12 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/admin/cursos/:id/modulos/:modId/temas/:temaId/preguntas/:qId',
     name: 'AdminPreguntaDetalle',
+    component: () => import('@/views/admin/AdminPreguntaDetalle.vue'),
+    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/cursos/:id/modulos/:modId/examen-diagnostico/:qId',
+    name: 'AdminPreguntaModuloDetalle',
     component: () => import('@/views/admin/AdminPreguntaDetalle.vue'),
     meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true }
   },

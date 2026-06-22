@@ -17,7 +17,7 @@ from app.db import get_db
 from app.deps import require_role
 from app.models.user import User
 from app.routers.admin.permissions import assert_can_manage_module, assert_can_manage_topic
-from app.schemas.admin.topics import TopicCreate, TopicReorderBody, TopicResponse, TopicUpdate
+from app.schemas.admin.topics import TopicCreate, TopicReorderBody, TopicResponse, TopicUpdate, TopicWithQuestionsResponse
 from app.services.audit import log_admin_action
 
 router = APIRouter(tags=["admin-topics"])
@@ -65,6 +65,19 @@ async def create_topic(
     await db.commit()
     await db.refresh(topic)
     return TopicResponse.model_validate(topic)
+
+
+@router.get("/api/v1/admin/topics/{topic_id}", response_model=TopicWithQuestionsResponse)
+async def get_topic_detail(
+    topic_id: uuid.UUID,
+    current_user: User = Depends(_guard),  # noqa: B008
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> TopicWithQuestionsResponse:
+    await assert_can_manage_topic(db, current_user, topic_id)
+    topic = await crud.get_topic_with_questions(db, topic_id)
+    if topic is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+    return TopicWithQuestionsResponse.model_validate(topic)
 
 
 @router.patch("/api/v1/admin/topics/{topic_id}", response_model=TopicResponse)

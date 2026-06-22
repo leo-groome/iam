@@ -20,9 +20,9 @@ onMounted(async () => {
   }
 });
 
-const enProgreso = computed(() => courses.value.filter(c => c.progress_pct > 0 && c.progress_pct < 100));
-const nuevos = computed(() => courses.value.filter(c => c.progress_pct === 0));
-const completados = computed(() => courses.value.filter(c => c.progress_pct === 100));
+const enProgreso = computed(() => courses.value.filter((c: any) => c.progress_pct > 0 && c.progress_pct < 100));
+const nuevos = computed(() => courses.value.filter((c: any) => !c.progress_pct || c.progress_pct === 0));
+const completados = computed(() => courses.value.filter((c: any) => c.progress_pct === 100));
 
 const IMG = "/Images";
 

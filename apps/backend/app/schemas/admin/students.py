@@ -56,6 +56,8 @@ class EnrollmentSummary(BaseModel):
     started_at: datetime
     completed_at: datetime | None
     progress_cached: int
+    course_title: str | None = None
+    course_slug: str | None = None
 
 
 class StudentDetail(BaseModel):

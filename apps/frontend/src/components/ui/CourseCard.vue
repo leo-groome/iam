@@ -2,10 +2,10 @@
 import { computed } from 'vue';
 
 interface Props {
-  id: string;
+  slug: string;
   title: string;
   description: string;
-  duration: string;
+  duration?: string;
   progress?: number;
   cover?: string;
   cta?: string;
@@ -13,10 +13,11 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  progress: 0
+  progress: 0,
+  duration: ''
 });
 
-const url = computed(() => props.href ?? `/curso/${props.id}`);
+const url = computed(() => props.href ?? `/curso/${props.slug}`);
 const buttonLabel = computed(() => props.cta ?? (props.progress > 0 ? "Continuar" : "Comenzar"));
 </script>
 

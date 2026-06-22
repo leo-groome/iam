@@ -104,6 +104,30 @@ async def create_question_for_module(
     return QuestionResponse.model_validate(question)
 
 
+@router.get("/api/v1/admin/questions/{question_id}", response_model=QuestionResponse)
+async def get_question_detail(
+    question_id: uuid.UUID,
+    current_user: User = Depends(_guard),  # noqa: B008
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> QuestionResponse:
+    await assert_can_manage_question(db, current_user, question_id)
+    question = await crud.get_question_with_options(db, question_id)
+    if question is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
+    return QuestionResponse.model_validate(question)
+
+
+@router.get("/api/v1/admin/modules/{module_id}/questions", response_model=list[QuestionResponse])
+async def list_module_questions(
+    module_id: uuid.UUID,
+    current_user: User = Depends(_guard),  # noqa: B008
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> list[QuestionResponse]:
+    await assert_can_manage_module(db, current_user, module_id)
+    questions = await crud.list_module_questions(db, module_id)
+    return [QuestionResponse.model_validate(q) for q in questions]
+
+
 @router.patch("/api/v1/admin/questions/{question_id}", response_model=QuestionResponse)
 async def patch_question(
     question_id: uuid.UUID,

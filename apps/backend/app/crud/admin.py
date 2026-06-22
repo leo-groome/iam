@@ -197,6 +197,39 @@ async def reorder_topics(
 # ---------------------------------------------------------------------------
 
 
+async def get_topic_with_questions(db: AsyncSession, topic_id: uuid.UUID) -> Topic | None:
+    stmt = (
+        select(Topic)
+        .where(Topic.id == topic_id, Topic.archived_at.is_(None))
+        .options(
+            selectinload(Topic.questions).selectinload(Question.options)
+        )
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def get_question_with_options(db: AsyncSession, question_id: uuid.UUID) -> Question | None:
+    stmt = (
+        select(Question)
+        .where(Question.id == question_id, Question.archived_at.is_(None))
+        .options(selectinload(Question.options))
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def list_module_questions(db: AsyncSession, module_id: uuid.UUID) -> list[Question]:
+    stmt = (
+        select(Question)
+        .where(Question.module_id == module_id, Question.archived_at.is_(None))
+        .options(selectinload(Question.options))
+        .order_by(Question.created_at)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def get_question(
     db: AsyncSession, question_id: uuid.UUID
 ) -> Question | None:
@@ -336,7 +369,7 @@ async def get_student_detail(
         select(User)
         .where(User.id == student_id, User.role == "estudiante")
         .options(
-            selectinload(User.enrollments),
+            selectinload(User.enrollments).selectinload(Enrollment.course),
             selectinload(User.topic_progress),
             selectinload(User.exam_attempts),
         )
