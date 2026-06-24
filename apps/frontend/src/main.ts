@@ -13,8 +13,12 @@ const pinia = createPinia()
 app.use(pinia)
 app.use(router)
 
-// Initialize auth before mounting so router guards see populated state
-const auth = useAuthStore(pinia)
-await auth.init()
+async function bootstrap() {
+  // Initialize auth before mounting so router guards see populated state
+  const auth = useAuthStore(pinia)
+  await auth.init()
 
-app.mount('#app')
+  app.mount('#app')
+}
+
+void bootstrap()

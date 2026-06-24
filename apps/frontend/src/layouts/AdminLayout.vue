@@ -4,7 +4,7 @@
       <!-- Desktop Sidebar -->
       <aside class="hidden lg:flex w-64 bg-[var(--color-surface)] border-r border-[var(--color-border)] flex-col">
         <div class="px-6 py-5 border-b border-[var(--color-border)]">
-          <img :src="Logo" alt="Misioneras" class="h-10 w-auto" />
+          <img src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-10 w-auto" />
           <p class="text-xs text-[var(--color-text-muted)] mt-2">Panel admin</p>
         </div>
         <nav class="flex-1 p-3 space-y-1">
@@ -29,7 +29,7 @@
       <div class="flex-1 min-w-0">
         <!-- Mobile Header -->
         <header class="lg:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-3 flex items-center justify-between">
-          <img :src="Logo" alt="Misioneras" class="h-8 w-auto" />
+          <img src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-8 w-auto" />
           <router-link to="/admin" class="text-sm text-[var(--color-primary)] font-medium">Inicio</router-link>
         </header>
 
@@ -44,7 +44,6 @@
 
 <script setup lang="ts">
 import { useRoute } from 'vue-router';
-import Logo from '@/assets/logo.svg';
 
 const route = useRoute();
 
