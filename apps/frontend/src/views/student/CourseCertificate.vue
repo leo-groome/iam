@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { coursesService } from '@/services/courses.service';
+import { findCurso } from '@/lib/mock';
+import Logo from '@/assets/logo.svg';
 
 const route = useRoute();
 const router = useRouter();
@@ -37,7 +39,7 @@ const today = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'l
 
     <div class="card p-6 sm:p-10 mb-6 border-4 border-[var(--color-primary-soft)] relative overflow-hidden">
       <img
-        src="/MISIONERAS_LOGO.svg"
+        :src="Logo"
         alt=""
         aria-hidden="true"
         class="pointer-events-none select-none absolute inset-0 m-auto w-[85%] h-[85%] object-contain opacity-20"

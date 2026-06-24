@@ -124,6 +124,38 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/admin/AdminConfiguracion.vue'),
     meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true }
   },
+  // Admin Landing Control
+  {
+    path: '/admin/landing',
+    name: 'AdminLanding',
+    component: () => import('@/views/admin/landing/AdminLanding.vue'),
+    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true },
+    redirect: '/admin/landing/inicio',
+    children: [
+      {
+        path: 'inicio',
+        name: 'AdminLandingInicio',
+        component: () => import('@/views/admin/landing/SeccionInicio.vue')
+      },
+      {
+        path: 'pilares',
+        name: 'AdminLandingPilares',
+        component: () => import('@/views/admin/landing/SeccionPilares.vue')
+      },
+      {
+        path: 'quienes-somos',
+        name: 'AdminLandingQuienesSomos',
+        component: () => import('@/views/admin/landing/SeccionQuienesSomos.vue')
+      },
+      {
+        path: 'ecos',
+        name: 'AdminLandingEcos',
+        component: () => import('@/views/admin/landing/EcosEditor.vue')
+      }
+    ]
+  },
+
+  // Admin sub-rutas (módulos, temas, preguntas)
   {
     path: '/admin/cursos/:id/modulos/:modId',
     name: 'AdminModuloDetalle',

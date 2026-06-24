@@ -8,7 +8,7 @@
       <div class="w-full pl-5 pr-4 sm:pl-6 sm:pr-6">
         <div class="h-20 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
           <router-link to="/catalogo" class="flex items-center justify-self-start" aria-label="Inicio">
-            <img src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-14 sm:h-16 w-auto" />
+            <img :src="Logo" alt="Misioneras" class="h-14 sm:h-16 w-auto" />
           </router-link>
 
           <nav class="hidden md:flex items-center gap-1 justify-self-center">
@@ -82,6 +82,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import Logo from '@/assets/logo.svg';
 
 const route = useRoute();
 const authStore = useAuthStore();

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { z } from 'zod'
+import Logo from '@/assets/logo.svg'
 import {
   assertAuthConfigured,
   authClient,
@@ -355,11 +356,11 @@ function classifyAuthError(err: unknown): string {
       class="lg:absolute lg:inset-y-0 lg:left-0 lg:w-1/2 transition-transform duration-[700ms] ease-[cubic-bezier(0.65,0,0.35,1)] hidden lg:flex overflow-hidden"
       :class="mode === 'register' ? 'lg:translate-x-full' : 'lg:translate-x-0'"
     >
-      <img src="/Images/img-16.jpg" alt="" class="absolute inset-0 w-full h-full object-cover" />
+      <img :src="'/Images/img-16.jpg'" alt="" class="absolute inset-0 w-full h-full object-cover" />
       <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/20"></div>
 
       <div class="relative z-10 flex flex-col justify-between p-12 xl:p-16 text-white w-full">
-        <img src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-20 w-auto brightness-0 invert" />
+        <img :src="Logo" alt="Misioneras" class="h-20 w-auto brightness-0 invert" />
 
         <div class="max-w-md">
           <p class="text-sm uppercase tracking-[0.2em] text-white/70 mb-3 font-medium">Plataforma de formación</p>
@@ -391,7 +392,7 @@ function classifyAuthError(err: unknown): string {
 
         <!-- Mobile logo -->
         <div class="text-center lg:hidden mb-8">
-          <img src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-16 w-auto mx-auto" />
+          <img :src="Logo" alt="Misioneras" class="h-16 w-auto mx-auto" />
         </div>
 
         <!-- Toast notification -->
@@ -632,7 +633,6 @@ function classifyAuthError(err: unknown): string {
                 </span>
               </label>
               <p v-if="regErrors.terms" class="mt-1 text-xs text-red-600">{{ regErrors.terms }}</p>
-              </template>
 
               <button type="submit" class="btn btn-primary btn-block" :disabled="isLoading">
                 <span v-if="isLoading" class="opacity-70">{{ pendingRegistration ? 'Verificando…' : 'Creando cuenta…' }}</span>

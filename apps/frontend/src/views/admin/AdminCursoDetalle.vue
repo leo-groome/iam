@@ -141,11 +141,15 @@ const archiveCourse = async () => {
 
     <div class="space-y-6">
       <div class="card p-6">
+
         <h3 class="font-semibold mb-3">Configuración</h3>
         <div class="space-y-2 text-sm">
           <label class="flex items-center justify-between">
-            <span>Visible en catálogo</span>
-            <input type="checkbox" checked />
+            <span>Estado de Publicación</span>
+            <select class="input py-1 text-sm w-32 bg-[var(--color-surface)]">
+              <option value="borrador">Borrador</option>
+              <option value="publicado" selected>Publicado</option>
+            </select>
           </label>
           <label class="flex items-center justify-between">
             <span>Genera certificado</span>
