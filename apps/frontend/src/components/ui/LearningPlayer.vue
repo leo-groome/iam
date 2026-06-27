@@ -164,12 +164,8 @@ watch(
         console.error('PDF heartbeat failed', e);
       }
     } else if (newTema.content_type === 'video') {
-      // Seek to last position when video element is ready
-      setTimeout(() => {
-        if (videoEl.value && videoCurrentTime.value > 0) {
-          videoEl.value.currentTime = videoCurrentTime.value;
-        }
-      }, 500);
+      // Note: seek to last position is handled inside onLoadedMetadata
+      // to avoid timeupdate events firing before duration is known.
 
       // Setup periodic heartbeat
       heartbeatInterval = setInterval(async () => {
@@ -200,6 +196,24 @@ function setupScrollTracking(): void {
     }
   };
   window.addEventListener('scroll', scrollHandler, { passive: true });
+}
+
+// Flushes current video position + max-seen-pct to DB immediately so the
+// mark-content-done backend check (video_max_seen_pct >= 95) doesn't fail
+// due to a stale DB value from the last periodic heartbeat.
+async function syncVideoProgress(pct: number): Promise<void> {
+  if (!props.tema || !videoEl.value) return;
+  try {
+    await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
+      body: {
+        type: 'video',
+        pos_seconds: Math.floor(videoEl.value.currentTime),
+        max_seen_pct: Math.min(100, pct),
+      },
+    });
+  } catch (e) {
+    console.error('syncVideoProgress heartbeat failed', e);
+  }
 }
 
 async function markContentDone() {
@@ -239,25 +253,37 @@ function onVideoPause() {
 
 function onVideoTimeUpdate() {
   if (!videoEl.value) return;
+  // Guard: if metadata hasn't loaded yet, actualDuration is null and the
+  // division would produce NaN or Infinity, firing a false 95% trigger.
+  if (!actualDuration.value || actualDuration.value <= 0) return;
+
   videoCurrentTime.value = videoEl.value.currentTime;
   const pct = Math.round((videoEl.value.currentTime / videoDuration.value) * 100);
   videoProgress.value = Math.max(videoProgress.value, pct);
 
-  if (pct >= 95 && !contentDone.value) {
-    markContentDone();
+  if (pct >= 95 && !contentDone.value && !markingDone.value) {
+    // Flush progress to DB first so mark-content-done backend check passes.
+    syncVideoProgress(pct).then(() => markContentDone());
   }
 }
 
 function onLoadedMetadata() {
   if (videoEl.value) {
     actualDuration.value = videoEl.value.duration;
+    // Seek to last saved position here — after metadata is loaded and
+    // duration is known, avoiding timeupdate events with unknown duration.
+    if (videoCurrentTime.value > 0) {
+      videoEl.value.currentTime = videoCurrentTime.value;
+    }
   }
 }
 
-function onVideoEnded() {
+async function onVideoEnded() {
   playing.value = false;
   if (!contentDone.value) {
-    markContentDone();
+    // Flush 100% to DB before marking done so the backend check passes.
+    await syncVideoProgress(100);
+    await markContentDone();
   }
 }
 
