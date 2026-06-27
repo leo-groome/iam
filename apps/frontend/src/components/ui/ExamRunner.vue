@@ -146,7 +146,7 @@ const progressPct = computed(() =>
     </div>
     <h2 class="text-xl font-bold mb-2">No se pudo cargar el examen</h2>
     <p class="text-[var(--color-text-muted)] mb-6">{{ fetchError }}</p>
-    <button @click="() => window.location.reload()" class="btn btn-primary">
+    <button @click="() => location.reload()" class="btn btn-primary">
       Reintentar
     </button>
   </div>

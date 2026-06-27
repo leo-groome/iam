@@ -33,6 +33,7 @@ const isFullscreen = ref(false);
 const videoEl = ref<HTMLVideoElement | null>(null);
 const videoCurrentTime = ref(0);
 const videoProgress = ref(0);
+const actualDuration = ref<number | null>(null);
 
 // Video: direct stream URL (no Blob — enables native HTTP Range Requests)
 const mediaStreamUrl = ref<string | null>(null);
@@ -45,7 +46,7 @@ const markingDone = ref(false);
 
 const contentType = computed(() => props.tema?.content_type || 'video');
 const duration = computed(() => props.tema?.duration_seconds || 180);
-const videoDuration = computed(() => videoEl.value?.duration || duration.value || 0);
+const videoDuration = computed(() => actualDuration.value || duration.value || 0);
 
 let heartbeatInterval: any;
 let timer: any;
@@ -91,6 +92,7 @@ watch(
     playing.value = false;
     videoCurrentTime.value = 0;
     videoProgress.value = 0;
+    actualDuration.value = null;
     progress.value = 0;
     contentDone.value = false;
     markingDone.value = false;
@@ -246,9 +248,16 @@ function onVideoTimeUpdate() {
   }
 }
 
+function onLoadedMetadata() {
+  if (videoEl.value) {
+    actualDuration.value = videoEl.value.duration;
+  }
+}
+
 function onVideoEnded() {
   playing.value = false;
-  if (!contentDone.value) {
+  contentDone.value = true;
+  if (!markingDone.value) {
     markContentDone();
   }
 }
@@ -307,6 +316,7 @@ const buttonHref = computed(() => props.tema?.has_exam ? props.examUrl : (props.
           class="w-full h-full object-contain"
           :src="mediaStreamUrl ?? undefined"
           crossorigin="anonymous"
+          @loadedmetadata="onLoadedMetadata"
           @play="onVideoPlay"
           @pause="onVideoPause"
           @timeupdate="onVideoTimeUpdate"
