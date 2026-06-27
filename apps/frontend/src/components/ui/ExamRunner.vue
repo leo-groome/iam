@@ -121,6 +121,10 @@ const resultadoHref = computed(() => {
 const progressPct = computed(() =>
   questions.value.length ? Math.round((idx.value / questions.value.length) * 100) : 0,
 )
+
+function reloadPage() {
+  window.location.reload()
+}
 </script>
 
 <template>
@@ -146,7 +150,7 @@ const progressPct = computed(() =>
     </div>
     <h2 class="text-xl font-bold mb-2">No se pudo cargar el examen</h2>
     <p class="text-[var(--color-text-muted)] mb-6">{{ fetchError }}</p>
-    <button @click="() => location.reload()" class="btn btn-primary">
+    <button @click="reloadPage" class="btn btn-primary">
       Reintentar
     </button>
   </div>
