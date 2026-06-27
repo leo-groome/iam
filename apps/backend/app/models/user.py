@@ -41,3 +41,6 @@ class User(Base, TimestampMixin):
     audit_entries: Mapped[list["AdminAudit"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "AdminAudit", back_populates="actor"
     )
+    onboarding: Mapped["OnboardingResponse | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "OnboardingResponse", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )

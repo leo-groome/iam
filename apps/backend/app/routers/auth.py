@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_db
 from app.deps import get_current_user
+from app.models.onboarding import OnboardingResponse
 from app.models.user import User
 from app.schemas.user import SyncRequest, UserPublic
 from app.security.neon_auth import verify_stack_token
@@ -133,6 +134,25 @@ async def auth_sync(
             changed = True
         if changed:
             logger.info("Updated user profile", extra={"neon_user_id_prefix": claims.sub[:8]})
+
+    # --- 4. Onboarding upsert (optional; bundled from the signup cache) ---
+    # Atomic with the user upsert above — a single commit persists both. If the
+    # client omits `onboarding` (OAuth users who skipped it, or a name-only
+    # re-sync) any existing row is left untouched.
+    if body.onboarding is not None:
+        await db.flush()  # ensure user.id is populated for the FK on new rows
+        result = await db.execute(
+            select(OnboardingResponse).where(OnboardingResponse.user_id == user.id)
+        )
+        onboarding = result.scalar_one_or_none()
+        data = body.onboarding.model_dump()
+        if onboarding is None:
+            db.add(OnboardingResponse(user_id=user.id, **data))
+            logger.info("Stored onboarding response", extra={"neon_user_id_prefix": claims.sub[:8]})
+        else:
+            for field, value in data.items():
+                setattr(onboarding, field, value)
+            logger.info("Updated onboarding response", extra={"neon_user_id_prefix": claims.sub[:8]})
 
     await db.commit()
     await db.refresh(user)
