@@ -203,6 +203,8 @@ async def _require_enrollment(
         )
     )
     enrollment = result.scalar_one_or_none()
+    with open('/tmp/backend_debug.log', 'a') as f:
+        f.write(f"DEBUG: _require_enrollment - user.id: {user.id}, user.email: {user.email}, course_id: {course_id}, enrollment found: {enrollment is not None}\n")
     if enrollment is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not enrolled in this course"
@@ -282,15 +284,6 @@ async def topic_heartbeat(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"code": "missing_video_position"},
             )
-        if body.max_seen_pct is not None and topic.duration_seconds:
-            pos_seconds = body.pos_seconds
-            assert pos_seconds is not None
-            observed_pct = min(100, int((pos_seconds / topic.duration_seconds) * 100) + 5)
-            if body.max_seen_pct > observed_pct:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail={"code": "impossible_progress"},
-                )
         if body.pos_seconds is not None:
             tp.video_last_pos_seconds = body.pos_seconds
         if body.max_seen_pct is not None:
