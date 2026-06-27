@@ -23,6 +23,19 @@ export interface AppUser {
   status: string
 }
 
+// Onboarding answers bundled into /auth/sync. `nombre` is dropped client-side
+// (it maps to full_name); the rest mirror the backend OnboardingIn schema.
+export interface OnboardingPayload {
+  edad: string
+  sexo: string
+  diocesis: string
+  ciudad: string
+  parroquia: string
+  entorno: string
+  pastoral: string
+  extra?: Record<string, unknown>
+}
+
 // ---------------------------------------------------------------------------
 // Mock token parser
 // Format: mock-token:<sub>:<email>:<name>:<role>
@@ -174,6 +187,7 @@ export const useAuthStore = defineStore('auth', () => {
     otp: string,
     full_name: string,
     birth_date: string,
+    onboarding?: OnboardingPayload,
   ): Promise<void> {
     loading.value = true
     error.value = null
@@ -191,8 +205,11 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = t
 
       await apiPost('/api/v1/auth/sync', {
-        body: { full_name, birth_date },
+        body: { full_name, birth_date, onboarding: onboarding ?? null },
       })
+
+      // Onboarding cache is single-use: clear it once persisted.
+      if (onboarding) sessionStorage.removeItem('onboardingData')
 
       await fetchMe()
     } catch (err) {

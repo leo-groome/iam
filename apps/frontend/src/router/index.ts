@@ -51,6 +51,12 @@ const routes: Array<RouteRecordRaw> = [
 
   // Panel de Estudiante
   {
+    path: '/diagnostico',
+    name: 'Diagnostico',
+    component: () => import('@/views/student/DiagnosticoView.vue'),
+    meta: { layout: 'StudentLayout', requiresAuth: true }
+  },
+  {
     path: '/catalogo',
     name: 'Catalogo',
     component: () => import('@/views/public/catalogo.vue'),

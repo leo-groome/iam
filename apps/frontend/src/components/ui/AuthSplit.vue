@@ -11,11 +11,59 @@ import {
   sendEmailVerificationOtp,
   setMockAuthToken,
 } from '@/lib/auth-client'
-import { ApiError } from '@/lib/api'
-import { useAuthStore } from '@/stores/auth'
+import { ApiError, apiGet } from '@/lib/api'
+import { useAuthStore, type OnboardingPayload } from '@/stores/auth'
 
 const authStore = useAuthStore()
 const router = useRouter()
+
+// ---------------------------------------------------------------------------
+// Onboarding cache — read once. Used to prefill the name field and to bundle
+// the demographic answers into the /auth/sync call at signup.
+// ---------------------------------------------------------------------------
+const ONBOARDING_KEYS = ['edad', 'sexo', 'diocesis', 'ciudad', 'parroquia', 'entorno', 'pastoral'] as const
+
+function readOnboardingCache(): Record<string, string> | null {
+  try {
+    const raw = sessionStorage.getItem('onboardingData')
+    return raw ? (JSON.parse(raw) as Record<string, string>) : null
+  } catch {
+    return null
+  }
+}
+
+const onboardingData = readOnboardingCache()
+
+function buildOnboardingPayload(): OnboardingPayload | undefined {
+  const d = onboardingData
+  if (!d) return undefined
+  // `nombre` is intentionally dropped (it maps to full_name). Bail if any
+  // required demographic answer is missing so the backend isn't sent a partial.
+  if (!ONBOARDING_KEYS.every((k) => typeof d[k] === 'string' && d[k])) return undefined
+  return {
+    edad: d.edad,
+    sexo: d.sexo,
+    diocesis: d.diocesis,
+    ciudad: d.ciudad,
+    parroquia: d.parroquia,
+    entorno: d.entorno,
+    pastoral: d.pastoral,
+  }
+}
+
+// After a successful signup, route new registrants (those who came through the
+// onboarding flow) into the general diagnostic when one is configured; otherwise
+// fall back to the catalog. The cache is cleared by the store after sync.
+async function resolvePostSignupRedirect(): Promise<string> {
+  if (!onboardingData) return nextRedirect
+  try {
+    const res = (await apiGet('/api/v1/diagnostic/active')) as { active: unknown }
+    if (res && res.active) return '/diagnostico'
+  } catch {
+    // No diagnostic configured / network error — skip straight to the catalog.
+  }
+  return nextRedirect
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -69,6 +117,11 @@ onMounted(() => {
     if (next && next.startsWith('/')) nextRedirect = next
   }
   isReady.value = true
+
+  // Prefill the name from onboarding so the user doesn't type it twice.
+  if (onboardingData?.nombre && !regFullName.value) {
+    regFullName.value = onboardingData.nombre
+  }
 
   // Only enter "complete your profile" mode when the user actually returned
   // from an OAuth callback (?oauth=1). Otherwise a leftover Neon session would
@@ -207,9 +260,10 @@ async function handleVerifyRegistration() {
       parsed.data.code,
       pending.fullName,
       pending.birthDate,
+      buildOnboardingPayload(),
     )
     // fetchMe was already called inside verifyOtp — user is populated
-    window.location.href = nextRedirect
+    window.location.href = await resolvePostSignupRedirect()
   } catch (err: unknown) {
     console.error('[auth] verification failed:', err)
     if (err instanceof ApiError && err.status === 401) {
@@ -271,11 +325,13 @@ async function handleRegister() {
       // just get the JWT, sync the profile, then hydrate user.
       const { apiPost: syncPost } = await import('@/lib/api')
       await refreshAuthTokenCookie()
+      const payload = buildOnboardingPayload()
       await syncPost('/api/v1/auth/sync', {
-        body: { full_name: parsed.data.fullName, birth_date: parsed.data.birthDate },
+        body: { full_name: parsed.data.fullName, birth_date: parsed.data.birthDate, onboarding: payload ?? null },
       })
+      if (payload) sessionStorage.removeItem('onboardingData')
       await authStore.fetchMe()
-      window.location.href = nextRedirect
+      window.location.href = await resolvePostSignupRedirect()
       return
     } else if (isMockAuthAllowed()) {
       setMockAuthToken(parsed.data.email, parsed.data.fullName)
