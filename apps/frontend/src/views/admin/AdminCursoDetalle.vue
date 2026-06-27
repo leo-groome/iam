@@ -2,6 +2,7 @@
 import { useRoute, useRouter } from 'vue-router';
 import { onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
+import { mediaService } from '@/services/media.service';
 
 const route = useRoute();
 const router = useRouter();
@@ -11,12 +12,16 @@ const curso = ref<any>(null);
 const loading = ref(false);
 const saving = ref(false);
 
+const isUploadingCover = ref(false);
+const isUploadingMedia = ref(false);
+
 // Form state
 const formData = ref<any>({
   title: '',
   short_desc: '',
   long_desc: '',
   slug: '',
+  cover_key: null,
 });
 
 function onTitleInput() {
@@ -39,6 +44,7 @@ const loadCourse = async () => {
         short_desc: curso.value?.short_desc ?? '',
         long_desc: curso.value?.long_desc ?? '',
         slug: curso.value?.slug ?? '',
+        cover_key: curso.value?.cover_key ?? null,
       };
     } catch (err) {
       console.error('Error loading course:', err);
@@ -102,6 +108,44 @@ const archiveCourse = async () => {
     console.error('Error archiving course:', err);
   } finally {
     saving.value = false;
+  }
+};
+
+const handleCoverUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+
+  isUploadingCover.value = true;
+  try {
+    const key = await mediaService.uploadFile(file, 'cover');
+    formData.value.cover_key = key;
+  } catch (err: any) {
+    console.error('Error uploading cover:', err);
+    alert('No se pudo subir la imagen de portada: ' + err.message);
+  } finally {
+    isUploadingCover.value = false;
+  }
+};
+
+const handleTopicMediaUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+
+  let scope: 'video' | 'pdf' | 'imagen' = 'imagen';
+  if (drawerData.value.content_type === 'video') scope = 'video';
+  else if (drawerData.value.content_type === 'pdf') scope = 'pdf';
+
+  isUploadingMedia.value = true;
+  try {
+    const key = await mediaService.uploadFile(file, scope);
+    drawerData.value.content_url = key;
+  } catch (err: any) {
+    console.error('Error uploading topic media:', err);
+    alert('No se pudo subir el archivo: ' + err.message);
+  } finally {
+    isUploadingMedia.value = false;
   }
 };
 
@@ -221,6 +265,7 @@ const saveDrawer = async () => {
         content_body: drawerData.value.content_body || null,
         duration_seconds: dur,
         exam_min_score: Number(drawerData.value.exam_min_score) || 70,
+        media_key: drawerData.value.content_url || null,
       };
       if (drawerMode.value === 'new') {
         await adminService.createTopic(activeModuleId.value!, payload);
@@ -378,12 +423,24 @@ const saveDrawer = async () => {
           </div>
           <div>
             <label class="label">Imagen de portada</label>
+            <div v-if="formData.cover_key" class="relative group rounded-xl overflow-hidden mb-2 border border-[var(--color-border)] aspect-video bg-[var(--color-app-bg)] flex items-center justify-center">
+              <span class="text-xs text-[var(--color-text-muted)] p-4 break-all text-center">Archivo subido: {{ formData.cover_key }}</span>
+              <button type="button" @click="formData.cover_key = null" class="absolute top-2 right-2 p-1.5 rounded-full bg-red-600 text-white hover:bg-red-700 shadow-md z-20">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </div>
             <div class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-4 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
-              <input type="file" accept="image/jpeg, image/png, image/webp" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <p class="text-sm text-[var(--color-text-muted)]">Arrastra o haz clic para subir</p>
+              <input type="file" accept="image/jpeg, image/png, image/webp" @change="handleCoverUpload" :disabled="isUploadingCover" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+              <div v-if="isUploadingCover" class="flex flex-col items-center py-2">
+                <svg class="animate-spin h-6 w-6 text-[var(--color-primary)] mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p class="text-sm text-[var(--color-text-muted)]">Subiendo imagen...</p>
+              </div>
+              <div v-else>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p class="text-sm text-[var(--color-text-muted)]">Arrastra o haz clic para subir</p>
+              </div>
             </div>
           </div>
           <div class="pt-4 border-t border-[var(--color-border)]">
@@ -457,8 +514,12 @@ const saveDrawer = async () => {
               </div>
               <button type="button" @click="drawerData.content_url = ''" class="text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded font-medium border border-red-200">Reemplazar</button>
             </div>
+            <div v-else-if="isUploadingMedia" class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center bg-[var(--color-app-bg)] flex flex-col items-center">
+              <svg class="animate-spin h-6 w-6 text-[var(--color-primary)] mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              <p class="text-sm text-[var(--color-text-muted)]">Subiendo archivo a R2...</p>
+            </div>
             <div v-else class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-4 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
-              <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+              <input type="file" @change="handleTopicMediaUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
               <p class="text-sm font-medium text-[var(--color-text-muted)]">Arrastra o haz clic para subir archivo</p>
               <p class="text-xs text-[var(--color-text-muted)] mt-1">Max 500MB</p>

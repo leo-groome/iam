@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { mediaService } from '@/services/media.service';
 
 // TODO: endpoint backend pendiente (/api/v1/config o similar)
 const activeTab = ref('general');
 
-const formData = ref({
+const formData = ref<any>({
   // General
   platform_name: 'IAM de la vida',
   support_email: 'support@iamdelavida.com',
@@ -22,9 +23,29 @@ const formData = ref({
   
   // Branding
   primary_color: '#1448E0',
+  logo_key: '',
 });
 
 const isSaving = ref(false);
+const isUploadingLogo = ref(false);
+
+const handleLogoUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+
+  isUploadingLogo.value = true;
+  try {
+    const key = await mediaService.uploadFile(file, 'imagen');
+    formData.value.logo_key = key;
+    alert('Logo subido correctamente a R2: ' + key);
+  } catch (err: any) {
+    console.error('Error uploading logo:', err);
+    alert('No se pudo subir el logo: ' + err.message);
+  } finally {
+    isUploadingLogo.value = false;
+  }
+};
 
 const saveConfig = async () => {
   isSaving.value = true;
@@ -166,12 +187,22 @@ const saveConfig = async () => {
           <div class="grid md:grid-cols-2 gap-6">
             <div>
               <label class="label">Logo Principal</label>
+              <div v-if="formData.logo_key" class="border border-[var(--color-border)] rounded-xl p-3 flex items-center justify-between bg-[var(--color-bg-hover)] mb-2">
+                <span class="text-xs text-[var(--color-text-muted)] truncate max-w-[200px]">{{ formData.logo_key.split('/').pop() }}</span>
+                <button type="button" @click="formData.logo_key = ''" class="text-xs text-red-600 font-medium">Quitar</button>
+              </div>
               <div class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center text-sm text-[var(--color-text-muted)] hover:border-[var(--color-primary)] transition-colors cursor-pointer relative bg-[var(--color-app-bg)] group">
-                <input type="file" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                <div class="mx-auto w-10 h-10 rounded-full bg-[var(--color-primary-soft)] text-[var(--color-primary)] flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                  <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <input type="file" accept="image/*" @change="handleLogoUpload" :disabled="isUploadingLogo" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                <div v-if="isUploadingLogo" class="flex flex-col items-center">
+                  <svg class="animate-spin h-6 w-6 text-[var(--color-primary)] mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  <span>Subiendo logo...</span>
                 </div>
-                Arrastra o haz clic para subir
+                <div v-else>
+                  <div class="mx-auto w-10 h-10 rounded-full bg-[var(--color-primary-soft)] text-[var(--color-primary)] flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                  </div>
+                  Arrastra o haz clic para subir
+                </div>
               </div>
             </div>
             <div>

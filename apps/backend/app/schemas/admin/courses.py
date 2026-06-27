@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 
 
 class TopicAdminItem(BaseModel):
@@ -46,6 +46,14 @@ class CourseAdminResponse(BaseModel):
     instructor_id: uuid.UUID | None
     modules: list[ModuleAdminItem] = []
 
+    @field_validator("cover_key", mode="before")
+    @classmethod
+    def format_cover_url(cls, v: str | None) -> str | None:
+        if v and not v.startswith("http"):
+            from app.config import settings
+            return f"{settings.r2_public_base}/{v}"
+        return v
+
 
 class CourseAdminListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -70,6 +78,16 @@ class CourseCreate(BaseModel):
     order_index: int = Field(0, ge=0)
     instructor_id: uuid.UUID | None = None
 
+    @field_validator("cover_key", mode="before")
+    @classmethod
+    def strip_cover_url(cls, v: str | None) -> str | None:
+        if v and v.startswith("http"):
+            from app.config import settings
+            base = settings.r2_public_base + "/"
+            if v.startswith(base):
+                return v.split(base, 1)[1]
+        return v
+
     @model_validator(mode="after")
     def age_range_valid(self) -> CourseCreate:
         if self.age_min is not None and self.age_max is not None and self.age_max < self.age_min:
@@ -86,6 +104,16 @@ class CourseUpdate(BaseModel):
     age_max: int | None = Field(None, ge=13, le=99)
     order_index: int | None = Field(None, ge=0)
     instructor_id: uuid.UUID | None = None
+
+    @field_validator("cover_key", mode="before")
+    @classmethod
+    def strip_cover_url(cls, v: str | None) -> str | None:
+        if v and v.startswith("http"):
+            from app.config import settings
+            base = settings.r2_public_base + "/"
+            if v.startswith(base):
+                return v.split(base, 1)[1]
+        return v
 
     @model_validator(mode="after")
     def age_range_valid(self) -> CourseUpdate:

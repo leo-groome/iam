@@ -2,6 +2,7 @@
 import { useRoute, useRouter } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
+import { mediaService } from '@/services/media.service';
 
 type ExamOption = {
   texto: string;
@@ -26,6 +27,8 @@ const mod = ref<any>(null);
 const tema = ref<any>(null);
 const loading = ref(false);
 const saving = ref(false);
+const isUploading = ref(false);
+
 const errorMessage = ref('');
 const successMessage = ref('');
 const title = ref('');
@@ -34,6 +37,7 @@ const hasExam = ref(false);
 const contentBody = ref('');
 const durationMinutes = ref<number | null>(null);
 const examMinScore = ref(70);
+const mediaKey = ref('');
 const questions = ref<ExamQuestion[]>([]);
 
 const makeEmptyQuestion = (): ExamQuestion => ({
@@ -76,6 +80,7 @@ onMounted(async () => {
         contentBody.value = tema.value.content_body || '';
         durationMinutes.value = tema.value.duration_seconds ? Math.round(tema.value.duration_seconds / 60) : null;
         examMinScore.value = tema.value.exam_min_score || 70;
+        mediaKey.value = tema.value.media_key || '';
         questions.value = (tema.value.questions ?? []).map(normalizeQuestion);
       }
     }
@@ -146,6 +151,28 @@ const buildQuestionPayload = () => questions.value.map((question, questionIndex)
   })),
 }));
 
+const handleFileUpload = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+
+  let scope: 'video' | 'pdf' | 'imagen' = 'imagen';
+  if (contentType.value === 'video') scope = 'video';
+  else if (contentType.value === 'pdf') scope = 'pdf';
+
+  isUploading.value = true;
+  errorMessage.value = '';
+  try {
+    const key = await mediaService.uploadFile(file, scope);
+    mediaKey.value = key;
+  } catch (err: any) {
+    console.error('Error uploading file:', err);
+    errorMessage.value = 'No se pudo subir el archivo: ' + err.message;
+  } finally {
+    isUploading.value = false;
+  }
+};
+
 const handleSave = async () => {
   errorMessage.value = '';
   successMessage.value = '';
@@ -166,6 +193,7 @@ const handleSave = async () => {
       content_body: contentBody.value || null,
       duration_seconds: dur,
       exam_min_score: score,
+      media_key: mediaKey.value || null,
     };
     if (isNew) {
       const created = await adminService.createTopic(modId, formData);
@@ -243,16 +271,29 @@ const handleSave = async () => {
           />
         </div>
 
-        <div>
-          <label class="label">Subir archivo</label>
-          <div class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
-            <input type="file" accept="video/mp4, video/webm, application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+        <div v-if="contentType !== 'texto'">
+          <label class="label">Archivo Multimedia</label>
+          <div v-if="mediaKey" class="border border-[var(--color-border)] rounded-xl p-4 flex items-center justify-between bg-[var(--color-bg-hover)] mb-4">
+            <div class="flex items-center gap-3 overflow-hidden">
+              <svg class="w-8 h-8 text-[var(--color-primary)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              <span class="text-sm font-medium truncate">{{ mediaKey.split('/').pop() || 'Archivo actual' }}</span>
+            </div>
+            <button type="button" @click="mediaKey = ''" class="text-xs text-red-600 hover:bg-red-50 px-2.5 py-1 rounded font-medium border border-red-200">Reemplazar</button>
+          </div>
+          <div v-else-if="isUploading" class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-8 text-center bg-[var(--color-app-bg)] flex flex-col items-center">
+            <svg class="animate-spin h-6 w-6 text-[var(--color-primary)] mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <p class="text-sm text-[var(--color-text-muted)]">Subiendo archivo a Cloudflare R2...</p>
+          </div>
+          <div v-else class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
+            <input type="file" :accept="contentType === 'video' ? 'video/mp4, video/webm' : (contentType === 'pdf' ? 'application/pdf' : 'image/jpeg, image/png, image/webp')" @change="handleFileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
             <div class="space-y-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <p class="text-sm text-[var(--color-text-muted)]">Arrastra o haz clic para subir</p>
-              <p class="text-xs text-[var(--color-text-muted)]">Video (mp4/webm, máx 500 MB) o PDF (máx 50 MB).</p>
+              <p class="text-xs text-[var(--color-text-muted)]">
+                {{ contentType === 'video' ? 'Video (mp4/webm, máx 500 MB)' : (contentType === 'pdf' ? 'Documento PDF (máx 50 MB)' : 'Imagen (jpeg/png/webp, máx 10 MB)') }}
+              </p>
             </div>
           </div>
         </div>

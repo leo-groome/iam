@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class CourseCard(BaseModel):
@@ -17,6 +17,14 @@ class CourseCard(BaseModel):
     age_max: int | None
     order_index: int
     status: str
+
+    @field_validator("cover_key", mode="before")
+    @classmethod
+    def format_cover_url(cls, v: str | None) -> str | None:
+        if v and not v.startswith("http"):
+            from app.config import settings
+            return f"{settings.r2_public_base}/{v}"
+        return v
 
 
 class CourseCardListResponse(BaseModel):
@@ -60,6 +68,14 @@ class CourseDetail(BaseModel):
     modules: list[ModuleItem]
     enrollment_status: str
     progress_pct: int
+
+    @field_validator("cover_key", mode="before")
+    @classmethod
+    def format_cover_url(cls, v: str | None) -> str | None:
+        if v and not v.startswith("http"):
+            from app.config import settings
+            return f"{settings.r2_public_base}/{v}"
+        return v
 
 
 class EnrollResponse(BaseModel):

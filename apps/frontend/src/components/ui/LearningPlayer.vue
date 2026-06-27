@@ -1,72 +1,265 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { apiPost, mediaFetch, ApiError } from '@/lib/api'
-import type { PlayTokenResponse } from '@/lib/api'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { apiPost, mediaFetch } from '@/lib/api';
 
 const props = defineProps<{
-  tema?: { duration_seconds?: number; content_body?: string };
+  tema?: {
+    id: string;
+    title: string;
+    content_type: string;
+    content_body?: string;
+    duration_seconds?: number;
+    media_key?: string;
+    has_exam?: boolean;
+    state?: string;
+    progress?: {
+      video_last_pos_seconds: number;
+      video_max_seen_pct: number;
+      pdf_last_page: number;
+      pdf_total_pages: number | null;
+    };
+  };
   examUrl: string;
   nextUrl?: string;
   hasExam: boolean;
 }>();
 
+// Refs and states
 const progress = ref(0);
 const playing = ref(false);
-const duration = computed(() => props.tema?.duration_seconds || 180);
-const currentTime = ref(0);
-let timer: number | undefined;
-let scrollHandler: (() => void) | undefined;
-
 const videoWrap = ref<HTMLElement | null>(null);
 const isFullscreen = ref(false);
 
+const videoEl = ref<HTMLVideoElement | null>(null);
+const videoCurrentTime = ref(0);
+const videoProgress = ref(0);
+
+const mediaBlobUrl = ref<string | null>(null);
+const mediaError = ref('');
+const loadingToken = ref(false);
+const contentDone = ref(false);
+const markingDone = ref(false);
+
+const contentType = computed(() => props.tema?.content_type || 'video');
+const duration = computed(() => props.tema?.duration_seconds || 180);
+const videoDuration = computed(() => videoEl.value?.duration || duration.value || 0);
+
+let heartbeatInterval: any;
+let timer: any;
+let scrollHandler: (() => void) | undefined;
+
+// Format seconds to MM:SS
+function formatTime(secs: number): string {
+  if (isNaN(secs) || secs < 0) return '0:00';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+// Fullscreen
 function toggleFullscreen() {
   const el = videoWrap.value;
   if (!el) return;
   if (!document.fullscreenElement) {
-    el.requestFullscreen?.().catch(() => {})
+    el.requestFullscreen?.().catch(() => {});
   } else {
-    document.exitFullscreen?.().catch(() => {})
+    document.exitFullscreen?.().catch(() => {});
   }
 }
 
 function onFsChange(): void {
-  isFullscreen.value = !!document.fullscreenElement
+  isFullscreen.value = !!document.fullscreenElement;
+}
+
+// Watch for theme changes
+watch(
+  () => props.tema,
+  async (newTema) => {
+    // Revoke previous URL if any
+    if (mediaBlobUrl.value) {
+      URL.revokeObjectURL(mediaBlobUrl.value);
+      mediaBlobUrl.value = null;
+    }
+
+    mediaError.value = '';
+    loadingToken.value = false;
+    playing.value = false;
+    videoCurrentTime.value = 0;
+    videoProgress.value = 0;
+    progress.value = 0;
+    contentDone.value = false;
+    markingDone.value = false;
+
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    if (timer) clearInterval(timer);
+    if (scrollHandler) {
+      window.removeEventListener('scroll', scrollHandler);
+      scrollHandler = undefined;
+    }
+
+    if (!newTema) return;
+
+    // Load initial progress
+    if (newTema.progress && newTema.state) {
+      if (['contenido_visto', 'aprobado', 'en_repaso'].includes(newTema.state)) {
+        contentDone.value = true;
+      }
+      if (newTema.content_type === 'video') {
+        videoCurrentTime.value = newTema.progress.video_last_pos_seconds || 0;
+        videoProgress.value = newTema.progress.video_max_seen_pct || 0;
+      }
+    }
+
+    // Load private media if needed
+    if (newTema.content_type !== 'texto' && newTema.media_key) {
+      loadingToken.value = true;
+      try {
+        const tokenResp = (await apiPost('/api/v1/media/play-token' as any, {
+          body: { topic_id: newTema.id },
+        })) as any;
+
+        const blob = await mediaFetch(tokenResp.media_url, tokenResp.token);
+        mediaBlobUrl.value = URL.createObjectURL(blob);
+      } catch (err: any) {
+        console.error('Error fetching R2 play token/media:', err);
+        mediaError.value = err.message || 'No se pudo cargar el archivo multimedia.';
+      } finally {
+        loadingToken.value = false;
+      }
+    }
+
+    // Tracking initialization
+    if (newTema.content_type === 'texto' || newTema.content_type === 'imagen') {
+      try {
+        await apiPost(`/api/v1/learning/topics/${newTema.id}/heartbeat` as any, {
+          body: { type: newTema.content_type },
+        });
+      } catch (e) {
+        console.error('Initial heartbeat failed', e);
+      }
+      setupScrollTracking();
+    } else if (newTema.content_type === 'pdf') {
+      try {
+        await apiPost(`/api/v1/learning/topics/${newTema.id}/heartbeat` as any, {
+          body: { type: 'pdf', last_page: 1, total_pages: 1 },
+        });
+        contentDone.value = true;
+        await markContentDone();
+      } catch (e) {
+        console.error('PDF heartbeat failed', e);
+      }
+    } else if (newTema.content_type === 'video') {
+      // Seek to last position when video element is ready
+      setTimeout(() => {
+        if (videoEl.value && videoCurrentTime.value > 0) {
+          videoEl.value.currentTime = videoCurrentTime.value;
+        }
+      }, 500);
+
+      // Setup periodic heartbeat
+      heartbeatInterval = setInterval(async () => {
+        if (playing.value && videoEl.value && props.tema) {
+          const pos = Math.floor(videoEl.value.currentTime);
+          const maxSeen = Math.max(videoProgress.value, Math.round((pos / videoDuration.value) * 100));
+          try {
+            await apiPost(`/api/v1/learning/topics/${props.tema.id}/heartbeat` as any, {
+              body: { type: 'video', pos_seconds: pos, max_seen_pct: maxSeen },
+            });
+          } catch (e) {
+            console.error('Video heartbeat failed', e);
+          }
+        }
+      }, 5000);
+    }
+  },
+  { immediate: true }
+);
+
+function setupScrollTracking(): void {
+  scrollHandler = () => {
+    const h = document.documentElement.scrollHeight - window.innerHeight;
+    const pct = h > 0 ? Math.min(100, Math.round((window.scrollY / h) * 100)) : 100;
+    progress.value = pct;
+    if (pct >= 95 && !contentDone.value) {
+      markContentDone();
+    }
+  };
+  window.addEventListener('scroll', scrollHandler, { passive: true });
+}
+
+async function markContentDone() {
+  if (!props.tema) return;
+  markingDone.value = true;
+  try {
+    await apiPost(`/api/v1/learning/topics/${props.tema.id}/mark-content-done` as any);
+    contentDone.value = true;
+  } catch (err) {
+    console.error('Error marking content done:', err);
+  } finally {
+    markingDone.value = false;
+  }
+}
+
+async function onTextMarkDone(): Promise<void> {
+  await markContentDone();
+}
+
+// Video Playback
+function toggleVideoPlayback() {
+  if (!videoEl.value) return;
+  if (playing.value) {
+    videoEl.value.pause();
+  } else {
+    videoEl.value.play();
+  }
+}
+
+function onVideoPlay() {
+  playing.value = true;
+}
+
+function onVideoPause() {
+  playing.value = false;
+}
+
+function onVideoTimeUpdate() {
+  if (!videoEl.value) return;
+  videoCurrentTime.value = videoEl.value.currentTime;
+  const pct = Math.round((videoEl.value.currentTime / videoDuration.value) * 100);
+  videoProgress.value = Math.max(videoProgress.value, pct);
+
+  if (pct >= 95 && !contentDone.value) {
+    markContentDone();
+  }
+}
+
+function onVideoEnded() {
+  playing.value = false;
+  if (!contentDone.value) {
+    markContentDone();
+  }
 }
 
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFsChange);
 });
+
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', onFsChange);
+  if (mediaBlobUrl.value) {
+    URL.revokeObjectURL(mediaBlobUrl.value);
+  }
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
   if (timer) clearInterval(timer);
-  if (scrollHandler) window.removeEventListener('scroll', scrollHandler);
+  if (scrollHandler) {
+    window.removeEventListener('scroll', scrollHandler);
+  }
 });
 
-// ─── Scroll tracking for non-video ───────────────────────────────────────────
-function setupScrollTracking(): void {
-  scrollHandler = () => {
-    const h = document.documentElement.scrollHeight - window.innerHeight
-    const pct = h > 0 ? Math.min(100, Math.round((window.scrollY / h) * 100)) : 100
-    if (pct >= 95 && !contentDone.value) markContentDone()
-  }
-  window.addEventListener('scroll', scrollHandler, { passive: true })
-}
-
-// ─── Texto: manual completion ─────────────────────────────────────────────────
-async function onTextMarkDone(): Promise<void> {
-  await markContentDone()
-}
-
-onMounted(() => {
-  if (props.type !== 'video') {
-    scrollHandler = () => {
-      const h = document.documentElement.scrollHeight - window.innerHeight;
-      progress.value = h > 0 ? Math.min(100, Math.round((window.scrollY / h) * 100)) : 100;
-    };
-    window.addEventListener('scroll', scrollHandler);
-  }
-})
+// Sticky CTA Bar computed options
+const canContinue = computed(() => contentDone.value);
+const buttonLabel = computed(() => props.tema?.has_exam ? 'Ir al Examen' : 'Siguiente Tema');
+const buttonHref = computed(() => props.tema?.has_exam ? props.examUrl : (props.nextUrl || '#'));
 </script>
 
 <template>
@@ -120,7 +313,7 @@ onMounted(() => {
         </button>
 
         <!-- Bottom controls bar -->
-        <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
+        <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent z-15">
           <div class="flex items-center gap-3 text-white text-xs">
             <button
               @click="toggleVideoPlayback"

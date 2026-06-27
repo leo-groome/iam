@@ -73,3 +73,10 @@ PATCH  /api/v1/admin/questions/{id}                 → editar enunciado (NO afe
 DELETE /api/v1/admin/questions/{id}                 → soft-delete (`archived_at`)
 PATCH  /api/v1/admin/options/{id}                   → editar texto/correctitud
 ```
+
+## Media & Storage (R2)
+- **Subida directa:** El administrador sube archivos directamente a R2 desde el navegador usando URLs firmadas por el backend (`POST /api/v1/media/upload-url`). 
+- **CORS del Bucket:** El bucket de R2 debe tener configurada una política de CORS para permitir métodos `PUT` y `OPTIONS` desde `http://localhost:5173` y dominios de producción.
+- **URLs de Portada (Covers):** Los esquemas de Pydantic (`CourseCard`, `CourseDetail`, `CourseAdminResponse`) convierten de forma transparente el `cover_key` relativo de la base de datos en una URL absoluta usando `R2_PUBLIC_BASE`, y a la inversa al guardar para mantener limpia la BD.
+- **Reproductor del Estudiante (`LearningPlayer.vue`):** Consume la API `/api/v1/media/play-token` con el ID del tema para obtener una URL de reproducción efímera firmada con JWT. Descarga el archivo protegido como un blob local (`URL.createObjectURL(blob)`) y gestiona los heartbeats de progreso y finalización de lección en el backend.
+
