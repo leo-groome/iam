@@ -23,18 +23,17 @@ function onTitleInput() {
   if (isNew) {
     formData.value.slug = formData.value.title
       .toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9\s-]/g, '')
       .trim().replace(/\s+/g, '-');
   }
 }
 
-onMounted(async () => {
+const loadCourse = async () => {
   if (!isNew) {
     loading.value = true;
     try {
       curso.value = await adminService.getCourse(id);
-      // Populate form with loaded data
       formData.value = {
         title: curso.value?.title ?? '',
         short_desc: curso.value?.short_desc ?? '',
@@ -47,18 +46,31 @@ onMounted(async () => {
       loading.value = false;
     }
   }
+};
+
+onMounted(async () => {
+  if (isNew) {
+    openCourseDrawer();
+  } else {
+    await loadCourse();
+  }
 });
 
 const saveCourse = async () => {
   saving.value = true;
   try {
     if (isNew) {
-      await adminService.createCourse(formData.value);
+      const newCourse = await adminService.createCourse(formData.value);
+      if (newCourse && newCourse.id) {
+        router.push(`/admin/cursos/${newCourse.id}`);
+        return;
+      }
     } else {
       await adminService.updateCourse(id, formData.value);
     }
-    // Navigate back to courses list
-    router.push('/admin/cursos');
+    if (!isNew) {
+      router.push('/admin/cursos');
+    }
   } catch (err) {
     console.error('Error saving course:', err);
   } finally {
@@ -92,91 +104,412 @@ const archiveCourse = async () => {
     saving.value = false;
   }
 };
+
+// --- CURRICULUM BUILDER LOGIC ---
+const expandedModules = ref<string[]>([]);
+const isExpanded = (modId: string) => expandedModules.value.includes(modId);
+const toggleModule = (modId: string) => {
+  if (isExpanded(modId)) {
+    expandedModules.value = expandedModules.value.filter(id => id !== modId);
+  } else {
+    expandedModules.value.push(modId);
+  }
+};
+
+// Drawer state
+const drawerOpen = ref(false);
+const drawerType = ref<'module' | 'topic' | 'course'>('module');
+const drawerMode = ref<'new' | 'edit'>('new');
+const activeModuleId = ref<string | null>(null);
+const activeTopicId = ref<string | null>(null);
+const drawerSaving = ref(false);
+
+const drawerData = ref<any>({});
+
+const closeDrawer = () => {
+  drawerOpen.value = false;
+  drawerData.value = {};
+  activeModuleId.value = null;
+  activeTopicId.value = null;
+  // If we closed the course drawer while creating a new course, go back
+  if (drawerType.value === 'course' && isNew) {
+    router.push('/admin/cursos');
+  }
+};
+
+const openCourseDrawer = () => {
+  drawerType.value = 'course';
+  drawerMode.value = isNew ? 'new' : 'edit';
+  drawerOpen.value = true;
+};
+
+
+
+const openModuleDrawer = (modId: string | 'nuevo') => {
+  drawerType.value = 'module';
+  if (modId === 'nuevo') {
+    drawerMode.value = 'new';
+    drawerData.value = { title: '', description: '', max_attempts: 3 };
+  } else {
+    drawerMode.value = 'edit';
+    activeModuleId.value = modId;
+    const mod = curso.value?.modules?.find((m: any) => m.id === modId);
+    drawerData.value = { 
+      title: mod?.title ?? '', 
+      description: mod?.description ?? '',
+      max_attempts: mod?.max_attempts ?? 3 
+    };
+  }
+  drawerOpen.value = true;
+};
+
+const openTopicDrawer = (modId: string, topicId: string | 'nuevo') => {
+  drawerType.value = 'topic';
+  activeModuleId.value = modId;
+  if (topicId === 'nuevo') {
+    drawerMode.value = 'new';
+    drawerData.value = { 
+      title: '', 
+      content_type: 'video', 
+      content_body: '', 
+      duration_minutes: null, 
+      has_exam: false, 
+      exam_min_score: 70 
+    };
+  } else {
+    drawerMode.value = 'edit';
+    activeTopicId.value = topicId;
+    const mod = curso.value?.modules?.find((m: any) => m.id === modId);
+    const topic = mod?.topics?.find((t: any) => t.id === topicId);
+    drawerData.value = { 
+      title: topic?.title ?? '', 
+      content_type: topic?.content_type ?? 'video', 
+      content_body: topic?.content_body ?? '', 
+      duration_minutes: topic?.duration_seconds ? Math.round(topic.duration_seconds / 60) : null,
+      has_exam: topic?.has_exam ?? false,
+      exam_min_score: topic?.exam_min_score ?? 70,
+      content_url: topic?.content_url ?? ''
+    };
+  }
+  drawerOpen.value = true;
+};
+
+const saveDrawer = async () => {
+  drawerSaving.value = true;
+  try {
+    if (drawerType.value === 'course') {
+      await saveCourse();
+      closeDrawer();
+      return;
+    } else if (drawerType.value === 'module') {
+      const payload = {
+        title: drawerData.value.title,
+        description: drawerData.value.description,
+        max_attempts: drawerData.value.max_attempts,
+      };
+      if (drawerMode.value === 'new') {
+        await adminService.createModule(id, payload);
+      } else {
+        await adminService.updateModule(activeModuleId.value!, payload);
+      }
+    } else if (drawerType.value === 'topic') {
+      const dur = drawerData.value.duration_minutes ? Number(drawerData.value.duration_minutes) * 60 : null;
+      const payload = {
+        title: drawerData.value.title,
+        content_type: drawerData.value.content_type,
+        has_exam: drawerData.value.has_exam,
+        content_body: drawerData.value.content_body || null,
+        duration_seconds: dur,
+        exam_min_score: Number(drawerData.value.exam_min_score) || 70,
+      };
+      if (drawerMode.value === 'new') {
+        await adminService.createTopic(activeModuleId.value!, payload);
+        if (!isExpanded(activeModuleId.value!)) toggleModule(activeModuleId.value!);
+      } else {
+        await adminService.updateTopic(activeTopicId.value!, payload);
+      }
+    }
+    closeDrawer();
+    await loadCourse(); // Refresh curriculum tree
+  } catch (err) {
+    console.error('Error saving item:', err);
+  } finally {
+    drawerSaving.value = false;
+  }
+};
 </script>
 
 <template>
-  <div class="page-container">
+  <div class="page-container relative min-h-screen">
 
-
-  <router-link to="/admin/cursos" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Cursos</router-link>
+  <div class="mb-4 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
+    <router-link to="/admin/cursos" class="hover:text-[var(--color-primary)] transition-colors">Cursos</router-link>
+    <span v-if="!isNew">/</span>
+    <span v-if="!isNew" class="font-medium text-[var(--color-text)]">{{ formData.title || curso?.title }}</span>
+  </div>
   <header class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">{{ isNew ? "Crear nuevo curso" : `Editar: ${formData.title || curso?.title}` }}</h1>
+    <h1 class="text-2xl font-bold">{{ isNew ? "Crear nuevo curso" : `Configuración de Curso` }}</h1>
     <div class="flex gap-2">
-      <button class="btn btn-secondary" type="button" @click="saveCourse" :disabled="saving">{{ saving ? "Guardando..." : "Guardar borrador" }}</button>
+      <button v-if="!isNew" class="btn border border-red-200 text-red-600 hover:bg-red-50" type="button" @click="archiveCourse" :disabled="saving">Eliminar / Archivar</button>
       <button class="btn btn-primary" type="button" @click="publishCourse" :disabled="isNew || saving">{{ saving ? "Publicando..." : "Publicar" }}</button>
     </div>
   </header>
 
-  <div class="grid lg:grid-cols-3 gap-6">
-    <div class="card p-6 lg:col-span-2 space-y-4">
-      <div>
-        <label class="label">Título del curso</label>
-        <input class="input" minlength="5" maxlength="80" v-model="formData.title"
-          @input="onTitleInput"
-          placeholder="Ej. Comunicación empática" />
-        <p class="help">5–80 caracteres.</p>
+  <div v-if="!isNew && curso" class="card p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between mb-8 shadow-sm">
+    <div class="flex items-center gap-4">
+      <div class="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0 border border-gray-300 flex items-center justify-center">
+        <!-- image placeholder -->
+        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
       </div>
       <div>
-        <label class="label">Slug (URL)</label>
-        <input class="input" minlength="2" maxlength="120" v-model="formData.slug"
-          placeholder="ej. comunicacion-empatica" pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$" />
-        <p class="help">Solo minúsculas, números y guiones. Se auto-genera del título.</p>
-      </div>
-      <div>
-        <label class="label">Descripción corta</label>
-        <input class="input" minlength="10" maxlength="160" v-model="formData.short_desc" placeholder="Una línea que resuma el curso" />
-        <p class="help">Hasta 160 caracteres. Se muestra en la tarjeta.</p>
-      </div>
-      <div>
-        <label class="label">Descripción larga</label>
-        <textarea class="input min-h-32" maxlength="2000" v-model="formData.long_desc" placeholder="Markdown soportado"></textarea>
-      </div>
-      <div>
-        <label class="label">Imagen de portada</label>
-        <div class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-8 text-center text-sm text-[var(--color-text-muted)]">
-          Arrastra o haz clic para subir (JPG/PNG/WebP · máx 2 MB · ratio 16:9)
-        </div>
+        <h2 class="text-xl font-bold">{{ formData.title }}</h2>
+        <p class="text-sm text-[var(--color-text-muted)] mt-1 max-w-2xl">{{ formData.short_desc || 'Sin descripción' }}</p>
       </div>
     </div>
-
-    <div class="space-y-6">
-      <div class="card p-6">
-
-        <h3 class="font-semibold mb-3">Configuración</h3>
-        <div class="space-y-2 text-sm">
-          <label class="flex items-center justify-between">
-            <span>Estado de Publicación</span>
-            <select class="input py-1 text-sm w-32 bg-[var(--color-surface)]">
-              <option value="borrador">Borrador</option>
-              <option value="publicado" selected>Publicado</option>
-            </select>
-          </label>
-          <label class="flex items-center justify-between">
-            <span>Genera certificado</span>
-            <input type="checkbox" checked />
-          </label>
-        </div>
-      </div>
-    </div>
+    <button type="button" @click="openCourseDrawer" class="btn btn-secondary whitespace-nowrap">
+      <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+      Ajustes del curso
+    </button>
   </div>
 
-  <section v-if="!isNew && curso" class="mt-8">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="text-xl font-bold">Módulos</h2>
-      <router-link :to="`/admin/cursos/${id}/modulos/nuevo`" class="btn btn-secondary">+ Agregar módulo</router-link>
+
+  <!-- CURRICULUM BUILDER -->
+  <section v-if="!isNew && curso" class="mt-8 pb-32">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-xl font-bold">Plan de Estudios (Currícula)</h2>
+        <p class="text-sm text-[var(--color-text-muted)]">Organiza tu curso creando módulos y clases.</p>
+      </div>
+      <button type="button" @click="openModuleDrawer('nuevo')" class="btn btn-secondary">+ Agregar módulo</button>
     </div>
-    <div class="space-y-3">
-      <div v-for="(m, i) in curso.modules" :key="m.id" class="card p-4 flex items-center justify-between gap-3">
-        <div>
-          <p class="text-xs text-[var(--color-text-muted)]">Módulo {{ i + 1 }}</p>
-          <p class="font-semibold">{{ m.title }}</p>
-          <p class="text-sm text-[var(--color-text-muted)] mt-1">{{ m.topics?.length ?? 0 }} temas · {{ m.duration }}</p>
+    
+    <div v-if="curso.modules && curso.modules.length > 0" class="space-y-4">
+      <div v-for="(m, i) in curso.modules" :key="m.id" class="border border-[var(--color-border)] rounded-xl overflow-hidden bg-[var(--color-surface)] shadow-sm">
+        
+        <!-- Accordion Header (Module) -->
+        <div class="p-4 flex items-center justify-between cursor-pointer hover:bg-[var(--color-app-bg)] transition-colors select-none" @click="toggleModule(m.id)">
+           <div class="flex items-center gap-3">
+              <svg :class="['w-5 h-5 text-[var(--color-text-muted)] transition-transform', isExpanded(m.id) ? 'rotate-90' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              <div>
+                <p class="font-semibold">Módulo {{ i + 1 }}: {{ m.title }}</p>
+                <p class="text-xs text-[var(--color-text-muted)] mt-0.5">{{ m.topics?.length ?? 0 }} clases <!-- duration --></p>
+              </div>
+           </div>
+           <div class="flex gap-2">
+             <button type="button" @click.stop="openModuleDrawer(m.id)" class="text-sm text-[var(--color-primary)] hover:underline font-medium px-2 py-1">Editar módulo</button>
+             <router-link :to="`/admin/cursos/${id}/modulos/${m.id}`" class="text-sm text-[var(--color-primary)] hover:underline font-medium px-2 py-1" @click.stop>Examen Diagnóstico</router-link>
+           </div>
         </div>
-        <router-link :to="`/admin/cursos/${id}/modulos/${m.id}`" class="btn btn-secondary">Editar</router-link>
+
+        <!-- Accordion Body (Topics) -->
+        <div v-show="isExpanded(m.id)" class="border-t border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
+           <div class="space-y-2 mb-3">
+             <div v-for="(t, j) in m.topics" :key="t.id" class="flex items-center justify-between p-3 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] hover:border-[var(--color-border-hover)] transition-colors">
+                <div class="flex items-center gap-3">
+                   <span class="text-[10px] uppercase bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded w-16 text-center">{{ t.content_type }}</span>
+                   <span class="text-sm font-medium">{{ j + 1 }}. {{ t.title }}</span>
+                </div>
+                <div class="flex items-center gap-3">
+                   <span v-if="t.has_exam" class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">Examen</span>
+                   <button type="button" @click.stop="openTopicDrawer(m.id, t.id)" class="text-xs text-[var(--color-primary)] hover:underline font-medium">Editar clase</button>
+                   <router-link v-if="t.has_exam" :to="`/admin/cursos/${id}/modulos/${m.id}/temas/${t.id}/preguntas`" class="text-xs text-[var(--color-primary)] hover:underline font-medium ml-2" @click.stop>Preguntas</router-link>
+                </div>
+             </div>
+           </div>
+           
+           <button type="button" @click="openTopicDrawer(m.id, 'nuevo')" class="w-full text-left p-3 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface)] hover:border-[var(--color-primary)] rounded-lg border border-dashed border-[var(--color-border)] transition-colors flex items-center justify-center gap-2">
+             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+             Agregar nueva clase
+           </button>
+        </div>
       </div>
     </div>
+    <div v-else class="text-center p-8 border-2 border-dashed border-[var(--color-border)] rounded-xl mt-4 text-[var(--color-text-muted)] bg-[var(--color-surface)]">
+      <p>Aún no hay contenido en este curso.</p>
+      <button type="button" @click="openModuleDrawer('nuevo')" class="btn btn-secondary mt-3">+ Agregar tu primer módulo</button>
+    </div>
   </section>
+
+  <!-- SLIDE-OVER DRAWER OVERLAY -->
+  <Transition name="fade">
+    <div v-if="drawerOpen" class="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" @click="closeDrawer"></div>
+  </Transition>
+
+  <!-- SLIDE-OVER DRAWER PANEL -->
+  <Transition name="slide-right">
+    <div v-if="drawerOpen" class="fixed inset-y-0 right-0 w-full max-w-md bg-[var(--color-surface)] shadow-2xl z-50 flex flex-col border-l border-[var(--color-border)]">
+      <!-- Drawer Header -->
+      <div class="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-app-bg)]">
+        <h3 class="text-lg font-bold">
+          <span v-if="drawerType === 'course'">{{ isNew ? 'Crear Nuevo Curso' : 'Ajustes del Curso' }}</span>
+          <span v-else>
+            {{ drawerMode === 'new' ? 'Crear' : 'Editar' }} 
+            {{ drawerType === 'module' ? 'Módulo' : 'Clase' }}
+          </span>
+        </h3>
+        <button type="button" @click="closeDrawer" class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <!-- Drawer Body -->
+      <div class="flex-1 overflow-y-auto p-6 space-y-5">
+        
+        <!-- COURSE FORM -->
+        <template v-if="drawerType === 'course'">
+          <div>
+            <label class="label">Título del curso</label>
+            <input class="input" minlength="5" maxlength="80" v-model="formData.title" @input="onTitleInput" placeholder="Ej. Comunicación empática" />
+            <p class="help">5–80 caracteres.</p>
+          </div>
+          <div>
+            <label class="label">Slug (URL)</label>
+            <input class="input" minlength="2" maxlength="120" v-model="formData.slug" placeholder="ej. comunicacion-empatica" pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$" />
+            <p class="help">Solo minúsculas, números y guiones. Se auto-genera.</p>
+          </div>
+          <div>
+            <label class="label">Descripción corta</label>
+            <textarea class="input min-h-24" maxlength="160" v-model="formData.short_desc" placeholder="Una línea que resuma el curso"></textarea>
+            <p class="help">Hasta 160 caracteres. Se muestra en la tarjeta.</p>
+          </div>
+          <div>
+            <label class="label">Descripción larga</label>
+            <textarea class="input min-h-32" maxlength="2000" v-model="formData.long_desc" placeholder="Markdown soportado"></textarea>
+          </div>
+          <div>
+            <label class="label">Imagen de portada</label>
+            <div class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-4 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
+              <input type="file" accept="image/jpeg, image/png, image/webp" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p class="text-sm text-[var(--color-text-muted)]">Arrastra o haz clic para subir</p>
+            </div>
+          </div>
+          <div class="pt-4 border-t border-[var(--color-border)]">
+            <h4 class="font-semibold mb-3">Configuración de Publicación</h4>
+            <div class="space-y-3 text-sm">
+              <label class="flex items-center justify-between">
+                <span>Estado</span>
+                <select class="input py-1 text-sm w-32 bg-[var(--color-surface)]">
+                  <option value="borrador">Borrador</option>
+                  <option value="publicado" selected>Publicado</option>
+                </select>
+              </label>
+              <label class="flex items-center justify-between">
+                <span>Genera certificado</span>
+                <input type="checkbox" checked />
+              </label>
+            </div>
+          </div>
+        </template>
+
+        <!-- MODULE FORM -->
+        <template v-if="drawerType === 'module'">
+          <div>
+            <label class="label">Título del módulo</label>
+            <input class="input" minlength="3" maxlength="60" v-model="drawerData.title" placeholder="Ej: Introducción" />
+          </div>
+          <div>
+            <label class="label">Descripción</label>
+            <textarea class="input min-h-24" maxlength="2000" v-model="drawerData.description" placeholder="Objetivos del módulo..."></textarea>
+          </div>
+          <div class="pt-4 border-t border-[var(--color-border)]">
+            <h4 class="font-semibold mb-2">Examen Diagnóstico</h4>
+            <label class="label">Intentos Máximos</label>
+            <input type="number" class="input max-w-24" min="1" max="10" v-model.number="drawerData.max_attempts" />
+            <p class="text-xs text-[var(--color-text-muted)] mt-1">Límite antes de mostrar respuestas y avanzar.</p>
+          </div>
+        </template>
+
+        <!-- TOPIC (CLASS) FORM -->
+        <template v-if="drawerType === 'topic'">
+          <div>
+            <label class="label">Título de la clase</label>
+            <input class="input" minlength="3" maxlength="60" v-model="drawerData.title" placeholder="Ej: ¿Qué es la comunicación?" />
+          </div>
+          <div>
+            <label class="label">Tipo de contenido</label>
+            <select class="input" v-model="drawerData.content_type">
+              <option value="video">Video</option>
+              <option value="pdf">PDF / Documento</option>
+              <option value="imagen">Imagen / Infografía</option>
+              <option value="texto">Artículo (Texto)</option>
+            </select>
+          </div>
+          
+          <div v-if="drawerData.content_type === 'texto'">
+            <label class="label">Contenido del artículo</label>
+            <textarea class="input min-h-32 text-sm font-mono" maxlength="20000" v-model="drawerData.content_body" placeholder="Soporta Markdown..."></textarea>
+          </div>
+
+          <div v-if="drawerData.content_type === 'video'">
+            <label class="label">Duración aproximada (minutos)</label>
+            <input type="number" class="input" v-model.number="drawerData.duration_minutes" min="1" placeholder="Ej: 15" />
+          </div>
+
+          <div v-if="drawerData.content_type !== 'texto'">
+            <label class="label">Archivo Multimedia</label>
+            <div v-if="drawerData.content_url" class="border border-[var(--color-border)] rounded-xl p-3 flex items-center justify-between bg-[var(--color-bg-hover)]">
+              <div class="flex items-center gap-3 overflow-hidden">
+                <svg class="w-8 h-8 text-[var(--color-primary)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="text-sm font-medium truncate">{{ drawerData.content_url.split('/').pop() || 'Archivo actual' }}</span>
+              </div>
+              <button type="button" @click="drawerData.content_url = ''" class="text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded font-medium border border-red-200">Reemplazar</button>
+            </div>
+            <div v-else class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-4 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
+              <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+              <p class="text-sm font-medium text-[var(--color-text-muted)]">Arrastra o haz clic para subir archivo</p>
+              <p class="text-xs text-[var(--color-text-muted)] mt-1">Max 500MB</p>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-[var(--color-border)]">
+            <label class="flex items-center justify-between mb-2 cursor-pointer">
+              <span class="font-semibold text-sm">Requiere Cuestionario / Examen</span>
+              <input type="checkbox" v-model="drawerData.has_exam" />
+            </label>
+            <div v-if="drawerData.has_exam" class="mt-2">
+              <label class="label">Puntaje mínimo para aprobar (%)</label>
+              <input type="number" class="input max-w-24" min="50" max="100" v-model.number="drawerData.exam_min_score" />
+            </div>
+          </div>
+        </template>
+
+      </div>
+
+      <!-- Drawer Footer -->
+      <div class="p-4 border-t border-[var(--color-border)] bg-[var(--color-app-bg)] flex justify-end gap-3">
+        <button type="button" @click="closeDrawer" class="btn btn-secondary">Cancelar</button>
+        <button type="button" @click="saveDrawer" :disabled="drawerSaving" class="btn btn-primary min-w-24">
+          {{ drawerSaving ? 'Guardando...' : 'Guardar' }}
+        </button>
+      </div>
+    </div>
+  </Transition>
 
 
   </div>
 </template>
+
+<style scoped>
+/* Animations for the Drawer */
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.slide-right-enter-from,
+.slide-right-leave-to {
+  transform: translateX(100%);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

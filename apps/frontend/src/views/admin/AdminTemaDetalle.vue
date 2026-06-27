@@ -70,7 +70,15 @@ const handleSave = async () => {
   <div class="page-container">
 
 
-  <router-link :to="`/admin/cursos/${courseId}/modulos/${modId}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Módulo</router-link>
+  <div class="mb-4 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
+    <router-link to="/admin/cursos" class="hover:text-[var(--color-primary)] transition-colors">Cursos</router-link>
+    <span>/</span>
+    <router-link :to="`/admin/cursos/${courseId}`" class="hover:text-[var(--color-primary)] transition-colors">{{ curso?.title || 'Curso' }}</router-link>
+    <span>/</span>
+    <router-link :to="`/admin/cursos/${courseId}/modulos/${modId}`" class="hover:text-[var(--color-primary)] transition-colors">{{ mod?.title || 'Módulo' }}</router-link>
+    <span v-if="!isNew">/</span>
+    <span v-if="!isNew" class="font-medium text-[var(--color-text)]">{{ title || tema?.title }}</span>
+  </div>
   <header class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">{{ isNew ? "Nuevo tema" : `Editar: ${tema?.title}` }}</h1>
     <button @click="handleSave" class="btn btn-primary">Guardar</button>
@@ -117,8 +125,15 @@ const handleSave = async () => {
 
       <div>
         <label class="label">Subir archivo</label>
-        <div class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-8 text-center text-sm text-[var(--color-text-muted)]">
-          Arrastra video (mp4/webm, máx 500 MB) o PDF (máx 50 MB).
+        <div class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
+          <input type="file" accept="video/mp4, video/webm, application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+          <div class="space-y-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <p class="text-sm text-[var(--color-text-muted)]">Arrastra o haz clic para subir</p>
+            <p class="text-xs text-[var(--color-text-muted)]">Video (mp4/webm, máx 500 MB) o PDF (máx 50 MB).</p>
+          </div>
         </div>
       </div>
     </div>

@@ -20,7 +20,6 @@ onMounted(async () => {
     const res = await (apiGet as any)('/api/v1/admin/topics/' + temaId);
     tema.value = res;
     questions.value = res.questions ?? [];
-    minScore.value = res.exam_min_score ?? 70;
   } catch (err) {
     console.error('Error loading topic:', err);
   } finally {
@@ -36,21 +35,23 @@ const handleDeleteQuestion = async (qId: string) => {
     console.error('Error deleting question:', err);
   }
 };
-
-const handleSaveMinScore = async () => {
-  try {
-    await adminService.updateTopic(temaId, { exam_min_score: minScore.value });
-  } catch (err) {
-    console.error('Error saving min score:', err);
-  }
-};
 </script>
 
 <template>
   <div class="page-container">
 
 
-  <router-link :to="`/admin/cursos/${courseId}/modulos/${modId}/temas/${temaId}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Tema</router-link>
+  <div class="mb-4 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
+    <router-link to="/admin/cursos" class="hover:text-[var(--color-primary)] transition-colors">Cursos</router-link>
+    <span>/</span>
+    <router-link :to="`/admin/cursos/${courseId}`" class="hover:text-[var(--color-primary)] transition-colors">Curso</router-link>
+    <span>/</span>
+    <router-link :to="`/admin/cursos/${courseId}/modulos/${modId}`" class="hover:text-[var(--color-primary)] transition-colors">Módulo</router-link>
+    <span>/</span>
+    <router-link :to="`/admin/cursos/${courseId}/modulos/${modId}/temas/${temaId}`" class="hover:text-[var(--color-primary)] transition-colors">{{ tema?.title || 'Tema' }}</router-link>
+    <span>/</span>
+    <span class="font-medium text-[var(--color-text)]">Preguntas</span>
+  </div>
   <header class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-2xl font-bold">Banco de preguntas</h1>
@@ -59,13 +60,6 @@ const handleSaveMinScore = async () => {
     <router-link :to="`/admin/cursos/${courseId}/modulos/${modId}/temas/${temaId}/preguntas/nueva`" class="btn btn-primary">+ Agregar pregunta</router-link>
   </header>
 
-  <div class="card p-6 mb-6">
-    <label class="label">% mínimo para aprobar</label>
-    <div class="flex items-center gap-3">
-      <input type="number" class="input max-w-32" min="50" max="100" v-model.number="minScore" @blur="handleSaveMinScore" />
-      <p class="text-sm text-[var(--color-text-muted)]">Mínimo 50, máximo 100. Default 70.</p>
-    </div>
-  </div>
 
   <div class="space-y-3">
     <div v-for="(p, i) in questions" :key="p.id" class="card p-5">

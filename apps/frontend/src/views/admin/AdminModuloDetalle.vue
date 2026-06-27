@@ -17,6 +17,7 @@ const saving = ref(false);
 const formData = ref<any>({
   title: '',
   description: '',
+  max_attempts: 3,
 });
 
 // Examen diagnóstico
@@ -33,6 +34,7 @@ onMounted(async () => {
         formData.value = {
           title: mod.value.title ?? '',
           description: mod.value.description ?? '',
+          max_attempts: mod.value.max_attempts ?? 3,
         };
       }
       // Load module-level diagnostic questions
@@ -59,11 +61,13 @@ const handleSave = async () => {
       await adminService.createModule(courseId, {
         title: formData.value.title,
         description: formData.value.description,
+        max_attempts: formData.value.max_attempts,
       });
     } else {
       await adminService.updateModule(modId, {
         title: formData.value.title,
         description: formData.value.description,
+        max_attempts: formData.value.max_attempts,
       });
     }
   } catch (err) {
@@ -102,7 +106,13 @@ const getContentTypeBadgeColor = (contentType: string): string => {
   <div class="page-container">
 
 
-  <router-link :to="`/admin/cursos/${courseId}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Curso</router-link>
+  <div class="mb-4 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
+    <router-link to="/admin/cursos" class="hover:text-[var(--color-primary)] transition-colors">Cursos</router-link>
+    <span>/</span>
+    <router-link :to="`/admin/cursos/${courseId}`" class="hover:text-[var(--color-primary)] transition-colors">{{ curso?.title || 'Curso' }}</router-link>
+    <span v-if="!isNew">/</span>
+    <span v-if="!isNew" class="font-medium text-[var(--color-text)]">{{ formData.title || mod?.title }}</span>
+  </div>
   <header class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">{{ isNew ? "Nuevo módulo" : `Editar: ${mod?.title}` }}</h1>
     <button @click="handleSave" :disabled="saving" class="btn btn-primary">{{ saving ? "Guardando..." : "Guardar" }}</button>
@@ -117,6 +127,18 @@ const getContentTypeBadgeColor = (contentType: string): string => {
       <label class="label">Descripción del módulo</label>
       <textarea class="input min-h-24" maxlength="2000" v-model="formData.description" placeholder="Describe el contenido y objetivos del módulo"></textarea>
       <p class="help">Hasta 2000 caracteres.</p>
+    </div>
+    <div class="pt-2 border-t border-[var(--color-border)] mt-4">
+      <h3 class="font-semibold mb-3">Configuración del Examen Diagnóstico</h3>
+      <div>
+        <label class="label">Intentos Máximos</label>
+        <div class="flex items-center gap-4">
+          <input type="number" class="input max-w-24" min="1" max="10" v-model.number="formData.max_attempts" />
+          <p class="text-sm text-[var(--color-text-muted)]">
+            Si el estudiante agota los intentos, se mostrarán las respuestas correctas y avanzará al siguiente módulo sin importar su calificación final.
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 
