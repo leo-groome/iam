@@ -22,6 +22,8 @@ onMounted(async () => {
   }
 });
 
+const joining = ref(false);
+
 const primerTemaPendiente = computed(() => {
   if (!curso.value) return null;
   const all = curso.value.modules.flatMap(m => m.topics);
@@ -35,8 +37,31 @@ const ctaHref = computed(() => {
 
 const ctaLabel = computed(() => {
   if (!curso.value) return '';
+  if (curso.value.enrollment_status === 'no_iniciado') {
+    return 'Inscribirse al curso';
+  }
   return curso.value.progress_pct > 0 ? 'Continuar' : 'Empezar curso';
 });
+
+async function handleCtaClick() {
+  if (!curso.value || !primerTemaPendiente.value) return;
+
+  if (curso.value.enrollment_status === 'no_iniciado') {
+    joining.value = true;
+    try {
+      await coursesService.enroll(slug);
+      curso.value.enrollment_status = 'en_progreso';
+    } catch (err) {
+      console.error('Error enrolling in course:', err);
+      joining.value = false;
+      return;
+    } finally {
+      joining.value = false;
+    }
+  }
+
+  router.push(ctaHref.value);
+}
 </script>
 
 <template>
@@ -86,7 +111,9 @@ const ctaLabel = computed(() => {
 
     <div class="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] p-4 sm:static sm:bg-transparent sm:border-0 sm:p-0">
       <div class="max-w-3xl mx-auto">
-        <router-link :to="ctaHref" class="btn btn-primary btn-block">{{ ctaLabel }}</router-link>
+        <button @click="handleCtaClick" :disabled="joining" class="btn btn-primary btn-block">
+          {{ joining ? 'Inscribiendo...' : ctaLabel }}
+        </button>
       </div>
     </div>
   </div>

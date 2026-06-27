@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@neondatabase/neon-js": "0.6.2-beta",
     "lucide-vue-next": "^0.469.0",
     "pinia": "^3.0.0",

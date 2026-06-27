@@ -370,7 +370,7 @@ async def test_play_token_returns_valid_jwt(client: AsyncClient, scaffold):
     data = resp.json()
     assert "token" in data
     assert "media_url" in data
-    assert data["expires_in"] == 900
+    assert data["expires_in"] == 300
     assert topic.media_key in data["media_url"]
 
     # Decode and verify the JWT locally

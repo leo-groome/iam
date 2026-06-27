@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import LearningPlayer from '@/components/ui/LearningPlayer.vue';
 import { coursesService } from '@/services/courses.service';
@@ -8,20 +8,43 @@ const route = useRoute();
 const router = useRouter();
 
 const slug = route.params.slug as string;
-const topicId = route.params.topicId as string;
+const topicId = computed(() => route.params.topicId as string);
 const isRepaso = route.query.repaso === '1';
 
 const curso = ref(null);
 const allTemas = ref([]);
 const loading = ref(true);
+const temaCargado = ref(null);
+const loadingTema = ref(false);
+
+async function fetchTemaDetalle(id: string) {
+  temaCargado.value = null; // Reset to avoid showing stale media
+  loadingTema.value = true;
+  try {
+    temaCargado.value = await coursesService.getTopic(id);
+  } catch (err) {
+    console.error('Error al obtener detalles del tema:', err);
+  } finally {
+    loadingTema.value = false;
+  }
+}
 
 onMounted(async () => {
   try {
     curso.value = await coursesService.getBySlug(slug);
-    allTemas.value = curso.value?.modules.flatMap(m => m.topics.map(t => ({ ...t, moduloTitle: m.title }))) || [];
-    if (!allTemas.value.find(t => t.id === topicId)) {
-      router.replace(`/curso/${slug}`);
+
+    if (curso.value?.enrollment_status === 'no_iniciado') {
+      await coursesService.enroll(slug);
+      curso.value.enrollment_status = 'en_progreso';
     }
+
+    allTemas.value = curso.value?.modules.flatMap(m => m.topics.map(t => ({ ...t, moduloTitle: m.title }))) || [];
+    if (!allTemas.value.find(t => t.id === topicId.value)) {
+      router.replace(`/curso/${slug}`);
+      return;
+    }
+
+    await fetchTemaDetalle(topicId.value);
   } catch (err) {
     console.error(err);
     router.replace('/catalogo');
@@ -30,11 +53,24 @@ onMounted(async () => {
   }
 });
 
-const idx = computed(() => allTemas.value.findIndex(t => t.id === topicId));
-const tema = computed(() => allTemas.value[idx.value]);
+watch(topicId, async (newId) => {
+  if (newId && !loading.value) {
+    await fetchTemaDetalle(newId);
+  }
+});
+
+const idx = computed(() => allTemas.value.findIndex(t => t.id === topicId.value));
+const tema = computed(() => {
+  const rawTopic = allTemas.value[idx.value];
+  if (!rawTopic) return null;
+  return {
+    ...rawTopic,
+    ...temaCargado.value
+  };
+});
 
 const nextTema = computed(() => allTemas.value[idx.value + 1]);
-const examUrl = computed(() => `/curso/${slug}/tema/${topicId}/examen`);
+const examUrl = computed(() => `/curso/${slug}/tema/${topicId.value}/examen`);
 const nextUrl = computed(() => nextTema.value ? `/curso/${slug}/tema/${nextTema.value.id}` : `/curso/${slug}/certificado`);
 </script>
 

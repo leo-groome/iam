@@ -153,10 +153,10 @@ async def get_play_token(
             detail={"code": "topic_locked", "detail": "Access to this topic's media is not yet unlocked."},
         )
 
-    token = sign_play_token(current_user.id, topic.media_key)
+    token = sign_play_token(current_user.id, topic.media_key, ttl_seconds=300)
     media_url = f"{settings.r2_public_base}/{topic.media_key}"
 
-    return PlayTokenResponse(token=token, media_url=media_url, expires_in=900)
+    return PlayTokenResponse(token=token, media_url=media_url, expires_in=300)
 
 
 # ── registration hint (owner adds this to app/main.py — NOT via api_router to avoid double /api/v1 prefix) ──

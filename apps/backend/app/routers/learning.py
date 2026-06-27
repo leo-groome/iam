@@ -246,6 +246,7 @@ async def get_topic(
         duration_seconds=topic.duration_seconds,
         has_exam=topic.has_exam,
         exam_min_score=topic.exam_min_score,
+        media_key=topic.media_key,
         state=real_state,
         progress=TopicProgressDetail(
             video_last_pos_seconds=tp.video_last_pos_seconds,
@@ -306,8 +307,10 @@ async def topic_heartbeat(
     await db.commit()
     await db.refresh(tp)
 
+    real_state = tp.state if tp.state != "bloqueado" else state
+
     return HeartbeatResponse(
-        state=tp.state,
+        state=real_state,
         video_last_pos_seconds=tp.video_last_pos_seconds,
         video_max_seen_pct=tp.video_max_seen_pct,
         pdf_last_page=tp.pdf_last_page,

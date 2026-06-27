@@ -41,6 +41,7 @@ class ModuleTopicItem(BaseModel):
     duration_seconds: int | None
     has_exam: bool
     order_index: int
+    media_key: str | None = None
 
 
 class ModuleItem(BaseModel):

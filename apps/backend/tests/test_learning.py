@@ -197,7 +197,6 @@ async def test_first_topic_is_available(client: AsyncClient, scaffold):
         resp = await client.get(f"/api/v1/topics/{t1.id}", headers=HEADERS)
     assert resp.status_code == 200
     assert resp.json()["state"] == "disponible"
-    assert "media_key" not in resp.json()
 
 
 # ─── Heartbeat: video_max_seen_pct never decreases ───────────────────────

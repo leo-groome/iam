@@ -25,6 +25,7 @@ build/
 .env
 .env.*
 !.env.example
+.dev.vars
 
 # OS / IDE
 .DS_Store

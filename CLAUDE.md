@@ -76,7 +76,12 @@ PATCH  /api/v1/admin/options/{id}                   → editar texto/correctitud
 
 ## Media & Storage (R2)
 - **Subida directa:** El administrador sube archivos directamente a R2 desde el navegador usando URLs firmadas por el backend (`POST /api/v1/media/upload-url`). 
-- **CORS del Bucket:** El bucket de R2 debe tener configurada una política de CORS para permitir métodos `PUT` y `OPTIONS` desde `http://localhost:5173` y dominios de producción.
-- **URLs de Portada (Covers):** Los esquemas de Pydantic (`CourseCard`, `CourseDetail`, `CourseAdminResponse`) convierten de forma transparente el `cover_key` relativo de la base de datos en una URL absoluta usando `R2_PUBLIC_BASE`, y a la inversa al guardar para mantener limpia la BD.
-- **Reproductor del Estudiante (`LearningPlayer.vue`):** Consume la API `/api/v1/media/play-token` con el ID del tema para obtener una URL de reproducción efímera firmada con JWT. Descarga el archivo protegido como un blob local (`URL.createObjectURL(blob)`) y gestiona los heartbeats de progreso y finalización de lección en el backend.
+- **CORS del Bucket:** El bucket de R2 debe tener configurada una política de CORS para permitir métodos `PUT` y `OPTIONS` desde `http://localhost:4321` y dominios de producción.
+- **URLs de Portada (Covers):** Las portadas son públicas, servidas por el worker de R2 bajo el prefijo `cover/` con `Access-Control-Allow-Origin: *` y `Cross-Origin-Resource-Policy: cross-origin` para permitir embebido seguro bajo COEP.
+- **Reproductor del Estudiante (`LearningPlayer.vue`):**
+  - Carga el tema detallado usando `GET /api/v1/topics/{topic_id}` en `LessonView.vue` para obtener de forma segura el `media_key` (el catálogo `/courses/{slug}` oculta `media_key` por privacidad).
+  - Los **videos** se reproducen usando streaming directo con soporte de HTTP Range Requests (`206 Partial Content`) pasando el token en la consulta (`?token=...`) y con `crossorigin="anonymous"` en la etiqueta `<video>`.
+  - Los **PDFs e imágenes** privados se descargan como blob en memoria (`URL.createObjectURL(blob)`).
+  - El worker de R2 inyecta `Cross-Origin-Resource-Policy: cross-origin` y `Access-Control-Allow-Origin` dinámico para evitar bloqueos por políticas COEP estrictas (`require-corp`) del servidor de desarrollo del frontend.
+
 

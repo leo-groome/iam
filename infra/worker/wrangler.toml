@@ -4,10 +4,11 @@ compatibility_date = "2024-09-23"
 
 [[r2_buckets]]
 binding = "R2_BUCKET"
-bucket_name = "iam-media"
+bucket_name = "iam"
+preview_bucket_name = "iam"
 
 [vars]
-ALLOWED_ORIGINS = "https://app.iam.example"
+ALLOWED_ORIGINS = "http://localhost:4321"
 
 # Deploy secrets via CLI — never commit real values:
 #   wrangler secret put MEDIA_JWT_SECRET

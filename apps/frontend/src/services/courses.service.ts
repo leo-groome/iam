@@ -10,6 +10,14 @@ export const coursesService = {
     return apiGet(`/api/v1/courses/{slug}` as any, { params: { slug } }) as Promise<CourseDetail>;
   },
 
+  async enroll(slug: string): Promise<any> {
+    return apiPost(`/api/v1/courses/{slug}/enroll` as any, { params: { slug } });
+  },
+
+  async getTopic(topicId: string): Promise<any> {
+    return apiGet(`/api/v1/topics/{topic_id}` as any, { params: { topic_id: topicId } });
+  },
+
   async getTopicExam(topicId: string): Promise<ExamResponse> {
     return apiPost(`/api/v1/topics/{topic_id}/exam` as any, { params: { topic_id: topicId } }) as Promise<ExamResponse>;
   },

@@ -34,6 +34,9 @@ const videoEl = ref<HTMLVideoElement | null>(null);
 const videoCurrentTime = ref(0);
 const videoProgress = ref(0);
 
+// Video: direct stream URL (no Blob — enables native HTTP Range Requests)
+const mediaStreamUrl = ref<string | null>(null);
+// PDF / image: still fetched as Blob (small files, no seek needed)
 const mediaBlobUrl = ref<string | null>(null);
 const mediaError = ref('');
 const loadingToken = ref(false);
@@ -75,11 +78,13 @@ function onFsChange(): void {
 watch(
   () => props.tema,
   async (newTema) => {
-    // Revoke previous URL if any
+    // Revoke previous Blob URL if any (PDF/image)
     if (mediaBlobUrl.value) {
       URL.revokeObjectURL(mediaBlobUrl.value);
       mediaBlobUrl.value = null;
     }
+    // Clear video stream URL
+    mediaStreamUrl.value = null;
 
     mediaError.value = '';
     loadingToken.value = false;
@@ -118,8 +123,16 @@ watch(
           body: { topic_id: newTema.id },
         })) as any;
 
-        const blob = await mediaFetch(tokenResp.media_url, tokenResp.token);
-        mediaBlobUrl.value = URL.createObjectURL(blob);
+        if (newTema.content_type === 'video') {
+          // VIDEO: construct direct Worker URL with token in query param.
+          // This lets the browser issue native HTTP Range Requests (206 Partial Content)
+          // for true progressive streaming — no full download, no RAM spike.
+          mediaStreamUrl.value = `${tokenResp.media_url}?token=${encodeURIComponent(tokenResp.token)}`;
+        } else {
+          // PDF / IMAGE: fetch as Blob (small files, no streaming needed)
+          const blob = await mediaFetch(tokenResp.media_url, tokenResp.token);
+          mediaBlobUrl.value = URL.createObjectURL(blob);
+        }
       } catch (err: any) {
         console.error('Error fetching R2 play token/media:', err);
         mediaError.value = err.message || 'No se pudo cargar el archivo multimedia.';
@@ -131,7 +144,7 @@ watch(
     // Tracking initialization
     if (newTema.content_type === 'texto' || newTema.content_type === 'imagen') {
       try {
-        await apiPost(`/api/v1/learning/topics/${newTema.id}/heartbeat` as any, {
+        await apiPost(`/api/v1/topics/${newTema.id}/heartbeat` as any, {
           body: { type: newTema.content_type },
         });
       } catch (e) {
@@ -140,7 +153,7 @@ watch(
       setupScrollTracking();
     } else if (newTema.content_type === 'pdf') {
       try {
-        await apiPost(`/api/v1/learning/topics/${newTema.id}/heartbeat` as any, {
+        await apiPost(`/api/v1/topics/${newTema.id}/heartbeat` as any, {
           body: { type: 'pdf', last_page: 1, total_pages: 1 },
         });
         contentDone.value = true;
@@ -162,7 +175,7 @@ watch(
           const pos = Math.floor(videoEl.value.currentTime);
           const maxSeen = Math.max(videoProgress.value, Math.round((pos / videoDuration.value) * 100));
           try {
-            await apiPost(`/api/v1/learning/topics/${props.tema.id}/heartbeat` as any, {
+            await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
               body: { type: 'video', pos_seconds: pos, max_seen_pct: maxSeen },
             });
           } catch (e) {
@@ -191,7 +204,7 @@ async function markContentDone() {
   if (!props.tema) return;
   markingDone.value = true;
   try {
-    await apiPost(`/api/v1/learning/topics/${props.tema.id}/mark-content-done` as any);
+    await apiPost(`/api/v1/topics/${props.tema.id}/mark-content-done` as any);
     contentDone.value = true;
   } catch (err) {
     console.error('Error marking content done:', err);
@@ -246,6 +259,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', onFsChange);
+  // Only revoke Blob URLs (PDF/image) — video uses direct stream URL, no revoke needed
   if (mediaBlobUrl.value) {
     URL.revokeObjectURL(mediaBlobUrl.value);
   }
@@ -291,18 +305,20 @@ const buttonHref = computed(() => props.tema?.has_exam ? props.examUrl : (props.
         <video
           ref="videoEl"
           class="w-full h-full object-contain"
-          :src="mediaBlobUrl ?? undefined"
+          :src="mediaStreamUrl ?? undefined"
+          crossorigin="anonymous"
           @play="onVideoPlay"
           @pause="onVideoPause"
           @timeupdate="onVideoTimeUpdate"
           @ended="onVideoEnded"
           preload="metadata"
           playsinline
+          controlsList="nodownload"
         />
 
         <!-- Big center play button when paused -->
         <button
-          v-if="!playing && mediaBlobUrl"
+          v-if="!playing && mediaStreamUrl"
           @click="toggleVideoPlayback"
           class="absolute inset-0 w-full h-full grid place-items-center bg-black/20 group"
           aria-label="Reproducir"

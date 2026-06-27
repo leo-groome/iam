@@ -15,10 +15,20 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // @ffmpeg/ffmpeg uses internal Web Workers that Vite cannot pre-bundle.
+  // Excluding them prevents the "disallowed MIME type" worker error in dev.
+  optimizeDeps: {
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+  },
   server: {
     port: 4321,
+    headers: {
+      // Required for SharedArrayBuffer (used by ffmpeg.wasm for multi-threading)
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
   build: {
-    target: 'esnext'
-  }
+    target: 'esnext',
+  },
 });

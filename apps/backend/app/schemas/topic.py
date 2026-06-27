@@ -22,6 +22,7 @@ class TopicView(BaseModel):
     duration_seconds: int | None
     has_exam: bool
     exam_min_score: int
+    media_key: str | None
     state: str
     progress: TopicProgressDetail
 
