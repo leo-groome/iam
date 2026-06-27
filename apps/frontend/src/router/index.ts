@@ -3,7 +3,25 @@ import { useAuthStore } from '@/stores/auth'
 
 const routes: Array<RouteRecordRaw> = [
   // Públicas
-  { path: '/', redirect: '/login' },
+  { 
+    path: '/', 
+    redirect: () => {
+      return localStorage.getItem('hasCompletedOnboarding') ? '/login' : '/onboarding'
+    } 
+  },
+  {
+    path: '/onboarding',
+    name: 'Onboarding',
+    component: () => import('@/views/public/OnboardingView.vue'),
+    meta: { layout: 'PublicLayout' },
+    beforeEnter: (to, from, next) => {
+      if (localStorage.getItem('hasCompletedOnboarding')) {
+        next('/login')
+      } else {
+        next()
+      }
+    }
+  },
   {
     path: '/login',
     name: 'Login',

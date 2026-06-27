@@ -638,7 +638,6 @@ function classifyAuthError(err: unknown): string {
                 <span v-if="isLoading" class="opacity-70">{{ pendingRegistration ? 'Verificando…' : 'Creando cuenta…' }}</span>
                 <span v-else>{{ pendingRegistration ? 'Verificar y entrar' : isCompletingOAuthProfile ? 'Completar perfil' : 'Crear mi cuenta' }}</span>
               </button>
-              </template>
             </form>
 
             <p v-if="!isCompletingOAuthProfile && !pendingRegistration" class="text-center text-sm text-[var(--color-text-muted)] mt-6">
