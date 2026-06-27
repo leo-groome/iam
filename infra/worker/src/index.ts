@@ -132,47 +132,70 @@ export default {
       }
     }
 
-    // Parse Range header for partial content support (HTTP 206)
-    const rangeHeader = request.headers.get("Range");
-    const r2Options: R2GetOptions = {};
-    if (rangeHeader) {
-      const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader);
-      if (match) {
-        const start = parseInt(match[1], 10);
-        const end = match[2] ? parseInt(match[2], 10) : undefined;
-        r2Options.range =
-          end !== undefined
-            ? { offset: start, length: end - start + 1 }
-            : { offset: start };
-      }
-    }
-
-    // For public paths we use requestedKey directly (no claims).
-    // For protected paths, claims.key was already validated to equal requestedKey above.
     const r2Key = requestedKey;
-    const object = await env.R2_BUCKET.get(r2Key, r2Options);
+    const objectHead = await env.R2_BUCKET.head(r2Key);
 
-    if (!object) {
+    if (!objectHead) {
       return new Response("Not Found", { status: 404 });
     }
 
+    // Parse Range header for partial content support (HTTP 206)
+    const rangeHeader = request.headers.get("Range");
+    const r2Options: R2GetOptions = {};
+    let isRangeSatisfiable = true;
+    let start = 0;
+    let end = objectHead.size - 1;
+
+    if (rangeHeader) {
+      const match = /bytes=(\d+)-(\d*)/.exec(rangeHeader);
+      if (match) {
+        start = parseInt(match[1], 10);
+        const endVal = match[2] ? parseInt(match[2], 10) : undefined;
+        
+        if (start >= objectHead.size) {
+          isRangeSatisfiable = false;
+        } else {
+          end = endVal !== undefined ? Math.min(endVal, objectHead.size - 1) : objectHead.size - 1;
+          r2Options.range = { offset: start, length: end - start + 1 };
+        }
+      }
+    }
+
     const headers = new Headers();
-    object.writeHttpMetadata(headers);
+    objectHead.writeHttpMetadata(headers);
     headers.set("Accept-Ranges", "bytes");
     headers.set("Cache-Control", "private, no-store");
     addCorsHeaders(headers, request, env, isPublic);
 
-    if (rangeHeader && object.range) {
-      const range = object.range as { offset: number; length: number };
-      const totalSize = object.size;
-      const start = range.offset;
-      const end = start + range.length - 1;
-      headers.set("Content-Range", `bytes ${start}-${end}/${totalSize}`);
-      headers.set("Content-Length", String(range.length));
+    if (!isRangeSatisfiable) {
+      headers.set("Content-Range", `bytes */${objectHead.size}`);
+      return new Response("Range Not Satisfiable", { status: 416, headers });
+    }
+
+    // Handle HEAD request
+    if (request.method === "HEAD") {
+      if (rangeHeader) {
+        headers.set("Content-Range", `bytes ${start}-${end}/${objectHead.size}`);
+        headers.set("Content-Length", String(end - start + 1));
+        return new Response(null, { status: 206, headers });
+      }
+      headers.set("Content-Length", String(objectHead.size));
+      return new Response(null, { status: 200, headers });
+    }
+
+    // Fetch the object body from R2
+    const object = await env.R2_BUCKET.get(r2Key, r2Options);
+    if (!object) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    if (rangeHeader) {
+      headers.set("Content-Range", `bytes ${start}-${end}/${objectHead.size}`);
+      headers.set("Content-Length", String(end - start + 1));
       return new Response(object.body, { status: 206, headers });
     }
 
-    headers.set("Content-Length", String(object.size));
+    headers.set("Content-Length", String(objectHead.size));
     return new Response(object.body, { status: 200, headers });
   },
 };
