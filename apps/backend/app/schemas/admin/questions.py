@@ -32,6 +32,7 @@ class OptionResponse(BaseModel):
 class QuestionCreate(BaseModel):
     enunciado: str = Field(..., min_length=5, max_length=300)
     options: list[OptionCreate] = Field(..., min_length=3, max_length=5)
+    order_index: int = Field(0, ge=0)
 
     @model_validator(mode="after")
     def exactly_one_correct(self) -> QuestionCreate:
@@ -52,5 +53,6 @@ class QuestionResponse(BaseModel):
     topic_id: uuid.UUID | None
     module_id: uuid.UUID | None
     enunciado: str
+    order_index: int
     archived_at: str | None = None
     options: list[OptionResponse] = []

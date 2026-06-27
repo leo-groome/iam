@@ -36,22 +36,33 @@ test.describe('IAM Training Platform E2E Tests', () => {
                 return { data: { user: { id: 'mock_student_id' } }, error: null };
               },
             };
-            val.token = async () => {
-              return { data: { token: 'mock-token:mock_student_id:new_student@example.com:Student User:student' }, error: null };
+            val.token = {
+              get: () => {
+                return { data: { token: 'mock-token:mock_student_id:new_student@example.com:Student User:student' }, error: null };
+              }
             };
           }
         }
       });
+      window.sessionStorage.setItem('onboardingData', JSON.stringify({
+        nombre: 'Student User',
+        edad: '18-25',
+        sexo: 'Hombre',
+        diocesis: 'Aguascalientes',
+        ciudad: 'Aguascalientes',
+        parroquia: 'San Jose',
+        entorno: 'Urbana',
+        pastoral: 'IAM'
+      }));
+      window.localStorage.setItem('hasCompletedOnboarding', 'true');
     });
 
     await page.goto('/registro');
     await expect(page.locator('[data-auth-ready="true"]')).toBeVisible();
 
     // Fill in registration form
-    await page.locator('#reg-nombre').fill('Student User');
     await page.locator('#reg-email').fill('new_student@example.com');
     await page.locator('#reg-password').fill('password123');
-    await page.locator('#reg-fecha').fill('2000-01-01');
     await page.locator('form input[type="checkbox"]').check();
 
     // Click register button

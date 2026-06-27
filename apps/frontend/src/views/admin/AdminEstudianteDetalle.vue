@@ -34,8 +34,8 @@ onMounted(async () => {
         <tbody>
           <tr v-for="e in (student.enrollments ?? [])" :key="e.id" class="border-b">
             <td class="p-3">{{ e.course_title }}</td>
-            <td class="p-3">{{ e.progress_percentage ?? 0 }}%</td>
-            <td class="p-3">{{ e.status }}</td>
+            <td class="p-3">{{ e.progress_cached ?? e.progress_percentage ?? 0 }}%</td>
+            <td class="p-3">{{ e.status ?? (e.completed_at ? 'completado' : 'en_progreso') }}</td>
           </tr>
           <tr v-if="!(student.enrollments?.length)">
             <td colspan="3" class="p-6 text-center text-gray-400">Sin inscripciones.</td>
@@ -55,7 +55,7 @@ onMounted(async () => {
         </thead>
         <tbody>
           <tr v-for="a in (student.exam_attempts ?? [])" :key="a.id" class="border-b">
-            <td class="p-3">{{ a.topic_title }}</td>
+            <td class="p-3">{{ a.topic_title ?? a.module_title ?? 'Diagnóstico' }}</td>
             <td class="p-3">{{ a.score }}%</td>
             <td class="p-3">
               <span :class="a.passed ? 'text-green-600' : 'text-red-500'">{{ a.passed ? 'Aprobado' : 'Reprobado' }}</span>

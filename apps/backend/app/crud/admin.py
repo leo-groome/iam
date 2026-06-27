@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, with_loader_criteria
 
 from app.models.course import Course, Module, Topic
 from app.models.progress import Enrollment, ExamAttempt, TopicProgress
@@ -202,7 +202,8 @@ async def get_topic_with_questions(db: AsyncSession, topic_id: uuid.UUID) -> Top
         select(Topic)
         .where(Topic.id == topic_id, Topic.archived_at.is_(None))
         .options(
-            selectinload(Topic.questions).selectinload(Question.options)
+            selectinload(Topic.questions).selectinload(Question.options),
+            with_loader_criteria(Question, Question.archived_at.is_(None)),
         )
     )
     result = await db.execute(stmt)
@@ -224,7 +225,18 @@ async def list_module_questions(db: AsyncSession, module_id: uuid.UUID) -> list[
         select(Question)
         .where(Question.module_id == module_id, Question.archived_at.is_(None))
         .options(selectinload(Question.options))
-        .order_by(Question.created_at)
+        .order_by(Question.order_index, Question.created_at, Question.id)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def list_topic_questions(db: AsyncSession, topic_id: uuid.UUID) -> list[Question]:
+    stmt = (
+        select(Question)
+        .where(Question.topic_id == topic_id, Question.archived_at.is_(None))
+        .options(selectinload(Question.options))
+        .order_by(Question.order_index, Question.created_at, Question.id)
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
@@ -248,11 +260,13 @@ async def create_question(
     topic_id: uuid.UUID | None,
     module_id: uuid.UUID | None,
     options_data: list[dict[str, object]],
+    order_index: int = 0,
 ) -> Question:
     question = Question(
         enunciado=enunciado,
         topic_id=topic_id,
         module_id=module_id,
+        order_index=order_index,
     )
     db.add(question)
     await db.flush()
@@ -371,7 +385,8 @@ async def get_student_detail(
         .options(
             selectinload(User.enrollments).selectinload(Enrollment.course),
             selectinload(User.topic_progress),
-            selectinload(User.exam_attempts),
+            selectinload(User.exam_attempts).selectinload(ExamAttempt.topic),
+            selectinload(User.exam_attempts).selectinload(ExamAttempt.module),
         )
     )
     result = await db.execute(stmt)

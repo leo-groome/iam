@@ -33,6 +33,8 @@ class ExamAttemptSummary(BaseModel):
     id: uuid.UUID
     topic_id: uuid.UUID | None
     module_id: uuid.UUID | None
+    topic_title: str | None = None
+    module_title: str | None = None
     score: int
     passed: bool
     min_score_snapshot: int
@@ -56,6 +58,8 @@ class EnrollmentSummary(BaseModel):
     started_at: datetime
     completed_at: datetime | None
     progress_cached: int
+    progress_percentage: int
+    status: str
     course_title: str | None = None
     course_slug: str | None = None
 

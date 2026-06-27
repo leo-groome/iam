@@ -7,10 +7,16 @@ const selectedCourseId = ref('')
 const passRates = ref<any[]>([])
 const loadingPassRate = ref(false)
 
-const API_BASE = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8000'
-
-function exportReport(type: string) {
-  window.open(`${API_BASE}/api/v1/admin/reports/export?type=${type}`, '_blank')
+async function exportReport(type: string) {
+  const { blob, filename } = await adminService.exportReport(type)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename ?? `${type}.csv`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
 }
 
 async function loadPassRate() {

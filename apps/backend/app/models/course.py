@@ -63,7 +63,7 @@ class Module(Base, TimestampMixin):
         "Topic", back_populates="module", cascade="all, delete-orphan", order_by="Topic.order_index"
     )
     questions: Mapped[list["Question"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
-        "Question", back_populates="module", foreign_keys="Question.module_id"
+        "Question", back_populates="module", foreign_keys="Question.module_id", order_by="Question.order_index"
     )
     exam_attempts: Mapped[list["ExamAttempt"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "ExamAttempt", back_populates="module", foreign_keys="ExamAttempt.module_id"
@@ -97,7 +97,7 @@ class Topic(Base, TimestampMixin):
 
     module: Mapped["Module"] = relationship("Module", back_populates="topics")
     questions: Mapped[list["Question"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
-        "Question", back_populates="topic", foreign_keys="Question.topic_id"
+        "Question", back_populates="topic", foreign_keys="Question.topic_id", order_by="Question.order_index"
     )
     topic_progress: Mapped[list["TopicProgress"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "TopicProgress", back_populates="topic"

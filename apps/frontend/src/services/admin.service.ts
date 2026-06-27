@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { apiBlob, apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
 
 export const adminService = {
   // Dashboard
@@ -69,6 +69,10 @@ export const adminService = {
     return apiPatch('/api/v1/admin/topics/{id}' as any, { params: { id }, body: data }) as Promise<any>;
   },
 
+  async getTopicDetail(id: string): Promise<any> {
+    return apiGet('/api/v1/admin/topics/{id}' as any, { params: { id } }) as Promise<any>;
+  },
+
   async deleteTopic(id: string): Promise<any> {
     return apiDelete('/api/v1/admin/topics/{id}' as any, { params: { id } }) as Promise<any>;
   },
@@ -111,13 +115,20 @@ export const adminService = {
     return apiDelete('/api/v1/admin/questions/{id}' as any, { params: { id } }) as Promise<any>;
   },
 
+  async replaceTopicQuestions(topicId: string, questions: any[]): Promise<any> {
+    return apiPost('/api/v1/admin/topics/{topic_id}/questions/bulk' as any, {
+      params: { topic_id: topicId },
+      body: questions,
+    }) as Promise<any>;
+  },
+
   // Options
   async updateOption(id: string, data: any): Promise<any> {
     return apiPatch('/api/v1/admin/options/{id}' as any, { params: { id }, body: data }) as Promise<any>;
   },
 
   // Students
-  async getStudents(params?: { search?: string; status?: string; page?: number }): Promise<any> {
+  async getStudents(params?: { q?: string; status?: string; page?: number }): Promise<any> {
     return apiGet('/api/v1/admin/students' as any, { query: params }) as Promise<any>;
   },
 
@@ -128,5 +139,9 @@ export const adminService = {
   // Reports
   async getTopicPassRate(courseId: string): Promise<any> {
     return apiGet('/api/v1/admin/reports/topic-pass-rate' as any, { query: { course_id: courseId } }) as Promise<any>;
+  },
+
+  async exportReport(type: string): Promise<{ blob: Blob; filename: string | null }> {
+    return apiBlob('/api/v1/admin/reports/export' as any, { query: { type } });
   },
 };

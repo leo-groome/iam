@@ -58,7 +58,7 @@
 
         <!-- Dynamic View -->
         <main class="p-6 lg:p-10 max-w-[1400px] w-full mx-auto flex-1">
-          <router-view />
+          <slot />
         </main>
       </div>
     </div>

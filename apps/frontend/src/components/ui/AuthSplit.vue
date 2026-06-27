@@ -106,6 +106,24 @@ const maxDob = computed(() => {
   return d.toISOString().split('T')[0]
 })
 
+function getBirthDateFromAgeRange(edad: string): string {
+  const today = new Date()
+  let age = 18 // fallback
+  if (edad === '<18') {
+    age = 15
+  } else if (edad === '18-25') {
+    age = 21
+  } else if (edad === '26-35') {
+    age = 30
+  } else if (edad === '36-50') {
+    age = 43
+  } else if (edad === '>50') {
+    age = 60
+  }
+  const birthYear = today.getFullYear() - age
+  return `${birthYear}-01-01`
+}
+
 // ---------------------------------------------------------------------------
 // Read ?next= from query string for post-auth redirect
 // ---------------------------------------------------------------------------
@@ -118,9 +136,22 @@ onMounted(() => {
   }
   isReady.value = true
 
-  // Prefill the name from onboarding so the user doesn't type it twice.
-  if (onboardingData?.nombre && !regFullName.value) {
-    regFullName.value = onboardingData.nombre
+  if (mode.value === 'register' && !onboardingData) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('hasCompletedOnboarding')
+      router.push({ path: '/onboarding', query: router.currentRoute.value.query })
+    }
+    return
+  }
+
+  // Prefill name and birth date from onboarding data
+  if (onboardingData) {
+    if (onboardingData.nombre && !regFullName.value) {
+      regFullName.value = onboardingData.nombre
+    }
+    if (onboardingData.edad && !regBirthDate.value) {
+      regBirthDate.value = getBirthDateFromAgeRange(onboardingData.edad)
+    }
   }
 
   // Only enter "complete your profile" mode when the user actually returned
@@ -565,7 +596,7 @@ function classifyAuthError(err: unknown): string {
                 {{ isCompletingOAuthProfile ? 'Completa tu perfil' : 'Empieza tu camino' }}
               </h1>
               <p class="text-[var(--color-text-muted)] mt-2">
-                {{ pendingRegistration ? 'Escribe el código que recibiste por correo.' : isCompletingOAuthProfile ? 'Solo falta tu fecha de nacimiento para entrar.' : 'Es gratis y solo te toma un minuto.' }}
+                {{ pendingRegistration ? 'Escribe el código que recibiste por correo.' : isCompletingOAuthProfile ? 'Solo falta un paso más para entrar.' : 'Es gratis y solo te toma un minuto.' }}
               </p>
             </div>
             <div class="lg:hidden text-center mb-6">
@@ -605,23 +636,6 @@ function classifyAuthError(err: unknown): string {
               </div>
 
               <template v-else>
-              <div>
-                <label class="label" for="reg-nombre">Nombre completo</label>
-                <input
-                  id="reg-nombre"
-                  v-model="regFullName"
-                  type="text"
-                  class="input"
-                  :class="{ 'border-red-400': regErrors.fullName }"
-                  placeholder="Tu nombre"
-                  autocomplete="name"
-                  required
-                  minlength="3"
-                  maxlength="80"
-                />
-                <p v-if="regErrors.fullName" class="mt-1 text-xs text-red-600">{{ regErrors.fullName }}</p>
-              </div>
-
               <div v-if="!isCompletingOAuthProfile">
                 <label class="label" for="reg-email">Correo</label>
                 <input
@@ -652,24 +666,6 @@ function classifyAuthError(err: unknown): string {
                   minlength="8"
                 />
                 <p v-if="regErrors.password" class="mt-1 text-xs text-red-600">{{ regErrors.password }}</p>
-              </div>
-
-              <div>
-                <label class="label" for="reg-fecha">
-                  Fecha de nacimiento
-                  <span class="text-[var(--color-text-muted)] font-normal text-xs ml-1">(debes tener 13 años o más)</span>
-                </label>
-                <input
-                  id="reg-fecha"
-                  v-model="regBirthDate"
-                  type="date"
-                  class="input"
-                  :class="{ 'border-red-400': regErrors.birthDate }"
-                  :max="maxDob"
-                  autocomplete="bday"
-                  required
-                />
-                <p v-if="regErrors.birthDate" class="mt-1 text-xs text-red-600">{{ regErrors.birthDate }}</p>
               </div>
 
               <label class="flex items-start gap-2 text-sm">

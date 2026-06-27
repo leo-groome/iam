@@ -56,6 +56,7 @@ async def create_question_for_topic(
         topic_id=topic_id,
         module_id=None,
         options_data=options_data,
+        order_index=body.order_index,
     )
     await log_admin_action(
         db,
@@ -68,6 +69,48 @@ async def create_question_for_topic(
     await db.commit()
     await db.refresh(question, ["options"])
     return QuestionResponse.model_validate(question)
+
+
+@router.post(
+    "/api/v1/admin/topics/{topic_id}/questions/bulk",
+    response_model=list[QuestionResponse],
+)
+async def replace_questions_for_topic(
+    topic_id: uuid.UUID,
+    body: list[QuestionCreate],
+    current_user: User = Depends(_guard),  # noqa: B008
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> list[QuestionResponse]:
+    await assert_can_manage_topic(db, current_user, topic_id)
+
+    existing = await crud.list_topic_questions(db, topic_id)
+    for question in existing:
+        await crud.archive_question(db, question)
+
+    created = []
+    for idx, question_body in enumerate(body):
+        question = await crud.create_question(
+            db,
+            enunciado=question_body.enunciado,
+            topic_id=topic_id,
+            module_id=None,
+            options_data=[o.model_dump() for o in question_body.options],
+            order_index=idx,
+        )
+        created.append(question)
+
+    await log_admin_action(
+        db,
+        actor_id=current_user.id,
+        action="replace_bulk",
+        entity="topic_questions",
+        entity_id=topic_id,
+        payload={"topic_id": str(topic_id), "question_count": len(created)},
+    )
+    await db.commit()
+
+    refreshed = await crud.list_topic_questions(db, topic_id)
+    return [QuestionResponse.model_validate(q) for q in refreshed]
 
 
 @router.post(
@@ -90,6 +133,7 @@ async def create_question_for_module(
         topic_id=None,
         module_id=module_id,
         options_data=options_data,
+        order_index=body.order_index,
     )
     await log_admin_action(
         db,

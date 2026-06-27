@@ -68,6 +68,8 @@ async def get_student(
             started_at=e.started_at,
             completed_at=e.completed_at,
             progress_cached=e.progress_cached,
+            progress_percentage=e.progress_cached,
+            status="completado" if e.completed_at else "en_progreso",
             course_title=getattr(e.course, "title", None) if e.course else None,
             course_slug=getattr(e.course, "slug", None) if e.course else None,
         )
@@ -80,7 +82,17 @@ async def get_student(
     ]
 
     exam_attempts_data = [
-        ExamAttemptSummary.model_validate(ea)
+        ExamAttemptSummary(
+            id=ea.id,
+            topic_id=ea.topic_id,
+            module_id=ea.module_id,
+            topic_title=getattr(ea.topic, "title", None) if ea.topic else None,
+            module_title=getattr(ea.module, "title", None) if ea.module else None,
+            score=ea.score,
+            passed=ea.passed,
+            min_score_snapshot=ea.min_score_snapshot,
+            created_at=ea.created_at,
+        )
         for ea in user.exam_attempts
     ]
 

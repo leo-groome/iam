@@ -358,11 +358,15 @@ const prevStep = () => {
 
 const finishOnboarding = () => {
   sessionStorage.setItem('onboardingData', JSON.stringify(answers.value));
-  // Not pushing to signup yet per user instructions: "el funcionamiento aun no deja todo preparado pero sin conectar nada aun"
-  // but I will keep the redirect commented or just redirect to signup visually so it doesn't break.
-  // Wait, the user said "sin conectar nada aun". I'll still push to signup, since it's just the UI flow.
   localStorage.setItem('hasCompletedOnboarding', 'true');
-  router.push('/signup');
+  
+  // Forward oauth query param if present
+  const oauth = new URLSearchParams(window.location.search).get('oauth');
+  if (oauth) {
+    router.push(`/signup?oauth=${oauth}`);
+  } else {
+    router.push('/signup');
+  }
 };
 </script>
 

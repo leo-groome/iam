@@ -10,7 +10,7 @@ const statusFilter = ref('')
 async function fetchStudents() {
   loading.value = true
   const res = await adminService.getStudents({
-    search: search.value || undefined,
+    q: search.value || undefined,
     status: statusFilter.value || undefined,
   })
   students.value = res?.items ?? []

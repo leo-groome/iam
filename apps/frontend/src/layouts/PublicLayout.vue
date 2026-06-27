@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-[var(--color-app-bg)] text-[var(--color-text)]">
-    <router-view />
+    <slot />
   </div>
 </template>
 

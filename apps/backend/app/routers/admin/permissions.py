@@ -26,11 +26,11 @@ async def assert_can_manage_course(
     user: User,
     course_id: uuid.UUID,
 ) -> None:
-    result = await db.execute(select(Course.instructor_id).where(Course.id == course_id))
-    instructor_id = result.scalar_one_or_none()
-    if instructor_id is None:
+    result = await db.execute(select(Course.id, Course.instructor_id).where(Course.id == course_id))
+    row = result.one_or_none()
+    if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-    _assert_owner_or_admin(user, instructor_id)
+    _assert_owner_or_admin(user, row.instructor_id)
 
 
 async def assert_can_manage_module(
@@ -39,14 +39,14 @@ async def assert_can_manage_module(
     module_id: uuid.UUID,
 ) -> None:
     result = await db.execute(
-        select(Course.instructor_id)
+        select(Module.id, Course.instructor_id)
         .join(Module, Module.course_id == Course.id)
         .where(Module.id == module_id)
     )
-    instructor_id = result.scalar_one_or_none()
-    if instructor_id is None:
+    row = result.one_or_none()
+    if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found")
-    _assert_owner_or_admin(user, instructor_id)
+    _assert_owner_or_admin(user, row.instructor_id)
 
 
 async def assert_can_manage_topic(
@@ -55,15 +55,15 @@ async def assert_can_manage_topic(
     topic_id: uuid.UUID,
 ) -> None:
     result = await db.execute(
-        select(Course.instructor_id)
+        select(Topic.id, Course.instructor_id)
         .join(Module, Module.course_id == Course.id)
         .join(Topic, Topic.module_id == Module.id)
         .where(Topic.id == topic_id)
     )
-    instructor_id = result.scalar_one_or_none()
-    if instructor_id is None:
+    row = result.one_or_none()
+    if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
-    _assert_owner_or_admin(user, instructor_id)
+    _assert_owner_or_admin(user, row.instructor_id)
 
 
 async def assert_can_manage_question(
@@ -72,24 +72,24 @@ async def assert_can_manage_question(
     question_id: uuid.UUID,
 ) -> None:
     topic_result = await db.execute(
-        select(Course.instructor_id)
+        select(Question.id, Course.instructor_id)
         .join(Module, Module.course_id == Course.id)
         .join(Topic, Topic.module_id == Module.id)
         .join(Question, Question.topic_id == Topic.id)
         .where(Question.id == question_id)
     )
-    instructor_id = topic_result.scalar_one_or_none()
-    if instructor_id is None:
+    row = topic_result.one_or_none()
+    if row is None:
         module_result = await db.execute(
-            select(Course.instructor_id)
+            select(Question.id, Course.instructor_id)
             .join(Module, Module.course_id == Course.id)
             .join(Question, Question.module_id == Module.id)
             .where(Question.id == question_id)
         )
-        instructor_id = module_result.scalar_one_or_none()
-    if instructor_id is None:
+        row = module_result.one_or_none()
+    if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
-    _assert_owner_or_admin(user, instructor_id)
+    _assert_owner_or_admin(user, row.instructor_id)
 
 
 async def assert_can_manage_option(

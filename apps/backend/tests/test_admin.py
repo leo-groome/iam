@@ -420,6 +420,82 @@ async def test_create_question_two_options_422(client: AsyncClient, db: AsyncSes
     assert resp.status_code == 422, resp.text
 
 
+@pytest.mark.asyncio
+async def test_replace_topic_questions_bulk_archives_old_questions(client: AsyncClient, db: AsyncSession) -> None:
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+
+    from sqlalchemy import select
+
+    from app.models.base import new_uuid
+    from app.models.course import Course, Module, Topic
+    from app.models.question import Question
+
+    course = Course(
+        id=new_uuid(),
+        slug="bulk-course",
+        title="Bulk Course",
+        short_desc="",
+        long_desc="",
+        status="publicado",
+    )
+    db.add(course)
+    await db.flush()
+    module = Module(id=new_uuid(), course_id=course.id, title="Bulk Module", description="")
+    db.add(module)
+    await db.flush()
+    topic = Topic(id=new_uuid(), module_id=module.id, title="Bulk Topic", content_type="texto", has_exam=True)
+    db.add(topic)
+    await db.commit()
+
+    first_payload = [
+        {
+            "enunciado": "Primera pregunta válida",
+            "options": [
+                {"texto": "A", "is_correct": True},
+                {"texto": "B", "is_correct": False},
+                {"texto": "C", "is_correct": False},
+            ],
+        },
+        {
+            "enunciado": "Segunda pregunta válida",
+            "options": [
+                {"texto": "A", "is_correct": False},
+                {"texto": "B", "is_correct": True},
+                {"texto": "C", "is_correct": False},
+            ],
+        },
+    ]
+    second_payload = [first_payload[1]]
+
+    with patch(
+        "app.deps.verify_stack_token",
+        _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
+    ):
+        first = await client.post(
+            f"/api/v1/admin/topics/{topic.id}/questions/bulk",
+            json=first_payload,
+            headers=ADMIN_HEADERS,
+        )
+        second = await client.post(
+            f"/api/v1/admin/topics/{topic.id}/questions/bulk",
+            json=second_payload,
+            headers=ADMIN_HEADERS,
+        )
+
+    assert first.status_code == 200, first.text
+    assert [q["order_index"] for q in first.json()] == [0, 1]
+    assert second.status_code == 200, second.text
+    assert len(second.json()) == 1
+    assert second.json()[0]["enunciado"] == "Segunda pregunta válida"
+
+    await db.rollback()
+    result = await db.execute(select(Question).where(Question.topic_id == topic.id))
+    all_questions = list(result.scalars().all())
+    assert sum(1 for q in all_questions if q.archived_at is None) == 1
+    assert sum(1 for q in all_questions if q.archived_at is not None) == 2
+
+
 # ---------------------------------------------------------------------------
 # Test 8: Reorder modules persiste order_index
 # ---------------------------------------------------------------------------
@@ -604,6 +680,79 @@ async def test_stuck_students_filter(client: AsyncClient, db: AsyncSession) -> N
     stuck = [s for s in data["items"] if s["is_stuck"]]
     assert len(stuck) >= 1
     assert stuck[0]["full_name"] == "Stuck Student"
+
+
+@pytest.mark.asyncio
+async def test_student_detail_exposes_progress_status_and_attempt_titles(client: AsyncClient, db: AsyncSession) -> None:
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+
+    from app.models.base import new_uuid
+    from app.models.course import Course, Module, Topic
+    from app.models.progress import Enrollment, ExamAttempt
+    from app.models.user import User
+
+    student = User(
+        id=new_uuid(),
+        neon_user_id="neon_detail_student",
+        email="detail@student.test",
+        full_name="Detail Student",
+        birth_date=date(2000, 1, 1),
+        role="estudiante",
+        status="activo",
+    )
+    course = Course(
+        id=new_uuid(),
+        slug="detail-course",
+        title="Detail Course",
+        short_desc="",
+        long_desc="",
+        status="publicado",
+    )
+    db.add_all([student, course])
+    await db.flush()
+    module = Module(id=new_uuid(), course_id=course.id, title="Detail Module", description="")
+    db.add(module)
+    await db.flush()
+    topic = Topic(id=new_uuid(), module_id=module.id, title="Detail Topic", content_type="texto", has_exam=True)
+    db.add(topic)
+    await db.flush()
+    db.add(
+        Enrollment(
+            id=new_uuid(),
+            user_id=student.id,
+            course_id=course.id,
+            started_at=datetime.now(UTC),
+            progress_cached=45,
+        )
+    )
+    db.add(
+        ExamAttempt(
+            id=new_uuid(),
+            user_id=student.id,
+            topic_id=topic.id,
+            module_id=None,
+            score=80,
+            passed=True,
+            min_score_snapshot=70,
+            answers={},
+            created_at=datetime.now(UTC),
+        )
+    )
+    await db.commit()
+
+    with patch(
+        "app.deps.verify_stack_token",
+        _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
+    ):
+        resp = await client.get(f"/api/v1/admin/students/{student.id}", headers=ADMIN_HEADERS)
+
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["enrollments"][0]["progress_cached"] == 45
+    assert data["enrollments"][0]["progress_percentage"] == 45
+    assert data["enrollments"][0]["status"] == "en_progreso"
+    assert data["exam_attempts"][0]["topic_title"] == "Detail Topic"
 
 
 @pytest.mark.asyncio

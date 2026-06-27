@@ -30,6 +30,21 @@ def _decode_cursor(cursor: str) -> tuple[int, uuid.UUID]:
     return int(idx_str), uuid.UUID(id_str)
 
 
+def _age_clause_for_user(user: User):
+    age = _user_age(user)
+    return (
+        (Course.age_min.is_(None) | (Course.age_min <= age))
+        & (Course.age_max.is_(None) | (Course.age_max >= age))
+    )
+
+
+def _course_allows_user_age(course: Course, user: User) -> bool:
+    age = _user_age(user)
+    if course.age_min is not None and age < course.age_min:
+        return False
+    return not (course.age_max is not None and age > course.age_max)
+
+
 async def get_courses_for_user(
     db: AsyncSession,
     user: User,
@@ -44,7 +59,7 @@ async def get_courses_for_user(
         select(Course)
         .where(
             or_(
-                Course.status == "publicado",
+                (Course.status == "publicado") & _age_clause_for_user(user),
                 (Course.status == "archivado") & (Course.id.in_(enrolled_subq)),
             )
         )
@@ -87,4 +102,4 @@ async def get_course_by_slug(db: AsyncSession, slug: str) -> Course | None:
 async def is_course_eligible_for_user(course: Course, user: User, enrolled: bool) -> bool:
     if course.status == "archivado":
         return enrolled
-    return course.status == "publicado"
+    return course.status == "publicado" and _course_allows_user_age(course, user)

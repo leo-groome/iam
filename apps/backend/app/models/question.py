@@ -16,6 +16,8 @@ class Question(Base, TimestampMixin):
         ),
         Index("ix_questions_topic", "topic_id"),
         Index("ix_questions_module", "module_id"),
+        Index("ix_questions_topic_order", "topic_id", "order_index"),
+        Index("ix_questions_module_order", "module_id", "order_index"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
@@ -26,6 +28,7 @@ class Question(Base, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("modules.id", ondelete="CASCADE"), nullable=True
     )
     enunciado: Mapped[str] = mapped_column(Text, nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     archived_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     topic: Mapped["Topic | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821

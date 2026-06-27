@@ -217,6 +217,44 @@ export async function apiDelete<P extends keyof paths>(
   return apiFetch(path, { ...options, method: 'DELETE' })
 }
 
+export async function apiBlob(
+  path: keyof paths | string,
+  options: GetOptions = {},
+): Promise<{ blob: Blob; filename: string | null }> {
+  const { params, query } = options
+  let resolvedPath = path as string
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      resolvedPath = resolvedPath.replace(`{${key}}`, encodeURIComponent(value))
+    }
+  }
+
+  const url = new URL(resolvedPath, API_BASE)
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== null && value !== undefined) {
+        url.searchParams.set(key, String(value))
+      }
+    }
+  }
+
+  const headers: Record<string, string> = { Accept: '*/*' }
+  const token = await resolveToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(url.toString(), { method: 'GET', headers })
+  } catch (err) {
+    throw new ApiError(0, 'NETWORK_ERROR', (err as Error)?.message ?? 'Network error', undefined)
+  }
+  if (!res.ok) await throwApiError(res)
+
+  const disposition = res.headers.get('content-disposition')
+  const filename = disposition?.match(/filename="?([^"]+)"?/i)?.[1] ?? null
+  return { blob: await res.blob(), filename }
+}
+
 // ---------------------------------------------------------------------------
 // Media Worker fetch helper (R2 via Cloudflare Worker)
 // ---------------------------------------------------------------------------

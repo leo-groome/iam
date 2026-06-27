@@ -48,7 +48,7 @@
 
     <!-- Main Content -->
     <main :class="[`mx-auto px-4 py-6 pb-32`, wide ? 'max-w-6xl' : 'max-w-3xl']">
-      <router-view />
+      <slot />
     </main>
 
     <!-- Mobile Nav -->
