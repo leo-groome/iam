@@ -256,8 +256,7 @@ function onLoadedMetadata() {
 
 function onVideoEnded() {
   playing.value = false;
-  contentDone.value = true;
-  if (!markingDone.value) {
+  if (!contentDone.value) {
     markContentDone();
   }
 }

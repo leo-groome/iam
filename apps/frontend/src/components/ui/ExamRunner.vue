@@ -5,7 +5,7 @@ import type { ExamResponse, QuestionOut } from '@/lib/api'
 
 const props = defineProps<{
   topicId: string
-  cursoId: string
+  cursoSlug: string
 }>()
 
 // State
@@ -111,11 +111,11 @@ async function submitExam() {
 
 // CTAs
 const repasoHref = computed(
-  () => `/curso/${props.cursoId}/tema/${props.topicId}?repaso=1`,
+  () => `/curso/${props.cursoSlug}/tema/${props.topicId}?repaso=1`,
 )
 const resultadoHref = computed(() => {
   const s = result.value?.score ?? 0
-  return `/curso/${props.cursoId}/tema/${props.topicId}/resultado?score=${s}&pass=1`
+  return `/curso/${props.cursoSlug}/tema/${props.topicId}/resultado?score=${s}&pass=1`
 })
 
 const progressPct = computed(() =>
@@ -247,9 +247,9 @@ function reloadPage() {
         </svg>
       </div>
       <h2 class="text-3xl font-bold">¡Aprobado!</h2>
-      <p class="text-5xl font-extrabold text-[var(--color-primary)] mt-4">{{ score }}</p>
-      <p class="text-[var(--color-text-muted)] mt-2">Calificación mínima: {{ minPercent }}</p>
-      <router-link :to="`/curso/${cursoId}/tema/${temaId}/resultado?score=${score}&pass=1`" class="btn btn-primary btn-block mt-6">
+      <p class="text-5xl font-extrabold text-[var(--color-primary)] mt-4">{{ result.score }}%</p>
+      <p class="text-[var(--color-text-muted)] mt-2">Calificación mínima: {{ minScore }}%</p>
+      <router-link :to="resultadoHref" class="btn btn-primary btn-block mt-6">
         Continuar al siguiente tema
       </router-link>
     </div>
@@ -264,9 +264,9 @@ function reloadPage() {
       </div>
       <h2 class="text-2xl font-bold">No esta vez</h2>
       <p class="text-[var(--color-text-muted)] mt-1">Vamos a repasar juntos.</p>
-      <p class="text-5xl font-extrabold text-[var(--color-text-muted)] mt-4">{{ score }}</p>
-      <p class="text-[var(--color-text-muted)] mt-2">Necesitas al menos {{ minPercent }} para aprobar.</p>
-      <router-link :to="`/curso/${cursoId}/tema/${temaId}?repaso=1`" class="btn btn-primary btn-block mt-6">
+      <p class="text-5xl font-extrabold text-[var(--color-text-muted)] mt-4">{{ result.score }}%</p>
+      <p class="text-[var(--color-text-muted)] mt-2">Necesitas al menos {{ minScore }}% para aprobar.</p>
+      <router-link :to="repasoHref" class="btn btn-primary btn-block mt-6">
         Volver a ver el video
       </router-link>
     </div>
