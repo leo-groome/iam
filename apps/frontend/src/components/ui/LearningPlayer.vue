@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { apiPost, mediaFetch } from '@/lib/api';
 
+const emit = defineEmits<{ 'content-done': [] }>();
+
 const props = defineProps<{
   tema?: {
     id: string;
@@ -226,6 +228,7 @@ async function markContentDone() {
   try {
     await apiPost(`/api/v1/topics/${props.tema.id}/mark-content-done` as any);
     contentDone.value = true;
+    emit('content-done');
     markDoneSuccess.value = true;
     setTimeout(() => { markDoneSuccess.value = false; }, 2000);
   } catch (err) {

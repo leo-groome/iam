@@ -5,10 +5,12 @@ import ProgressBar from '@/components/ui/ProgressBar.vue';
 import SkeletonCard from '@/components/ui/SkeletonCard.vue';
 import SkeletonText from '@/components/ui/SkeletonText.vue';
 import { coursesService } from '@/services/courses.service';
+import { useProgressStore } from '@/stores/progress';
 
 const route = useRoute();
 const router = useRouter();
 const slug = route.params.slug as string;
+const progressStore = useProgressStore();
 
 const curso = ref(null);
 const loading = ref(true);
@@ -16,6 +18,7 @@ const loading = ref(true);
 onMounted(async () => {
   try {
     curso.value = await coursesService.getBySlug(slug);
+    progressStore.hydrate(slug, { course_pct: curso.value.progress_pct, modules: [] });
   } catch (err) {
     console.error(err);
     router.replace('/catalogo');
@@ -89,7 +92,7 @@ async function handleCtaClick() {
             </div>
 
             <div class="mt-6">
-              <ProgressBar :value="curso.progress_pct" label="Tu progreso" showPercent />
+              <ProgressBar :value="progressStore.coursePercentage(slug)" label="Tu progreso" showPercent />
             </div>
           </div>
         </div>

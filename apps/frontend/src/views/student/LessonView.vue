@@ -5,9 +5,11 @@ import LearningPlayer from '@/components/ui/LearningPlayer.vue';
 import SkeletonCard from '@/components/ui/SkeletonCard.vue';
 import SkeletonText from '@/components/ui/SkeletonText.vue';
 import { coursesService } from '@/services/courses.service';
+import { useProgressStore } from '@/stores/progress';
 
 const route = useRoute();
 const router = useRouter();
+const progressStore = useProgressStore();
 
 const slug = route.params.slug as string;
 const topicId = computed(() => route.params.topicId as string);
@@ -42,6 +44,10 @@ onMounted(async () => {
     }
 
     allTemas.value = curso.value?.modules.flatMap(m => m.topics.map(t => ({ ...t, moduloTitle: m.title }))) || [];
+
+    // Seed the progress store with the server value so CourseDashboard can read it reactively.
+    progressStore.hydrate(slug, { course_pct: curso.value.progress_pct, modules: [] });
+
     if (!allTemas.value.find(t => t.id === topicId.value)) {
       router.replace(`/curso/${slug}`);
       return;
@@ -75,6 +81,18 @@ const tema = computed(() => {
 const nextTema = computed(() => allTemas.value[idx.value + 1]);
 const examUrl = computed(() => `/curso/${slug}/tema/${topicId.value}/examen`);
 const nextUrl = computed(() => nextTema.value ? `/curso/${slug}/tema/${nextTema.value.id}` : `/curso/${slug}/certificado`);
+
+// Called by LearningPlayer after mark-content-done succeeds.
+// Estimates new course_pct from allTemas (server-confirmed, no rollback needed).
+function handleContentDone() {
+  const total = allTemas.value.length;
+  if (total === 0) return;
+  const doneStates = ['contenido_visto', 'aprobado', 'en_repaso'];
+  const alreadyDone = allTemas.value.filter(t => doneStates.includes(t.state)).length;
+  const currentWasAlreadyDone = doneStates.includes(tema.value?.state ?? '');
+  const newDone = currentWasAlreadyDone ? alreadyDone : alreadyDone + 1;
+  progressStore.updateProgress(slug, Math.min(100, Math.round((newDone / total) * 100)));
+}
 </script>
 
 <template>
@@ -119,6 +137,7 @@ const nextUrl = computed(() => nextTema.value ? `/curso/${slug}/tema/${nextTema.
             :examUrl="examUrl"
             :nextUrl="nextUrl"
             :hasExam="tema.has_exam"
+            @content-done="handleContentDone"
           >
             <div v-html="tema.content_body"></div>
           </LearningPlayer>
