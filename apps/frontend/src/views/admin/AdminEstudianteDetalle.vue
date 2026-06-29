@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminService } from '@/services/admin.service'
+import UserAvatar from '@/components/ui/UserAvatar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,7 +21,7 @@ onMounted(async () => {
     <div v-if="loading" class="text-center py-8 text-gray-500">Cargando...</div>
     <template v-else-if="student">
       <div class="flex items-center gap-4 mb-6">
-        <img :src="`https://api.dicebear.com/9.x/notionists-neutral/svg?seed=${encodeURIComponent(student.full_name || student.email || 'avatar')}`" alt="Avatar" class="w-16 h-16 rounded-full bg-blue-100 shrink-0" />
+        <UserAvatar :name="student.full_name || student.email || 'avatar'" size="w-16 h-16" />
         <div>
           <h1 class="text-2xl font-bold">{{ student.full_name }}</h1>
           <p class="text-gray-500">{{ student.email }}</p>
