@@ -28,7 +28,7 @@ const buttonLabel = computed(() => props.cta ?? (props.progress > 0 ? "Continuar
         :src="cover && cover !== '/placeholder.jpg' ? cover : '/MISIONERAS_LOGO.svg'"
         :alt="title"
         loading="lazy"
-        :class="[cover && cover !== '/placeholder.jpg' ? 'w-full h-full object-cover' : 'max-w-[75%] max-h-[75%] w-auto h-auto object-contain', 'group-hover:scale-105 transition duration-500']"
+        :class="[cover && cover !== '/placeholder.jpg' ? 'w-full h-full object-cover' : 'w-24 h-24 object-contain opacity-80', 'group-hover:scale-105 transition duration-500']"
       />
       <span v-if="progress === 100" class="absolute top-3 right-3 chip bg-emerald-500/95 text-white">✓ Completado</span>
     </div>
