@@ -36,8 +36,9 @@ onMounted(async () => {
     curso.value = await coursesService.getBySlug(slug);
 
     if (curso.value?.enrollment_status === 'no_iniciado') {
-      await coursesService.enroll(slug);
+      // Optimistic: update local state immediately, enroll in background.
       curso.value.enrollment_status = 'en_progreso';
+      coursesService.enroll(slug).catch(err => console.error('Background enrollment failed:', err));
     }
 
     allTemas.value = curso.value?.modules.flatMap(m => m.topics.map(t => ({ ...t, moduloTitle: m.title }))) || [];
@@ -94,16 +95,26 @@ const nextUrl = computed(() => nextTema.value ? `/curso/${slug}/tema/${nextTema.
           <p class="text-amber-700 text-sm mt-1">Vuelve a ver el contenido completo para reintentar el cuestionario.</p>
         </div>
 
-        <p class="text-sm text-[var(--color-primary)] font-medium">{{ tema.moduloTitle }}</p>
-        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mt-1 mb-2">{{ tema.title }}</h1>
-        <p class="text-[var(--color-text-muted)] mb-6">{{ tema.duration_seconds }}s · {{ tema.has_exam ? 'Con examen' : 'Sin examen' }}</p>
+        <transition name="fade" mode="out-in">
+          <div v-if="loadingTema" key="loading-header" class="space-y-2 mb-6">
+            <div class="h-4 w-32 bg-[var(--color-border)] rounded animate-pulse opacity-50"></div>
+            <div class="h-8 w-3/4 bg-[var(--color-border)] rounded animate-pulse opacity-40"></div>
+            <div class="h-4 w-40 bg-[var(--color-border)] rounded animate-pulse opacity-30"></div>
+          </div>
+          <div v-else key="real-header" class="mb-6">
+            <p class="text-sm text-[var(--color-primary)] font-medium">{{ tema.moduloTitle }}</p>
+            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mt-1 mb-2">{{ tema.title }}</h1>
+            <p class="text-[var(--color-text-muted)]">{{ tema.duration_seconds }}s · {{ tema.has_exam ? 'Con examen' : 'Sin examen' }}</p>
+          </div>
+        </transition>
 
         <transition name="fade" mode="out-in">
-          <div v-if="loadingTema" class="card h-[500px] flex items-center justify-center">
+          <div v-if="loadingTema" key="loading-player" class="card h-[500px] flex items-center justify-center">
              <div class="animate-pulse w-full h-full bg-[var(--color-border)] opacity-30 rounded-2xl"></div>
           </div>
           <LearningPlayer
             v-else
+            key="real-player"
             :tema="tema"
             :examUrl="examUrl"
             :nextUrl="nextUrl"

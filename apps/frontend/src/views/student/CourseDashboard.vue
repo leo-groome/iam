@@ -46,20 +46,14 @@ const ctaLabel = computed(() => {
 });
 
 async function handleCtaClick() {
-  if (!curso.value || !primerTemaPendiente.value) return;
+  if (!curso.value || !primerTemaPendiente.value || joining.value) return;
+  joining.value = true;
 
   if (curso.value.enrollment_status === 'no_iniciado') {
-    joining.value = true;
-    try {
-      await coursesService.enroll(slug);
-      curso.value.enrollment_status = 'en_progreso';
-    } catch (err) {
-      console.error('Error enrolling in course:', err);
-      joining.value = false;
-      return;
-    } finally {
-      joining.value = false;
-    }
+    // Optimistic: update local state + navigate immediately.
+    // Enrollment fires in background — LessonView retries on mount if this fails.
+    curso.value.enrollment_status = 'en_progreso';
+    coursesService.enroll(slug).catch(err => console.error('Background enrollment failed:', err));
   }
 
   router.push(ctaHref.value);
@@ -124,7 +118,7 @@ async function handleCtaClick() {
         <div class="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] p-4 sm:static sm:bg-transparent sm:border-0 sm:p-0">
           <div class="max-w-3xl mx-auto">
             <button @click="handleCtaClick" :disabled="joining" class="btn btn-primary btn-block">
-              {{ joining ? 'Inscribiendo...' : ctaLabel }}
+              {{ ctaLabel }}
             </button>
           </div>
         </div>
