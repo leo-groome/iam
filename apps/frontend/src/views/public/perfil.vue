@@ -43,7 +43,7 @@ const age = computed(() => {
   <h1 class="text-3xl font-bold mb-6">Mi perfil</h1>
 
   <div class="card p-6 mb-6 flex items-center gap-4">
-    <img :src="`https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(user.full_name || user.email || 'avatar')}`" alt="Avatar" class="w-16 h-16 rounded-full bg-blue-100 shrink-0" />
+    <img :src="`https://api.dicebear.com/9.x/notionists-neutral/svg?seed=${encodeURIComponent(user.full_name || user.email || 'avatar')}`" alt="Avatar" class="w-16 h-16 rounded-full bg-blue-100 shrink-0" />
     <div>
       <p class="font-bold text-lg">{{ user.full_name }}</p>
       <p class="text-[var(--color-text-muted)] text-sm">{{ user.email }}</p>

@@ -20,7 +20,7 @@ onMounted(async () => {
     <div v-if="loading" class="text-center py-8 text-gray-500">Cargando...</div>
     <template v-else-if="student">
       <div class="flex items-center gap-4 mb-6">
-        <img :src="`https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(student.full_name || student.email || 'avatar')}`" alt="Avatar" class="w-16 h-16 rounded-full bg-blue-100 shrink-0" />
+        <img :src="`https://api.dicebear.com/9.x/notionists-neutral/svg?seed=${encodeURIComponent(student.full_name || student.email || 'avatar')}`" alt="Avatar" class="w-16 h-16 rounded-full bg-blue-100 shrink-0" />
         <div>
           <h1 class="text-2xl font-bold">{{ student.full_name }}</h1>
           <p class="text-gray-500">{{ student.email }}</p>

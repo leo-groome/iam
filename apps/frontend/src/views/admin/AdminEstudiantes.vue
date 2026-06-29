@@ -72,7 +72,7 @@ watch([search, statusFilter], fetchStudents)
               <tr v-for="s in students" :key="s.id" class="hover:bg-[var(--color-bg-hover)] transition-colors group">
                 <td class="px-6 py-4 font-medium">
                   <div class="flex items-center gap-3">
-                    <img :src="`https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(s.full_name || s.email)}`" alt="Avatar" class="w-8 h-8 rounded-full bg-blue-100 shrink-0" />
+                    <img :src="`https://api.dicebear.com/9.x/notionists-neutral/svg?seed=${encodeURIComponent(s.full_name || s.email)}`" alt="Avatar" class="w-8 h-8 rounded-full bg-blue-100 shrink-0" />
                     <div>
                       {{ s.full_name }}
                       <span v-if="s.is_stuck" class="ml-2 inline-flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full font-semibold border border-red-200">
