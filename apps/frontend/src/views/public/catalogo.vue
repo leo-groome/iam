@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue';
+import { onMounted, computed, ref } from 'vue';
 import CourseCard from "@/components/ui/CourseCard.vue";
 import SkeletonCard from "@/components/ui/SkeletonCard.vue";
 import GreetingHeader from "@/components/ui/GreetingHeader.vue";
