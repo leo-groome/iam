@@ -22,8 +22,8 @@ export const stories: Story[] = [
     headline: "Estaba sola y asustada. Hoy mi hija es mi razón de vivir.",
     excerpt:
       "Cuando descubrí que estaba embarazada, lo primero que sentí fue miedo. Mis amigas me decían que no arruinara mi vida. Hasta que una voz distinta me escuchó sin juzgar.",
-    cover: "/images/img-19.webp",
-    portrait: "/images/img-19.webp",
+    cover: "/images/img-05.webp",
+    portrait: "/images/img-05.webp",
     date: "Marzo 2026",
     readingTime: "5 min de lectura",
     category: "Madres acompañadas",
