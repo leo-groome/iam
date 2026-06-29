@@ -30,5 +30,20 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('vue') || id.includes('pinia') || id.includes('vue-router')) {
+              return 'vendor-vue'; // Vue y sus utilidades básicas
+            }
+            if (id.includes('ffmpeg')) {
+              return 'vendor-ffmpeg'; // Procesamiento multimedia pesado
+            }
+            return 'vendor'; // El resto de dependencias (lucide, zod, tailwind, etc.)
+          }
+        }
+      }
+    }
   },
 });
