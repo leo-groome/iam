@@ -4,7 +4,7 @@
     <Transition name="fade-slow">
       <!-- Splash Screen -->
       <div v-if="showSplash" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[var(--color-app-bg)]">
-        <img src="/MISIONERAS_LOGO.svg" alt="IAM de la Vida" class="w-64 md:w-80 lg:w-96 h-auto drop-shadow-xl animate-pulse" />
+        <img loading="lazy" src="/MISIONERAS_LOGO.svg" alt="IAM de la Vida" class="w-64 md:w-80 lg:w-96 h-auto drop-shadow-xl animate-pulse" />
       </div>
     </Transition>
 
@@ -14,7 +14,7 @@
       <!-- Top Bar / Logo -->
       <header class="w-full p-6 flex flex-col items-center justify-center relative z-20">
         <div class="flex items-center gap-3 opacity-80">
-          <img src="/MISIONERAS_LOGO.svg" alt="Logo" class="w-8 h-auto" />
+          <img loading="lazy" src="/MISIONERAS_LOGO.svg" alt="Logo" class="w-8 h-auto" />
           <span class="font-display font-semibold tracking-wider text-[var(--color-primary)] uppercase text-sm">IAM de la Vida</span>
         </div>
       </header>

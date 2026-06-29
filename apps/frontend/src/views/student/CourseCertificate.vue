@@ -36,7 +36,7 @@ const today = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'l
     </div>
 
     <div class="card p-6 sm:p-10 mb-6 border-4 border-[var(--color-primary-soft)] relative overflow-hidden">
-      <img
+      <img loading="lazy"
         src="/MISIONERAS_LOGO.svg"
         alt=""
         aria-hidden="true"

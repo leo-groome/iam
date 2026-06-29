@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ExamRunner from '@/components/ui/ExamRunner.vue';
+import SkeletonCard from '@/components/ui/SkeletonCard.vue';
+import SkeletonText from '@/components/ui/SkeletonText.vue';
 import { coursesService } from '@/services/courses.service';
 
 const route = useRoute();
@@ -31,12 +33,21 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="!loading && curso && tema">
-    <p class="text-sm text-[var(--color-primary)] font-medium">Cuestionario</p>
-    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-6">{{ tema.title }}</h1>
+  <div class="animate-fade-in">
+    <transition name="fade" mode="out-in">
+      <div v-if="loading" class="space-y-4">
+        <SkeletonText :lines="1" titleWidth="100px" class="mb-4" />
+        <SkeletonText :lines="1" titleWidth="250px" class="mb-6 h-8" />
+        <SkeletonCard :hasImage="false" :hasIcon="false" :hasSubtitle="true" :hasFooter="true" class="h-64" />
+      </div>
+      <div v-else-if="curso && tema">
+        <p class="text-sm text-[var(--color-primary)] font-medium">Cuestionario</p>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-6">{{ tema.title }}</h1>
 
-    <ExamRunner :topicId="topicId" :cursoSlug="slug" />
+        <ExamRunner :topicId="topicId" :cursoSlug="slug" />
 
-    <div class="h-32"></div>
+        <div class="h-32"></div>
+      </div>
+    </transition>
   </div>
 </template>

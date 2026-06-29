@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import StatCard from "@/components/ui/StatCard.vue";
+import SkeletonStats from "@/components/ui/SkeletonStats.vue";
 import Banner from "@/components/ui/Banner.vue";
 import { adminService } from '@/services/admin.service';
 
@@ -26,29 +27,39 @@ onMounted(async () => {
     </header>
 
     <!-- ALERTS -->
-    <div v-if="kpis?.stuck_students > 0" class="flex items-center gap-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 p-4 rounded-xl shadow-sm">
-      <div class="bg-amber-100 dark:bg-amber-800/50 p-2 rounded-full">
-        <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+    <transition name="fade" mode="out-in">
+      <div v-if="!loading && kpis?.stuck_students > 0" class="flex items-center gap-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 p-4 rounded-xl shadow-sm">
+        <div class="bg-amber-100 dark:bg-amber-800/50 p-2 rounded-full">
+          <svg class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </div>
+        <div>
+          <h3 class="font-bold">Atención Requerida: {{ kpis?.stuck_students }} estudiantes atorados</h3>
+          <p class="text-sm opacity-90">Tienen 3 o más intentos fallidos consecutivos. Revisa el reporte académico.</p>
+        </div>
       </div>
-      <div>
-        <h3 class="font-bold">Atención Requerida: {{ kpis?.stuck_students }} estudiantes atorados</h3>
-        <p class="text-sm opacity-90">Tienen 3 o más intentos fallidos consecutivos. Revisa el reporte académico.</p>
-      </div>
-    </div>
+    </transition>
 
     <!-- MAIN KPIS -->
     <section>
       <h2 class="text-sm font-bold uppercase tracking-wider text-[var(--color-text-muted)] mb-4">Métricas Globales</h2>
-      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="Estudiantes Totales" :value="String(kpis?.total_students ?? '-')" delta="+12 este mes" trend="up" class="hover:shadow-md transition-shadow" />
-        <StatCard label="Cursos Activos" :value="String(kpis?.active_courses ?? '-')" delta="+5 vs ayer" trend="up" class="hover:shadow-md transition-shadow" />
-        <StatCard label="Tasa de Finalización" :value="`${kpis?.completion_rate ?? '-'}%`" delta="+3% esta semana" trend="up" class="hover:shadow-md transition-shadow" />
-        <StatCard label="Promedio Global" :value="`${kpis?.avg_exam_score ?? '-'}/100`" delta="Estable" trend="up" class="hover:shadow-md transition-shadow" />
-        <StatCard label="Certificados Emitidos" value="142" delta="+28 este mes" trend="up" class="hover:shadow-md transition-shadow" />
+      
+      <div v-if="loading" class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <SkeletonStats v-for="i in 5" :key="i" />
       </div>
+      
+      <transition name="fade" mode="out-in">
+        <div v-if="!loading" class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard label="Estudiantes Totales" :value="String(kpis?.total_students ?? '-')" delta="+12 este mes" trend="up" class="hover:shadow-md transition-shadow" />
+          <StatCard label="Cursos Activos" :value="String(kpis?.active_courses ?? '-')" delta="+5 vs ayer" trend="up" class="hover:shadow-md transition-shadow" />
+          <StatCard label="Tasa de Finalización" :value="`${kpis?.completion_rate ?? '-'}%`" delta="+3% esta semana" trend="up" class="hover:shadow-md transition-shadow" />
+          <StatCard label="Promedio Global" :value="`${kpis?.avg_exam_score ?? '-'}/100`" delta="Estable" trend="up" class="hover:shadow-md transition-shadow" />
+          <StatCard label="Certificados Emitidos" value="142" delta="+28 este mes" trend="up" class="hover:shadow-md transition-shadow" />
+        </div>
+      </transition>
     </section>
 
-    <div class="grid lg:grid-cols-3 gap-6">
+    <transition name="fade" mode="out-in">
+      <div v-if="!loading" class="grid lg:grid-cols-3 gap-6">
       <!-- ACTIVIDAD RECIENTE (Takes 1 column) -->
       <div class="card flex flex-col hover:shadow-md transition-shadow">
         <div class="p-6 border-b border-[var(--color-border)] flex items-center justify-between">
@@ -122,6 +133,7 @@ onMounted(async () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </transition>
   </div>
 </template>

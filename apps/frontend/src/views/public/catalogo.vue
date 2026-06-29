@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue';
 import CourseCard from "@/components/ui/CourseCard.vue";
+import SkeletonCard from "@/components/ui/SkeletonCard.vue";
 import GreetingHeader from "@/components/ui/GreetingHeader.vue";
 import { coursesService } from "@/services/courses.service";
 import { useAuthStore } from '@/stores/auth';
@@ -107,26 +108,39 @@ const yOffsets = [0, 4, -4, 6, -6, 2, -2, 5, -5, 0, 3, -3];
         </div>
       </header>
 
-      <section v-if="enProgreso.length > 0" class="mb-10">
-        <h2 class="text-lg font-semibold mb-3">Continuar donde lo dejé</h2>
-        <div class="grid gap-4">
-          <CourseCard v-for="c in enProgreso" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="c.progress_pct" :cover="c.cover_key || '/placeholder.jpg'" />
+      <transition name="fade" mode="out-in">
+        <div v-if="loading" class="space-y-10">
+          <section>
+            <h2 class="text-lg font-semibold mb-3">Cursos disponibles</h2>
+            <div class="grid gap-4">
+              <SkeletonCard v-for="i in 3" :key="i" :hasImage="true" :hasIcon="false" :hasSubtitle="true" :hasFooter="true" class="h-40" />
+            </div>
+          </section>
         </div>
-      </section>
 
-      <section class="mb-10">
-        <h2 class="text-lg font-semibold mb-3">Cursos disponibles</h2>
-        <div class="grid gap-4">
-          <CourseCard v-for="c in nuevos" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :cover="c.cover_key || '/placeholder.jpg'" />
-        </div>
-      </section>
+        <div v-else class="space-y-10">
+          <section v-if="enProgreso.length > 0">
+            <h2 class="text-lg font-semibold mb-3">Continuar donde lo dejé</h2>
+            <div class="grid gap-4">
+              <CourseCard v-for="c in enProgreso" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="c.progress_pct" :cover="c.cover_key || '/placeholder.jpg'" />
+            </div>
+          </section>
 
-      <section v-if="completados.length > 0">
-        <h2 class="text-lg font-semibold mb-3">Ya completados</h2>
-        <div class="grid gap-4">
-          <CourseCard v-for="c in completados" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="100" :cover="c.cover_key || '/placeholder.jpg'" cta="Ver certificado" :href="`/curso/${c.slug}/certificado`" />
+          <section>
+            <h2 class="text-lg font-semibold mb-3">Cursos disponibles</h2>
+            <div class="grid gap-4">
+              <CourseCard v-for="c in nuevos" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :cover="c.cover_key || '/placeholder.jpg'" />
+            </div>
+          </section>
+
+          <section v-if="completados.length > 0">
+            <h2 class="text-lg font-semibold mb-3">Ya completados</h2>
+            <div class="grid gap-4">
+              <CourseCard v-for="c in completados" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="100" :cover="c.cover_key || '/placeholder.jpg'" cta="Ver certificado" :href="`/curso/${c.slug}/certificado`" />
+            </div>
+          </section>
         </div>
-      </section>
+      </transition>
     </div>
   </div>
 </template>

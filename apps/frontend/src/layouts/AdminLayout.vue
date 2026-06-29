@@ -4,7 +4,7 @@
       <!-- Desktop Sidebar -->
       <aside class="hidden lg:flex w-[260px] bg-[var(--color-surface)] border-r border-[var(--color-border)] flex-col shadow-sm">
         <div class="px-6 py-8 border-b border-[var(--color-border)] flex flex-col items-center">
-          <img src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-12 w-auto mb-3" />
+          <img loading="lazy" src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-12 w-auto mb-3" />
           <p class="text-[11px] font-bold tracking-widest uppercase text-[var(--color-text-muted)] bg-[var(--color-app-bg)] px-3 py-1 rounded-full border border-[var(--color-border)]">Portal Admin</p>
         </div>
         
@@ -52,7 +52,7 @@
       <div class="flex-1 min-w-0 flex flex-col">
         <!-- Mobile Header -->
         <header class="lg:hidden bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 py-3 flex items-center justify-between sticky top-0 z-20">
-          <img src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-8 w-auto" />
+          <img loading="lazy" src="/MISIONERAS_LOGO.svg" alt="Misioneras" class="h-8 w-auto" />
           <router-link to="/admin" class="text-sm text-[var(--color-primary)] font-bold bg-[var(--color-primary-soft)] px-3 py-1.5 rounded-lg">Menú Admin</router-link>
         </header>
 

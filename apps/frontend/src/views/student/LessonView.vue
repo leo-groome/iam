@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import LearningPlayer from '@/components/ui/LearningPlayer.vue';
+import SkeletonCard from '@/components/ui/SkeletonCard.vue';
+import SkeletonText from '@/components/ui/SkeletonText.vue';
 import { coursesService } from '@/services/courses.service';
 
 const route = useRoute();
@@ -75,25 +77,42 @@ const nextUrl = computed(() => nextTema.value ? `/curso/${slug}/tema/${nextTema.
 </script>
 
 <template>
-  <div v-if="!loading && curso && tema">
-    <router-link :to="`/curso/${slug}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Volver al curso</router-link>
+  <div class="animate-fade-in">
+    <transition name="fade" mode="out-in">
+      <div v-if="loading" class="space-y-4">
+        <SkeletonText :lines="1" titleWidth="100px" class="mb-4" />
+        <SkeletonText :lines="1" titleWidth="150px" />
+        <SkeletonText :lines="1" titleWidth="250px" class="mb-6 h-8" />
+        <SkeletonCard :hasImage="true" :hasIcon="false" :hasSubtitle="false" :hasFooter="true" class="h-[500px]" />
+      </div>
 
-    <div v-if="isRepaso" class="card p-4 mb-4 bg-amber-50 border-amber-200">
-      <p class="text-amber-800 text-sm font-medium">📖 Repaso del tema</p>
-      <p class="text-amber-700 text-sm mt-1">Vuelve a ver el contenido completo para reintentar el cuestionario.</p>
-    </div>
+      <div v-else-if="curso && tema">
+        <router-link :to="`/curso/${slug}`" class="text-sm text-[var(--color-text-muted)] mb-3 inline-block">← Volver al curso</router-link>
 
-    <p class="text-sm text-[var(--color-primary)] font-medium">{{ tema.moduloTitle }}</p>
-    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mt-1 mb-2">{{ tema.title }}</h1>
-    <p class="text-[var(--color-text-muted)] mb-6">{{ tema.duration_seconds }}s · {{ tema.has_exam ? 'Con examen' : 'Sin examen' }}</p>
+        <div v-if="isRepaso" class="card p-4 mb-4 bg-amber-50 border-amber-200">
+          <p class="text-amber-800 text-sm font-medium">📖 Repaso del tema</p>
+          <p class="text-amber-700 text-sm mt-1">Vuelve a ver el contenido completo para reintentar el cuestionario.</p>
+        </div>
 
-    <LearningPlayer
-      :tema="tema"
-      :examUrl="examUrl"
-      :nextUrl="nextUrl"
-      :hasExam="tema.has_exam"
-    >
-      <div v-html="tema.content_body"></div>
-    </LearningPlayer>
+        <p class="text-sm text-[var(--color-primary)] font-medium">{{ tema.moduloTitle }}</p>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mt-1 mb-2">{{ tema.title }}</h1>
+        <p class="text-[var(--color-text-muted)] mb-6">{{ tema.duration_seconds }}s · {{ tema.has_exam ? 'Con examen' : 'Sin examen' }}</p>
+
+        <transition name="fade" mode="out-in">
+          <div v-if="loadingTema" class="card h-[500px] flex items-center justify-center">
+             <div class="animate-pulse w-full h-full bg-[var(--color-border)] opacity-30 rounded-2xl"></div>
+          </div>
+          <LearningPlayer
+            v-else
+            :tema="tema"
+            :examUrl="examUrl"
+            :nextUrl="nextUrl"
+            :hasExam="tema.has_exam"
+          >
+            <div v-html="tema.content_body"></div>
+          </LearningPlayer>
+        </transition>
+      </div>
+    </transition>
   </div>
 </template>

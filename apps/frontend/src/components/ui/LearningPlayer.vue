@@ -416,6 +416,7 @@ const buttonHref = computed(() => props.tema?.has_exam ? props.examUrl : (props.
     <!-- IMAGEN -->
     <div v-else-if="contentType === 'imagen'" class="card p-6 mb-6">
       <img
+
         v-if="mediaBlobUrl"
         :src="mediaBlobUrl"
         alt="Infografía del tema"
