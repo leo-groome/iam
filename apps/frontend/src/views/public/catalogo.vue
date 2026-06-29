@@ -1,29 +1,27 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, computed } from 'vue';
 import CourseCard from "@/components/ui/CourseCard.vue";
 import SkeletonCard from "@/components/ui/SkeletonCard.vue";
 import GreetingHeader from "@/components/ui/GreetingHeader.vue";
-import { coursesService } from "@/services/courses.service";
 import { useAuthStore } from '@/stores/auth';
+import { useCatalogStore } from '@/stores/catalog';
 
 const authStore = useAuthStore();
-const courses = ref([]);
-const loading = ref(true);
+const catalogStore = useCatalogStore();
 
-onMounted(async () => {
-  try {
-    const data = await coursesService.getAll();
-    courses.value = data.items || [];
-  } catch (err) {
-    console.error('Error loading courses:', err);
-  } finally {
-    loading.value = false;
-  }
+// Show cached data instantly; loading only true when there's no cache yet
+const courses = computed(() => catalogStore.courses);
+const loading = computed(() => !catalogStore.courses.length && catalogStore.loading);
+
+onMounted(() => {
+  // Always refetch in background to stay fresh.
+  // If cache exists, content shows immediately while this runs silently.
+  catalogStore.refetch();
 });
 
-const enProgreso = computed(() => courses.value.filter((c: any) => c.progress_pct > 0 && c.progress_pct < 100));
-const nuevos = computed(() => courses.value.filter((c: any) => !c.progress_pct || c.progress_pct === 0));
-const completados = computed(() => courses.value.filter((c: any) => c.progress_pct === 100));
+const enProgreso = computed(() => catalogStore.courses.filter((c: any) => c.progress_pct > 0 && c.progress_pct < 100));
+const nuevos = computed(() => catalogStore.courses.filter((c: any) => !c.progress_pct || c.progress_pct === 0));
+const completados = computed(() => catalogStore.courses.filter((c: any) => c.progress_pct === 100));
 
 const IMG = "/Images";
 

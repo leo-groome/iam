@@ -28,6 +28,7 @@ onMounted(async () => {
 });
 
 const joining = ref(false);
+const coverLoaded = ref(false);
 
 const primerTemaPendiente = computed(() => {
   if (!curso.value) return null;
@@ -78,8 +79,19 @@ async function handleCtaClick() {
         <router-link to="/catalogo" class="text-sm text-[var(--color-text-muted)] mb-4 inline-block">← Catálogo</router-link>
 
         <div class="card overflow-hidden mb-6">
-          <div class="aspect-[21/9] bg-[var(--color-primary-soft)] overflow-hidden">
-            <img :src="curso.cover_key || '/placeholder.jpg'" :alt="curso.title" class="w-full h-full object-cover" loading="lazy" />
+          <div class="aspect-[21/9] bg-[var(--color-primary-soft)] overflow-hidden relative">
+            <div
+              v-if="!coverLoaded"
+              class="absolute inset-0 bg-[var(--color-border)] animate-pulse"
+            ></div>
+            <img
+              :src="curso.cover_key || '/placeholder.jpg'"
+              :alt="curso.title"
+              class="w-full h-full object-cover transition-opacity duration-500"
+              :class="coverLoaded ? 'opacity-100' : 'opacity-0'"
+              loading="lazy"
+              @load="coverLoaded = true"
+            />
           </div>
           <div class="p-6 sm:p-8">
             <p class="text-sm text-[var(--color-primary)] font-medium mb-1">{{ curso.short_desc }}</p>
