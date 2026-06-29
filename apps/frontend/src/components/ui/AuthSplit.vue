@@ -204,6 +204,7 @@ const registerSchema = z.object({
 // ---------------------------------------------------------------------------
 const loginEmail = ref('')
 const loginPassword = ref('')
+const showLoginPassword = ref(false)
 const loginErrors = ref<Record<string, string>>({})
 
 async function handleLogin() {
@@ -261,6 +262,7 @@ async function handleGoogleLogin() {
 const regFullName = ref('')
 const regEmail = ref('')
 const regPassword = ref('')
+const showRegPassword = ref(false)
 const regBirthDate = ref('')
 const regTerms = ref(false)
 const verificationCode = ref('')
@@ -565,16 +567,27 @@ function classifyAuthError(err: unknown): string {
               </div>
               <div>
                 <label class="label" for="login-password">Contraseña</label>
-                <input
-                  id="login-password"
-                  v-model="loginPassword"
-                  type="password"
-                  class="input"
-                  :class="{ 'border-red-400': loginErrors.password }"
-                  placeholder="••••••••"
-                  autocomplete="current-password"
-                  required
-                />
+                <div class="relative">
+                  <input
+                    id="login-password"
+                    v-model="loginPassword"
+                    :type="showLoginPassword ? 'text' : 'password'"
+                    class="input w-full pr-10"
+                    :class="{ 'border-red-400': loginErrors.password }"
+                    placeholder="••••••••"
+                    autocomplete="current-password"
+                    required
+                  />
+                  <button 
+                    type="button"
+                    class="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+                    @click="showLoginPassword = !showLoginPassword"
+                    tabindex="-1"
+                  >
+                    <svg v-if="!showLoginPassword" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                  </button>
+                </div>
                 <p v-if="loginErrors.password" class="mt-1 text-xs text-red-600">{{ loginErrors.password }}</p>
               </div>
               <button type="submit" class="btn btn-primary btn-block" :disabled="isLoading">
@@ -659,17 +672,28 @@ function classifyAuthError(err: unknown): string {
 
               <div v-if="!isCompletingOAuthProfile">
                 <label class="label" for="reg-password">Contraseña</label>
-                <input
-                  id="reg-password"
-                  v-model="regPassword"
-                  type="password"
-                  class="input"
-                  :class="{ 'border-red-400': regErrors.password }"
-                  placeholder="Mínimo 8 caracteres"
-                  autocomplete="new-password"
-                  required
-                  minlength="8"
-                />
+                <div class="relative">
+                  <input
+                    id="reg-password"
+                    v-model="regPassword"
+                    :type="showRegPassword ? 'text' : 'password'"
+                    class="input w-full pr-10"
+                    :class="{ 'border-red-400': regErrors.password }"
+                    placeholder="Mínimo 8 caracteres"
+                    autocomplete="new-password"
+                    required
+                    minlength="8"
+                  />
+                  <button 
+                    type="button"
+                    class="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+                    @click="showRegPassword = !showRegPassword"
+                    tabindex="-1"
+                  >
+                    <svg v-if="!showRegPassword" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                  </button>
+                </div>
                 <p v-if="regErrors.password" class="mt-1 text-xs text-red-600">{{ regErrors.password }}</p>
               </div>
 
