@@ -36,11 +36,17 @@ const buttonLabel = computed(() => props.cta ?? (props.progress > 0 ? "Continuar
       <h3 class="font-bold text-xl leading-tight mb-2">{{ title }}</h3>
       <p class="text-[var(--color-text-muted)] text-sm leading-relaxed mb-4 line-clamp-3">{{ description }}</p>
       <div class="flex flex-wrap gap-2 mb-4">
-        <span class="chip">{{ duration }}</span>
+        <span v-if="duration" class="chip">{{ duration }}</span>
         <span class="chip">Examen corto</span>
       </div>
-      <div v-if="progress < 100" class="h-1.5 bg-[var(--color-primary-soft)] rounded-full overflow-hidden mb-3">
-        <div class="h-full bg-[var(--color-primary)] transition-all duration-500" :style="`width: ${progress}%`"></div>
+      <div v-if="progress < 100" class="mb-3">
+        <div class="flex justify-between text-xs mb-1.5">
+          <span class="font-medium text-[var(--color-text-muted)]">Progreso</span>
+          <span class="font-bold text-[var(--color-primary)]">{{ progress }}%</span>
+        </div>
+        <div class="h-1.5 bg-[var(--color-primary-soft)] rounded-full overflow-hidden">
+          <div class="h-full bg-[var(--color-primary)] transition-all duration-500" :style="`width: ${progress}%`"></div>
+        </div>
       </div>
       <span class="btn btn-primary mt-auto md:self-start group-hover:bg-[var(--color-primary-hover)]">{{ buttonLabel }}</span>
     </div>
