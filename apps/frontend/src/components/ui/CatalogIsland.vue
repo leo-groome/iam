@@ -77,7 +77,10 @@ const completados = computed(() =>
         <CourseCard
           v-for="course in enProgreso"
           :key="course.slug"
-          :course="course"
+          :slug="course.slug"
+          :title="course.title"
+          :description="course.short_desc || course.description || ''"
+          :cover="course.cover_key || course.cover_url || '/placeholder.jpg'"
           :progress="progressStore.coursePercentage(course.slug)"
         />
       </div>
@@ -90,7 +93,10 @@ const completados = computed(() =>
         <CourseCard
           v-for="course in nuevos"
           :key="course.slug"
-          :course="course"
+          :slug="course.slug"
+          :title="course.title"
+          :description="course.short_desc || course.description || ''"
+          :cover="course.cover_key || course.cover_url || '/placeholder.jpg'"
           :progress="0"
         />
       </div>
@@ -106,7 +112,12 @@ const completados = computed(() =>
         <CourseCard
           v-for="course in completados"
           :key="course.slug"
-          :course="course"
+          :slug="course.slug"
+          :title="course.title"
+          :description="course.short_desc || course.description || ''"
+          :cover="course.cover_key || course.cover_url || '/placeholder.jpg'"
+          cta="Ver certificado"
+          :href="`/curso/${course.slug}/certificado`"
           :progress="100"
         />
       </div>

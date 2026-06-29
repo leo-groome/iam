@@ -25,11 +25,10 @@ const buttonLabel = computed(() => props.cta ?? (props.progress > 0 ? "Continuar
   <router-link :to="url" class="card overflow-hidden block hover:border-[var(--color-primary)] transition group flex flex-col md:flex-row rounded-3xl">
     <div class="relative shrink-0 overflow-hidden bg-white border-r border-[var(--color-border)] aspect-[16/9] md:aspect-auto md:w-[42%] md:max-w-xs grid place-items-center p-6">
       <img
-
-        src="/MISIONERAS_LOGO.svg"
+        :src="cover && cover !== '/placeholder.jpg' ? cover : '/MISIONERAS_LOGO.svg'"
         :alt="title"
         loading="lazy"
-        class="max-w-[75%] max-h-[75%] w-auto h-auto object-contain group-hover:scale-105 transition duration-500"
+        :class="[cover && cover !== '/placeholder.jpg' ? 'w-full h-full object-cover' : 'max-w-[75%] max-h-[75%] w-auto h-auto object-contain', 'group-hover:scale-105 transition duration-500']"
       />
       <span v-if="progress === 100" class="absolute top-3 right-3 chip bg-emerald-500/95 text-white">✓ Completado</span>
     </div>
