@@ -43,6 +43,8 @@ const mediaError = ref('');
 const loadingToken = ref(false);
 const contentDone = ref(false);
 const markingDone = ref(false);
+const videoBuffering = ref(false);
+const markDoneSuccess = ref(false);
 
 const contentType = computed(() => props.tema?.content_type || 'video');
 const duration = computed(() => props.tema?.duration_seconds || 180);
@@ -96,6 +98,8 @@ watch(
     progress.value = 0;
     contentDone.value = false;
     markingDone.value = false;
+    videoBuffering.value = false;
+    markDoneSuccess.value = false;
 
     if (heartbeatInterval) clearInterval(heartbeatInterval);
     if (timer) clearInterval(timer);
@@ -222,6 +226,8 @@ async function markContentDone() {
   try {
     await apiPost(`/api/v1/topics/${props.tema.id}/mark-content-done` as any);
     contentDone.value = true;
+    markDoneSuccess.value = true;
+    setTimeout(() => { markDoneSuccess.value = false; }, 2000);
   } catch (err) {
     console.error('Error marking content done:', err);
   } finally {
@@ -245,6 +251,15 @@ function toggleVideoPlayback() {
 
 function onVideoPlay() {
   playing.value = true;
+  videoBuffering.value = false;
+}
+
+function onVideoWaiting() {
+  videoBuffering.value = true;
+}
+
+function onVideoCanPlay() {
+  videoBuffering.value = false;
 }
 
 function onVideoPause() {
@@ -346,10 +361,24 @@ const buttonHref = computed(() => props.tema?.has_exam ? props.examUrl : (props.
           @pause="onVideoPause"
           @timeupdate="onVideoTimeUpdate"
           @ended="onVideoEnded"
+          @waiting="onVideoWaiting"
+          @stalled="onVideoWaiting"
+          @canplay="onVideoCanPlay"
+          @canplaythrough="onVideoCanPlay"
           preload="metadata"
           playsinline
           controlsList="nodownload"
         />
+
+        <!-- Buffering spinner overlay -->
+        <Transition name="fade-fast">
+          <div
+            v-if="videoBuffering && !loadingToken"
+            class="absolute inset-0 grid place-items-center bg-black/50 z-10 pointer-events-none"
+          >
+            <div class="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin"></div>
+          </div>
+        </Transition>
 
         <!-- Big center play button when paused -->
         <button
@@ -448,15 +477,69 @@ const buttonHref = computed(() => props.tema?.has_exam ? props.examUrl : (props.
     </article>
 
     <!-- Sticky CTA bar -->
-    <div class="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] p-4 z-20">
+    <div class="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] px-4 pt-3 pb-4 z-20">
       <div class="max-w-3xl mx-auto">
-        <router-link v-if="canContinue" :to="buttonHref" :class="['btn btn-block btn-primary']">
-          {{ buttonLabel }}
-        </router-link>
-        <span v-else :class="['btn btn-block btn-primary opacity-50 pointer-events-none']">
-          {{ buttonLabel }}
-        </span>
+        <!-- Video progress bar toward unlock -->
+        <div v-if="contentType === 'video' && !canContinue && !markingDone" class="mb-3">
+          <div class="flex justify-between text-xs text-[var(--color-text-muted)] mb-1.5">
+            <span>Progreso</span>
+            <span>{{ videoProgress }}%<span class="opacity-60"> / 95% para continuar</span></span>
+          </div>
+          <div class="h-1 bg-[var(--color-border)] rounded-full overflow-hidden">
+            <div
+              class="h-full bg-[var(--color-primary)] transition-all duration-500 rounded-full"
+              :style="{ width: Math.min(100, (videoProgress / 95) * 100) + '%' }"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Registering progress indicator -->
+        <Transition name="fade-fast">
+          <div v-if="markingDone" class="flex items-center justify-center gap-2 text-sm text-[var(--color-text-muted)] mb-2">
+            <div class="w-4 h-4 rounded-full border-2 border-[var(--color-primary)]/30 border-t-[var(--color-primary)] animate-spin"></div>
+            <span>Registrando progreso...</span>
+          </div>
+        </Transition>
+
+        <!-- CTA button with unlock transition -->
+        <Transition name="cta-unlock" mode="out-in">
+          <router-link v-if="canContinue" key="active" :to="buttonHref" class="btn btn-block btn-primary flex items-center justify-center gap-2">
+            <Transition name="fade-fast" mode="out-in">
+              <svg v-if="markDoneSuccess" key="check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+            </Transition>
+            {{ buttonLabel }}
+          </router-link>
+          <span v-else key="disabled" class="btn btn-block btn-primary opacity-40 pointer-events-none cursor-not-allowed">
+            {{ buttonLabel }}
+          </span>
+        </Transition>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.fade-fast-enter-active,
+.fade-fast-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-fast-enter-from,
+.fade-fast-leave-to {
+  opacity: 0;
+}
+
+.cta-unlock-enter-active {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.cta-unlock-leave-active {
+  transition: all 0.15s ease;
+}
+.cta-unlock-enter-from {
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+}
+.cta-unlock-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+</style>
