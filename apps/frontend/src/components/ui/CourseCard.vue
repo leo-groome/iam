@@ -39,8 +39,8 @@ const buttonLabel = computed(() => props.cta ?? (props.progress > 0 ? "Continuar
         <span class="chip">{{ duration }}</span>
         <span class="chip">Examen corto</span>
       </div>
-      <div v-if="progress > 0 && progress < 100" class="h-1.5 bg-[var(--color-primary-soft)] rounded-full overflow-hidden mb-3">
-        <div class="h-full bg-[var(--color-primary)]" :style="`width: ${progress}%`"></div>
+      <div v-if="progress < 100" class="h-1.5 bg-[var(--color-primary-soft)] rounded-full overflow-hidden mb-3">
+        <div class="h-full bg-[var(--color-primary)] transition-all duration-500" :style="`width: ${progress}%`"></div>
       </div>
       <span class="btn btn-primary mt-auto md:self-start group-hover:bg-[var(--color-primary-hover)]">{{ buttonLabel }}</span>
     </div>
