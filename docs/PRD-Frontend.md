@@ -1,9 +1,9 @@
 # PRD Frontend — Plataforma de Formación Paso a Paso
 
-**Versión:** 2.1
-**Fecha:** 2026-06-11
-**Stack:** Astro + Islands (Vue 3 para zonas interactivas) + Tailwind CSS + TypeScript
-**Alcance:** Definición completa de pantallas, reglas de negocio y límites para entrega del frontend en una sesión.
+**Versión:** 2.3
+**Fecha:** 2026-06-29
+**Stack:** Vue 3 SPA + Vue Router + Pinia + Tailwind CSS + TypeScript (Vite)
+**Alcance:** Definición completa de pantallas, reglas de negocio, patrones UX y límites del frontend.
 
 ---
 
@@ -21,30 +21,26 @@ Plataforma de formación digital "guiada de la mano". El público objetivo son p
 
 | Capa | Tecnología | Justificación |
 |---|---|---|
-| Framework | **Astro 4+** | Render estático/SSR híbrido, ideal para landing y catálogo. Islands para interactividad puntual. |
-| UI interactiva | **Vue 3** (islands, Composition API + `<script setup>`) | Player de video, examen, editores admin. |
-| Estilos | **Tailwind CSS** | Sistema de diseño rápido, consistente. |
-| Componentes | **shadcn-vue** (Reka UI / Radix Vue) | Base accesible para forms, modals, tablas. |
-| Tipado | **TypeScript estricto** | `strict: true`. |
-| Estado cliente | **Pinia** (panel admin) + **Nanostores** (estado compartido entre islands) | Pinia para flujos complejos admin, Nanostores cuando hay que sincronizar entre islas Astro. |
-| Forms | **VeeValidate + Zod** (`@vee-validate/zod`) | Validación tipada en cliente. |
-| Iconos | **Lucide Vue Next** | Minimalistas, coherentes con estética corporativa. |
-| Player video | **Vue-Plyr** o `<video>` nativo custom | Bloqueo de seek configurable. |
-| Visor PDF | **vue-pdf-embed** o `<iframe>` con PDF.js | Tracking de páginas leídas. |
-| Routing | Rutas Astro file-based | Estudiante `/`, admin `/admin/*`. |
-| Auth (cliente) | **@auth/core** o cliente del backend | Google + email/password. |
-| i18n | No aplica en v1 | Español únicamente. |
-| Build | Vite (incluido en Astro) | — |
-| Deploy | Vercel / Netlify (SSR) | Define el backend; el front es agnóstico. |
+| Framework | **Vue 3 SPA** (Composition API + `<script setup>`) | SPA completa; toda la UI es interactiva. |
+| Estilos | **Tailwind CSS** + variables CSS custom | Sistema de diseño rápido, consistente con theming via `--color-*`. |
+| Tipado | **TypeScript** | Tipos generados desde OpenAPI en `src/lib/types.gen.ts`. |
+| Estado cliente | **Pinia** | Stores: `auth`, `catalog`, `courses`, `progress`. |
+| Routing | **Vue Router** (hash-less history) | Lazy imports en todas las rutas → code splitting automático. |
+| Forms | **Zod** (validación manual en `<script setup>`) | Validación tipada sin librería de forms. |
+| Auth | **@stackframe/js** (Neon Auth) | JWT validado en backend; `useAuthStore` expone `user` reactivo. |
+| HTTP | `apiFetch` / `apiGet` / `apiPost` en `src/lib/api.ts` | Añade `Authorization: Bearer` automáticamente. |
+| Player video | `<video>` nativo + HTTP Range Requests (Worker R2) | Streaming nativo, sin seek hacia adelante. |
+| Visor PDF | `<iframe>` con Blob URL (fetch privado) | Archivos privados sin exponer URL firmada en DOM. |
+| Storage media | Cloudflare R2 + Worker (play-token JWT) | Upload directo desde browser; streaming autenticado. |
+| Build | **Vite** + `manualChunks` (vendor-vue / vendor-ffmpeg / vendor) | Chunks separados para caching óptimo. |
+| Deploy | **Vercel** (CI/CD vía GitHub push a `main`) | — |
 
 **Convenciones de proyecto:**
-- Carpetas: `src/pages/`, `src/components/`, `src/layouts/`, `src/stores/`, `src/lib/`, `src/styles/`.
-- Componentes Astro `.astro` para layouts y secciones estáticas.
-- Componentes Vue `.vue` (Composition API + `<script setup lang="ts">`) solo dentro de zonas interactivas (`client:load`, `client:idle`, `client:visible` según corresponda).
-- Una ruta = una página Astro. Sin SPA global.
-- Integración: `@astrojs/vue` en `astro.config.mjs`.
-- Convención de nombres Vue: PascalCase para componentes (`VideoPlayer.vue`, `ExamRunner.vue`).
-- Composables reutilizables en `src/composables/` (ej. `useVideoProgress`, `useExamSession`).
+- Carpetas: `src/views/`, `src/components/ui/`, `src/layouts/`, `src/stores/`, `src/services/`, `src/lib/`.
+- Vistas separadas por audiencia: `views/admin/`, `views/student/`, `views/public/`.
+- Servicios por audiencia: `courses.service.ts` (estudiante) y `admin.service.ts` (admin).
+- IDs en rutas admin: **UUID**. Rutas de estudiante: **slug** / `topicId` (UUID).
+- Convención de nombres: PascalCase para componentes, camelCase para composables/servicios.
 
 ---
 
@@ -60,7 +56,8 @@ Plataforma de formación digital "guiada de la mano". El público objetivo son p
 | Fecha límite | Sin límite — ritmo libre |
 | Certificado | PDF descargable al completar 100% del curso |
 | Autenticación | Google + email/password |
-| Onboarding | Auto-registro abierto; cursos filtrados por edad del estudiante |
+| Onboarding | Deck de tarjetas antes del registro; datos pre-rellenan nombre en signup. |
+| Restricción por edad | **Eliminada.** `age_min`/`age_max` existen en DB pero no se filtran. Todos los cursos publicados son visibles para todos los usuarios autenticados. |
 | Estética | Corporativo limpio (azul/blanco, profesional, minimalista) |
 | Dispositivos | Responsive completo (móvil y desktop por igual) |
 | Idioma | Español |
@@ -81,11 +78,12 @@ Plataforma de formación digital "guiada de la mano". El público objetivo son p
 - **R-AUTH-08:** Logout limpia sesión y redirige a Landing.
 
 ### 4.2 Reglas de catálogo y elegibilidad
-- **R-CAT-01:** El catálogo muestra **solo** cursos donde la edad del estudiante esté entre `edad_min` y `edad_max` del curso (inclusive).
+- **R-CAT-01:** El catálogo muestra **todos** los cursos publicados sin filtro de edad.
 - **R-CAT-02:** Cursos en estado `borrador` no aparecen jamás al estudiante.
 - **R-CAT-03:** Cursos `archivados` no aparecen, pero estudiantes ya inscritos pueden completarlos.
-- **R-CAT-04:** El orden del catálogo respeta el campo `orden` definido por el admin. Empate → fecha de creación descendente.
-- **R-CAT-05:** Si no hay cursos elegibles → estado vacío con mensaje "No hay cursos disponibles para tu perfil en este momento".
+- **R-CAT-04:** El catálogo se divide en secciones: "Continuar donde lo dejé" (progress > 0 < 100), "Cursos disponibles" (sin iniciar), "Ya completados" (100%).
+- **R-CAT-05:** Si no hay cursos → estado vacío con mensaje apropiado.
+- **R-CAT-06:** El catálogo usa `useCatalogStore` — segunda visita muestra cache inmediatamente mientras refetch corre en background.
 
 ### 4.3 Reglas de progreso
 - **R-PROG-01:** Un curso solo inicia cuando el estudiante presiona "Empezar curso". Sin auto-inicio.
@@ -192,7 +190,9 @@ Plataforma de formación digital "guiada de la mano". El público objetivo son p
 | INP | < 200 ms |
 | Bundle JS por ruta de estudiante | < 150 KB gzip |
 | Bundle JS panel admin | < 400 KB gzip |
-| Imágenes | servidas en WebP, lazy loading, `srcset` responsive |
+| Imágenes | `loading="lazy"` en todas; covers con fade-in desde placeholder |
+| Chunks Vite | vendor-vue / vendor-ffmpeg / vendor separados para caching |
+| Navegación entre rutas | Progress bar de página visible en ≤ 50 ms post-click |
 
 ### 5.5 Accesibilidad (WCAG 2.1 AA)
 
@@ -379,19 +379,63 @@ Plataforma de formación digital "guiada de la mano". El público objetivo son p
 
 ## 10. Componentes UI reutilizables
 
-- **Botón primario / secundario / destructivo / icon-only.**
-- **Tarjeta de curso.**
-- **Barra de progreso lineal y circular.**
-- **Player de video bloqueado.**
-- **Visor PDF con tracker.**
-- **Modal de confirmación.**
-- **Banner de estado** (info, éxito, advertencia, error).
-- **Tabla admin** (paginación, filtros, búsqueda, ordenamiento).
-- **Form fields** con validación visual.
-- **Sidebar de progreso (estudiante).**
-- **Layout admin** con nav lateral.
-- **Layout estudiante** con header mínimo.
-- **Empty states + Error states + Skeleton loaders.**
+### Player y contenido
+- **`LearningPlayer.vue`** — video (HTTP Range, buffering overlay, progress bar CTA), PDF (iframe Blob), imagen, texto. Emite `content-done` al completar.
+- **`ExamRunner.vue`** — pregunta por pregunta, aleatorizado.
+
+### Carga y feedback visual
+- **`SkeletonCard.vue`** — props: `hasImage`, `hasIcon`, `hasSubtitle`, `hasFooter`. Animate-pulse.
+- **`SkeletonStats.vue`** — KPI placeholder para dashboard admin.
+- **`SkeletonTable.vue`** — props: `rows`, `columns`, `hasAvatar`. Para tablas admin.
+- **`SkeletonText.vue`** — props: `lines`, `hasTitle`, `titleWidth`. Para bloques de texto.
+- **`PageProgressBar.vue`** — barra de 2px en top del viewport, activa en cada navegación de ruta via `router.beforeEach/afterEach`. Sin dependencias externas.
+- **`ProgressBar.vue`** — barra de progreso lineal con porcentaje. Lee de `useProgressStore` en CourseDashboard.
+
+### Navegación y layout
+- **`CourseCard.vue`** — tarjeta del catálogo con cover, título, descripción y progreso.
+- **`AuthSplit.vue`** — layout split para login/signup con validación Zod.
+- **`PageHeader.vue`**, **`GreetingHeader.vue`**, **`Banner.vue`**, **`StatCard.vue`**, **`EmptyState.vue`**.
+
+### Layouts
+- **`PublicLayout.vue`** — landing, login, signup, onboarding.
+- **`StudentLayout.vue`** — catálogo, curso, lección. Navbar con progreso.
+- **`AdminLayout.vue`** — sidebar, header, contenido.
+
+### Stores
+- **`auth`** — user, isAuthenticated, isAdmin, init/login/logout.
+- **`catalog`** — courses[], loading, refetch(), getBySlug(). Cache entre navegaciones.
+- **`progress`** — progressByCourse{}, hydrate(slug, data), updateProgress(slug, pct). Actualización optimista post mark-content-done.
+- **`courses`** — reservado (no usado activamente aún).
+
+---
+
+## 10.5 Patrones UX de carga (Optimistic UI)
+
+### Regla general
+Toda escritura al servidor sigue el patrón: **actualizar UI inmediatamente → llamar API → rollback si falla**.
+
+### Patrones implementados
+
+| Situación | Patrón |
+|---|---|
+| Enrollment en curso | Navegar inmediatamente; `enroll()` en background. Si falla, LessonView reintenta en `onMounted`. |
+| `mark-content-done` | Spinner "Registrando progreso..." mientras vuela la request. Al éxito: CTA se desbloquea con spring transition + checkmark 2s. |
+| Progreso del curso | `progressStore.updateProgress(slug, pct)` calculado localmente al `content-done`. CourseDashboard lo lee reactivo sin refetch. |
+| Buffering de video | Spinner overlay `bg-black/50` activo en `waiting`/`stalled`, oculto en `canplay`/`playing`. |
+| Progreso hacia desbloqueo | Barra fina sobre el CTA que crece con `videoProgress` hacia el umbral de 95%. |
+| Catálogo (segunda visita) | Muestra cache inmediatamente, refetch silencioso en background via `catalogStore.refetch()`. |
+| Cover de curso | Placeholder `animate-pulse` hasta `@load`; imagen hace fade-in en 500ms. |
+| Navegación entre rutas | `PageProgressBar` arranca en `beforeEach` (exponential approach a 88%), completa en `afterEach`. |
+| Título de tema | Skeleton sincronizado con el player durante `loadingTema` — revelan juntos. |
+
+### Skeleton pattern uniforme
+Todas las vistas con datos remotos usan:
+```html
+<transition name="fade" mode="out-in">
+  <SkeletonXxx v-if="loading" />
+  <div v-else class="animate-fade-in"><!-- contenido real --></div>
+</transition>
+```
 
 ---
 
