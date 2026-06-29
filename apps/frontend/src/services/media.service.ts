@@ -45,6 +45,9 @@ export async function optimizeVideoForStreaming(
 
     if (!ffmpeg.loaded) {
       // Load ffmpeg core from CDN (cached by browser after first load)
+      // Single-thread core (no SharedArrayBuffer needed).
+      // COEP headers were removed from vite.config.ts — R2 presigned PUT uploads
+      // require cross-origin fetch which COEP was blocking.
       await ffmpeg.load({
         coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js',
         wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm',

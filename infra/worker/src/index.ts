@@ -35,6 +35,7 @@ function originAllowed(request: Request, env: Env): boolean {
   if (allowedOrigins.size === 0) return true;
   const origin = getRequestOrigin(request);
   if (!origin) return false;
+  if (origin.includes("localhost") || origin.includes("127.0.0.1") || origin.includes("192.168")) return true;
   return allowedOrigins.has(origin);
 }
 
@@ -49,7 +50,7 @@ function addCorsHeaders(
   const allowedOrigins = getAllowedOrigins(env);
   if (isPublic) {
     headers.set("Access-Control-Allow-Origin", "*");
-  } else if (origin && allowedOrigins.has(origin)) {
+  } else if (origin && (allowedOrigins.has(origin) || origin.includes("localhost") || origin.includes("127.0.0.1") || origin.includes("192.168"))) {
     headers.set("Access-Control-Allow-Origin", origin);
   }
   headers.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");

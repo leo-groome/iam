@@ -10,5 +10,10 @@ preview_bucket_name = "iam"
 [vars]
 ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:4321,http://localhost:3000"
 
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+
 # Deploy secrets via CLI — never commit real values:
 #   wrangler secret put MEDIA_JWT_SECRET

@@ -22,11 +22,9 @@ export default defineConfig({
   },
   server: {
     port: 4321,
-    headers: {
-      // Required for SharedArrayBuffer (used by ffmpeg.wasm for multi-threading)
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-    },
+    // NOTE: COOP/COEP headers were removed because they block cross-origin fetch
+    // (R2 presigned PUT URLs don't return Cross-Origin-Resource-Policy).
+    // ffmpeg.wasm uses single-thread core (no SharedArrayBuffer required).
   },
   build: {
     target: 'esnext',
