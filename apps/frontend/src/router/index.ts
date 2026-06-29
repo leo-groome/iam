@@ -110,13 +110,13 @@ const routes: Array<RouteRecordRaw> = [
     path: '/admin',
     name: 'AdminDashboard',
     component: () => import('@/views/admin/AdminDashboard.vue'),
-    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true }
+    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true, keepAlive: true }
   },
   {
     path: '/admin/cursos',
     name: 'AdminCursos',
     component: () => import('@/views/admin/AdminCursos.vue'),
-    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true }
+    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true, keepAlive: true }
   },
   {
     path: '/admin/cursos/:id',
@@ -128,7 +128,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/admin/estudiantes',
     name: 'AdminEstudiantes',
     component: () => import('@/views/admin/AdminEstudiantes.vue'),
-    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true }
+    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true, keepAlive: true }
   },
   {
     path: '/admin/estudiantes/:id',
@@ -140,7 +140,7 @@ const routes: Array<RouteRecordRaw> = [
     path: '/admin/reportes',
     name: 'AdminReportes',
     component: () => import('@/views/admin/AdminReportes.vue'),
-    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true }
+    meta: { layout: 'AdminLayout', requiresAuth: true, requiresAdmin: true, keepAlive: true }
   },
   {
     path: '/admin/configuracion',
@@ -271,5 +271,6 @@ declare module 'vue-router' {
     wide?: boolean
     progress?: number
     courseName?: string
+    keepAlive?: boolean
   }
 }

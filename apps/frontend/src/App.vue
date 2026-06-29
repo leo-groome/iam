@@ -1,8 +1,20 @@
 <template>
   <PageProgressBar />
-  <!-- Using a dynamic component depending on the route meta -->
   <component :is="layout">
-    <router-view />
+    <router-view v-slot="{ Component, route }">
+      <keep-alive>
+        <component 
+          v-if="route.meta.keepAlive" 
+          :is="Component" 
+          :key="route.name" 
+        />
+      </keep-alive>
+      <component 
+        v-if="!route.meta.keepAlive" 
+        :is="Component" 
+        :key="route.fullPath" 
+      />
+    </router-view>
   </component>
 </template>
 
