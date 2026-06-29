@@ -62,7 +62,7 @@ export async function optimizeVideoForStreaming(
     await ffmpeg.exec(['-i', inputName, '-c', 'copy', '-movflags', 'faststart', outputName]);
 
     const data = await ffmpeg.readFile(outputName);
-    const optimizedBlob = new Blob([data], { type: 'video/mp4' });
+    const optimizedBlob = new Blob([data as any], { type: 'video/mp4' });
 
     // Cleanup WASM virtual filesystem
     await ffmpeg.deleteFile(inputName);
