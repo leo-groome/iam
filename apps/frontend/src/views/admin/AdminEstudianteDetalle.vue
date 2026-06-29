@@ -19,8 +19,13 @@ onMounted(async () => {
     <button @click="router.back()" class="mb-4 text-blue-600 hover:underline">← Volver</button>
     <div v-if="loading" class="text-center py-8 text-gray-500">Cargando...</div>
     <template v-else-if="student">
-      <h1 class="text-2xl font-bold mb-2">{{ student.full_name }}</h1>
-      <p class="text-gray-500 mb-6">{{ student.email }}</p>
+      <div class="flex items-center gap-4 mb-6">
+        <img :src="`https://api.dicebear.com/9.x/bottts/svg?seed=${encodeURIComponent(student.full_name || student.email || 'avatar')}`" alt="Avatar" class="w-16 h-16 rounded-full bg-blue-100 shrink-0" />
+        <div>
+          <h1 class="text-2xl font-bold">{{ student.full_name }}</h1>
+          <p class="text-gray-500">{{ student.email }}</p>
+        </div>
+      </div>
 
       <h2 class="text-lg font-semibold mb-3">Cursos Inscritos</h2>
       <table class="w-full border-collapse mb-8">
