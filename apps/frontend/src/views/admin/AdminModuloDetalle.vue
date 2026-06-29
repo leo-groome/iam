@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
 
 const route = useRoute();
+const router = useRouter();
 const courseId = route.params.id as string;
 const modId = route.params.modId as string;
 
@@ -77,6 +78,16 @@ const handleSave = async () => {
   }
 };
 
+const handleDeleteModule = async () => {
+  if (!confirm('¿Eliminar este módulo y todas sus clases permanentemente? Esta acción no se puede deshacer.')) return;
+  try {
+    await adminService.deleteModule(modId);
+    router.push(`/admin/cursos/${courseId}`);
+  } catch (err) {
+    console.error('Error deleting module:', err);
+  }
+};
+
 const handleDeleteModuleQuestion = async (qId: string) => {
   try {
     await adminService.archiveQuestion(qId);
@@ -115,7 +126,10 @@ const getContentTypeBadgeColor = (contentType: string): string => {
   </div>
   <header class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">{{ isNew ? "Nuevo módulo" : `Editar: ${mod?.title}` }}</h1>
-    <button @click="handleSave" :disabled="saving" class="btn btn-primary">{{ saving ? "Guardando..." : "Guardar" }}</button>
+    <div class="flex gap-2">
+      <button v-if="!isNew" @click="handleDeleteModule" class="btn border border-red-200 text-red-600 hover:bg-red-50">Eliminar módulo</button>
+      <button @click="handleSave" :disabled="saving" class="btn btn-primary">{{ saving ? "Guardando..." : "Guardar" }}</button>
+    </div>
   </header>
 
   <div class="card p-6 mb-6 space-y-4">

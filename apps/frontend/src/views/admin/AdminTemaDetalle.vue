@@ -215,6 +215,17 @@ const handleSave = async () => {
     saving.value = false;
   }
 };
+
+const handleDeleteTopic = async () => {
+  if (!confirm('¿Eliminar esta clase permanentemente? Esta acción no se puede deshacer.')) return;
+  try {
+    await adminService.deleteTopic(temaId);
+    router.push(`/admin/cursos/${courseId}/modulos/${modId}`);
+  } catch (err) {
+    errorMessage.value = 'No se pudo eliminar la clase.';
+    console.error('Error deleting topic:', err);
+  }
+};
 </script>
 
 <template>
@@ -231,7 +242,10 @@ const handleSave = async () => {
 
     <header class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold">{{ isNew ? "Nuevo tema" : `Editar: ${tema?.title || title}` }}</h1>
-      <button @click="handleSave" :disabled="saving || loading" class="btn btn-primary">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
+      <div class="flex gap-2">
+        <button v-if="!isNew" @click="handleDeleteTopic" class="btn border border-red-200 text-red-600 hover:bg-red-50">Eliminar clase</button>
+        <button @click="handleSave" :disabled="saving || loading" class="btn btn-primary">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
+      </div>
     </header>
 
     <div v-if="errorMessage" class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{{ errorMessage }}</div>

@@ -111,6 +111,40 @@ const archiveCourse = async () => {
   }
 };
 
+const deleteCourseAction = async () => {
+  if (isNew) return;
+  if (!confirm('¿Eliminar este curso permanentemente? Esta acción no se puede deshacer.')) return;
+  saving.value = true;
+  try {
+    await adminService.deleteCourse(id);
+    router.push('/admin/cursos');
+  } catch (err) {
+    console.error('Error deleting course:', err);
+  } finally {
+    saving.value = false;
+  }
+};
+
+const deleteModuleAction = async (modId: string) => {
+  if (!confirm('¿Eliminar este módulo y todas sus clases? Esta acción no se puede deshacer.')) return;
+  try {
+    await adminService.deleteModule(modId);
+    await loadCourse();
+  } catch (err) {
+    console.error('Error deleting module:', err);
+  }
+};
+
+const deleteTopicAction = async (topicId: string) => {
+  if (!confirm('¿Eliminar esta clase? Esta acción no se puede deshacer.')) return;
+  try {
+    await adminService.deleteTopic(topicId);
+    await loadCourse();
+  } catch (err) {
+    console.error('Error deleting topic:', err);
+  }
+};
+
 const handleCoverUpload = async (event: Event) => {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
@@ -232,7 +266,7 @@ const openTopicDrawer = (modId: string, topicId: string | 'nuevo') => {
       duration_minutes: topic?.duration_seconds ? Math.round(topic.duration_seconds / 60) : null,
       has_exam: topic?.has_exam ?? false,
       exam_min_score: topic?.exam_min_score ?? 70,
-      content_url: topic?.content_url ?? ''
+      content_url: topic?.media_key ?? ''
     };
   }
   drawerOpen.value = true;
@@ -295,7 +329,8 @@ const saveDrawer = async () => {
   <header class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">{{ isNew ? "Crear nuevo curso" : `Configuración de Curso` }}</h1>
     <div class="flex gap-2">
-      <button v-if="!isNew" class="btn border border-red-200 text-red-600 hover:bg-red-50" type="button" @click="archiveCourse" :disabled="saving">Eliminar / Archivar</button>
+      <button v-if="!isNew" class="btn border border-gray-300 text-gray-600 hover:bg-gray-50" type="button" @click="archiveCourse" :disabled="saving">Archivar</button>
+      <button v-if="!isNew" class="btn border border-red-200 text-red-600 hover:bg-red-50" type="button" @click="deleteCourseAction" :disabled="saving">Eliminar</button>
       <button class="btn btn-primary" type="button" @click="publishCourse" :disabled="isNew || saving">{{ saving ? "Publicando..." : "Publicar" }}</button>
     </div>
   </header>
@@ -341,8 +376,9 @@ const saveDrawer = async () => {
               </div>
            </div>
            <div class="flex gap-2">
-             <button type="button" @click.stop="openModuleDrawer(m.id)" class="text-sm text-[var(--color-primary)] hover:underline font-medium px-2 py-1">Editar módulo</button>
-             <router-link :to="`/admin/cursos/${id}/modulos/${m.id}`" class="text-sm text-[var(--color-primary)] hover:underline font-medium px-2 py-1" @click.stop>Examen Diagnóstico</router-link>
+             <button type="button" @click.stop="openModuleDrawer(m.id)" class="text-sm text-[var(--color-primary)] hover:underline font-medium px-2 py-1">Editar</button>
+             <router-link :to="`/admin/cursos/${id}/modulos/${m.id}`" class="text-sm text-[var(--color-primary)] hover:underline font-medium px-2 py-1" @click.stop>Examen</router-link>
+             <button type="button" @click.stop="deleteModuleAction(m.id)" class="text-sm text-red-500 hover:underline font-medium px-2 py-1">Eliminar</button>
            </div>
         </div>
 
@@ -356,8 +392,9 @@ const saveDrawer = async () => {
                 </div>
                 <div class="flex items-center gap-3">
                    <span v-if="t.has_exam" class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">Examen</span>
-                   <button type="button" @click.stop="openTopicDrawer(m.id, t.id)" class="text-xs text-[var(--color-primary)] hover:underline font-medium">Editar clase</button>
+                   <button type="button" @click.stop="openTopicDrawer(m.id, t.id)" class="text-xs text-[var(--color-primary)] hover:underline font-medium">Editar</button>
                    <router-link v-if="t.has_exam" :to="`/admin/cursos/${id}/modulos/${m.id}/temas/${t.id}/preguntas`" class="text-xs text-[var(--color-primary)] hover:underline font-medium ml-2" @click.stop>Preguntas</router-link>
+                   <button type="button" @click.stop="deleteTopicAction(t.id)" class="text-xs text-red-500 hover:underline font-medium">Eliminar</button>
                 </div>
              </div>
            </div>

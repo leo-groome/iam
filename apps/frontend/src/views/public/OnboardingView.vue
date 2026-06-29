@@ -95,14 +95,24 @@
 
               <!-- TYPE: TEXT -->
               <div v-else-if="step.type === 'text'" class="mt-auto space-y-6">
-                <input
-                  v-model="textInputState"
-                  type="text"
-                  :placeholder="step.placeholder"
-                  :disabled="index !== currentStep"
-                  class="w-full px-6 py-4 text-lg rounded-full border-2 border-[var(--color-border)] bg-transparent focus:border-[var(--color-primary)] focus:outline-none transition-colors"
-                  @keydown.enter="submitText"
-                />
+                <div class="space-y-2">
+                  <input
+                    v-model="textInputState"
+                    type="text"
+                    :placeholder="step.placeholder"
+                    :disabled="index !== currentStep"
+                    class="w-full px-6 py-4 text-lg rounded-full border-2 bg-transparent focus:outline-none transition-colors"
+                    :class="textInputError && index === currentStep
+                      ? 'border-red-400 focus:border-red-500'
+                      : 'border-[var(--color-border)] focus:border-[var(--color-primary)]'"
+                    @keydown.enter="submitText"
+                    @input="textInputError = ''"
+                  />
+                  <p
+                    v-if="textInputError && index === currentStep"
+                    class="text-red-500 text-sm px-4"
+                  >{{ textInputError }}</p>
+                </div>
                 <button
                   @click="submitText"
                   :disabled="!textInputState.trim() || index !== currentStep"
@@ -259,11 +269,15 @@ const steps: Step[] = [
 const currentStep = ref(0);
 const answers = ref<Record<string, string>>({});
 const textInputState = ref('');
+const textInputError = ref('');
 const searchQuery = ref('');
+
+const FULL_NAME_RE = /^[A-Za-zÀ-ÖØ-öø-ÿ\u00C0-\u024F\s]+$/
 
 // Reset temporary states when step changes
 watch(currentStep, (newStep) => {
   searchQuery.value = '';
+  textInputError.value = '';
   
   const currentId = steps[newStep].id;
   if (answers.value[currentId] && steps[newStep].type === 'text') {
@@ -329,8 +343,27 @@ const selectOption = (value: string) => {
 };
 
 const submitText = () => {
-  if (!textInputState.value.trim()) return;
-  answers.value[steps[currentStep.value].id] = textInputState.value.trim();
+  textInputError.value = '';
+  const value = textInputState.value.trim();
+  if (!value) return;
+
+  // Validate nombre: only letters and spaces (mirrors backend constraint)
+  if (steps[currentStep.value].id === 'nombre') {
+    if (value.length < 3) {
+      textInputError.value = 'El nombre debe tener al menos 3 caracteres'
+      return
+    }
+    if (value.length > 80) {
+      textInputError.value = 'El nombre es demasiado largo'
+      return
+    }
+    if (!FULL_NAME_RE.test(value)) {
+      textInputError.value = 'El nombre solo puede contener letras y espacios'
+      return
+    }
+  }
+
+  answers.value[steps[currentStep.value].id] = value;
   advanceStep();
 };
 

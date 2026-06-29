@@ -147,7 +147,9 @@ onMounted(() => {
   // Prefill name and birth date from onboarding data
   if (onboardingData) {
     if (onboardingData.nombre && !regFullName.value) {
-      regFullName.value = onboardingData.nombre
+      // Strip characters the backend rejects (anything that is not a letter or space)
+      const sanitized = onboardingData.nombre.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ\u00C0-\u024F\s]/g, '').trim()
+      regFullName.value = sanitized
     }
     if (onboardingData.edad && !regBirthDate.value) {
       regBirthDate.value = getBirthDateFromAgeRange(onboardingData.edad)
@@ -175,11 +177,14 @@ const loginSchema = z.object({
   password: z.string().min(1, 'La contraseña es requerida'),
 })
 
+const FULL_NAME_RE = /^[A-Za-zÀ-ÖØ-öø-ÿ\u00C0-\u024F\s]+$/
+
 const registerSchema = z.object({
   fullName: z
     .string()
     .min(3, 'El nombre debe tener al menos 3 caracteres')
-    .max(80, 'Nombre demasiado largo'),
+    .max(80, 'Nombre demasiado largo')
+    .regex(FULL_NAME_RE, 'El nombre solo puede contener letras y espacios'),
   email: z.string().email('Correo inválido').max(120, 'Correo demasiado largo'),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
   birthDate: z
