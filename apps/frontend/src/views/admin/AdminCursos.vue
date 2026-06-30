@@ -2,6 +2,18 @@
 import { onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
 import SkeletonTable from '@/components/ui/SkeletonTable.vue';
+import { Heart, Globe, Users, Flame, BookOpen, Star, Compass, MapPin } from 'lucide-vue-next';
+
+const themeIcons = [Heart, Globe, Users, Flame, BookOpen, Star, Compass, MapPin];
+
+const getCourseIcon = (id: string) => {
+  if (!id) return BookOpen;
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return themeIcons[Math.abs(hash) % themeIcons.length];
+};
 
 const courses = ref([]);
 const loading = ref(true);
@@ -45,8 +57,8 @@ onMounted(async () => {
           <tr v-for="c in courses" :key="c.id" class="hover:bg-slate-50 transition-colors group cursor-pointer" @click="$router.push(`/admin/cursos/${c.id}`)">
             <td class="px-6 py-4">
               <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200 overflow-hidden group-hover:shadow-md transition-shadow">
-                  <img :src="`https://api.dicebear.com/9.x/shapes/svg?seed=${c.id}&radius=50`" class="w-full h-full object-cover" alt="Course Icon" />
+                <div class="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 shadow-sm border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+                  <component :is="getCourseIcon(c.id)" class="w-6 h-6" stroke-width="1.5" />
                 </div>
                 <div>
                   <div class="font-bold text-gray-900 text-base mb-1">{{ c.title }}</div>
