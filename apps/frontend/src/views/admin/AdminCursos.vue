@@ -45,11 +45,8 @@ onMounted(async () => {
           <tr v-for="c in courses" :key="c.id" class="hover:bg-slate-50 transition-colors group cursor-pointer" @click="$router.push(`/admin/cursos/${c.id}`)">
             <td class="px-6 py-4">
               <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 transition-colors">
-                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" />
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9.75 10.5 12V7.5l3.75 2.25Z" />
-                  </svg>
+                <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-700 flex items-center justify-center flex-shrink-0 font-bold text-xl uppercase shadow-inner border border-blue-100 group-hover:from-blue-600 group-hover:to-indigo-600 group-hover:text-white transition-all duration-300">
+                  {{ c.title.charAt(0) }}
                 </div>
                 <div>
                   <div class="font-bold text-gray-900 text-base mb-1">{{ c.title }}</div>
