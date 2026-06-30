@@ -238,7 +238,7 @@ async def patch_option(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Option not found")
     await assert_can_manage_option(db, current_user, option_id)
 
-    updates = body.model_dump(exclude_none=True)
+    updates = body.model_dump(exclude_unset=True)
     updated = await crud.update_option(db, option, updates)
     await log_admin_action(
         db,

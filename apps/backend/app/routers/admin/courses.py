@@ -90,7 +90,7 @@ async def patch_course(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     _assert_owner_or_admin(current_user, course.instructor_id)
 
-    updates = body.model_dump(exclude_none=True)
+    updates = body.model_dump(exclude_unset=True)
     # Instructors cannot reassign instructor_id to another user
     if current_user.role == "instructor":
         updates.pop("instructor_id", None)
