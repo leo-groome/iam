@@ -23,7 +23,7 @@ onMounted(async () => {
   }
 });
 
-const studentName = authStore.user?.full_name || 'Estudiante';
+const studentName = authStore.user?.full_name || '';
 const today = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
 </script>
 
@@ -35,32 +35,60 @@ const today = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'l
       <p class="text-[var(--color-text-muted)] mt-2 text-lg">Completaste el curso. Aquí tienes tu certificado.</p>
     </div>
 
-    <div class="card p-6 sm:p-10 mb-6 border-4 border-[var(--color-primary-soft)] relative overflow-hidden">
-      <img loading="lazy"
-        src="/MISIONERAS_LOGO.svg"
-        alt=""
-        aria-hidden="true"
-        class="pointer-events-none select-none absolute inset-0 m-auto w-[85%] h-[85%] object-contain opacity-20"
-      />
-
-      <div class="relative border-2 border-[var(--color-primary)] rounded-2xl p-6 sm:p-10 text-center">
-        <p class="text-sm text-[var(--color-primary)] tracking-widest font-semibold uppercase">Certificado de finalización</p>
-        <div class="my-6 sm:my-8">
-          <p class="text-[var(--color-text-muted)]">Se otorga a</p>
-          <p class="text-3xl sm:text-4xl font-bold mt-2">{{ studentName }}</p>
+    <!-- Contenedor principal del certificado -->
+    <div class="relative w-full max-w-5xl bg-white shadow-xl overflow-hidden rounded-xl mb-8 border border-gray-100" style="aspect-ratio: 1.414 / 1;">
+      
+      <!-- Lado Izquierdo: FOTO con curva -->
+      <div class="absolute inset-y-0 left-0 w-1/2 h-full z-10">
+        <div class="w-full h-full curve-clip bg-[var(--color-primary-soft)] overflow-hidden relative">
+          <img :src="curso.cover_key || curso.cover_url || '/Images/img-16.jpg'" 
+               :alt="curso.title" 
+               class="w-full h-full object-cover opacity-90">
+          <div class="absolute inset-0 bg-[var(--color-primary)]/20 mix-blend-multiply"></div>
         </div>
-        <p class="text-[var(--color-text-muted)]">por haber completado satisfactoriamente</p>
-        <p class="text-xl sm:text-2xl font-bold mt-2">{{ curso.title }}</p>
-        <div class="mt-8 flex justify-between items-end text-xs text-[var(--color-text-muted)] gap-4">
-          <div class="text-left">
-            <p class="font-semibold text-[var(--color-text)]">{{ today }}</p>
+      </div>
+
+      <!-- Lado Derecho: CONTENIDO -->
+      <div class="absolute inset-y-0 right-0 w-3/5 h-full z-0 flex flex-col justify-between p-6 sm:p-8 md:p-12 md:pl-24">
+        
+        <!-- Logo Superior Derecho -->
+        <div class="self-end">
+          <div class="w-16 h-16 md:w-24 md:h-24 rounded-full border-2 border-gray-200 bg-white flex items-center justify-center shadow-sm overflow-hidden">
+            <img src="/MISIONERAS_LOGO.svg" class="w-10 h-10 md:w-16 md:h-16 object-contain" alt="Logo">
+          </div>
+        </div>
+
+        <!-- Textos Centrales -->
+        <div class="text-center mt-2 flex flex-col items-center justify-center flex-grow">
+          <h2 class="text-[var(--color-primary)] font-bold tracking-[0.2em] uppercase text-xs md:text-sm mb-4 md:mb-8">Certificado de Finalización</h2>
+          
+          <p class="text-[var(--color-text-muted)] text-sm md:text-lg mb-1 md:mb-2">Se otorga con orgullo a</p>
+          
+          <!-- Línea 1 (Nombre) -->
+          <div class="w-full flex justify-center">
+            <h1 class="text-2xl sm:text-3xl md:text-5xl font-serif text-gray-900 border-b border-gray-300 pb-2 md:pb-3 px-4 md:px-8 inline-block" style="font-family: Georgia, serif;">{{ studentName }}</h1>
+          </div>
+          
+          <p class="text-[var(--color-text-muted)] text-sm md:text-lg mt-4 md:mt-8 mb-1 md:mb-2">Por haber completado satisfactoriamente el curso</p>
+          
+          <!-- Línea 2 (Curso) -->
+          <div class="w-full flex justify-center">
+            <h3 class="text-lg sm:text-xl md:text-3xl font-bold text-gray-800 border-b border-gray-200 pb-1 md:pb-2 px-2 md:px-6 inline-block">{{ curso.title }}</h3>
+          </div>
+        </div>
+
+        <!-- Firmas / Fechas (Líneas inferiores) -->
+        <div class="flex justify-between items-end mt-4 md:mt-12 text-[var(--color-text-muted)] text-xs md:text-sm">
+          <div class="text-center w-24 md:w-40">
+            <div class="border-t border-gray-400 pt-1 md:pt-2 font-semibold text-gray-800">{{ today }}</div>
             <p>Fecha de emisión</p>
           </div>
-          <div class="text-right">
-            <p class="font-semibold text-[var(--color-text)]">#{{ curso.id.slice(0, 8).toUpperCase() }}</p>
-            <p>ID del certificado</p>
+          <div class="text-center w-24 md:w-40">
+            <div class="border-t border-gray-400 pt-1 md:pt-2 font-semibold text-gray-800">#{{ curso.id.slice(0, 8).toUpperCase() }}</div>
+            <p>ID del Certificado</p>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -73,3 +101,9 @@ const today = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'l
     </div>
   </div>
 </template>
+
+<style scoped>
+.curve-clip {
+  clip-path: ellipse(75% 100% at 20% 50%);
+}
+</style>
