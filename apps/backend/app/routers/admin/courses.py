@@ -8,6 +8,7 @@ Registration line for routers/__init__.py:
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -144,7 +145,7 @@ async def archive_course(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     _assert_owner_or_admin(current_user, course.instructor_id)
 
-    updated = await crud.update_course(db, course, {"status": "archivado"})
+    updated = await crud.update_course(db, course, {"status": "archivado", "archived_at": datetime.now(UTC)})
     await log_admin_action(
         db,
         actor_id=current_user.id,
