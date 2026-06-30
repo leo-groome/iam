@@ -45,8 +45,8 @@ onMounted(async () => {
           <tr v-for="c in courses" :key="c.id" class="hover:bg-slate-50 transition-colors group cursor-pointer" @click="$router.push(`/admin/cursos/${c.id}`)">
             <td class="px-6 py-4">
               <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-700 flex items-center justify-center flex-shrink-0 font-bold text-xl uppercase shadow-inner border border-blue-100 group-hover:from-blue-600 group-hover:to-indigo-600 group-hover:text-white transition-all duration-300">
-                  {{ c.title.charAt(0) }}
+                <div class="w-12 h-12 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200 overflow-hidden group-hover:shadow-md transition-shadow">
+                  <img :src="`https://api.dicebear.com/9.x/shapes/svg?seed=${c.id}&radius=50`" class="w-full h-full object-cover" alt="Course Icon" />
                 </div>
                 <div>
                   <div class="font-bold text-gray-900 text-base mb-1">{{ c.title }}</div>
