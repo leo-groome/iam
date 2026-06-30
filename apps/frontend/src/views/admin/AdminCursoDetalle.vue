@@ -379,9 +379,9 @@ const saveDrawer = async () => {
               </div>
            </div>
            <div class="flex gap-2">
-             <button type="button" @click.stop="openModuleDrawer(m.id)" class="text-sm text-[var(--color-primary)] hover:underline font-medium px-2 py-1">Editar</button>
-             <router-link :to="`/admin/cursos/${id}/modulos/${m.id}`" class="text-sm text-[var(--color-primary)] hover:underline font-medium px-2 py-1" @click.stop>Examen</router-link>
-             <button type="button" @click.stop="deleteModuleAction(m.id)" class="text-sm text-red-500 hover:underline font-medium px-2 py-1">Eliminar</button>
+             <button type="button" @click.stop="openModuleDrawer(m.id)" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-gray-50 transition-colors">Editar</button>
+             <router-link :to="`/admin/cursos/${id}/modulos/${m.id}`" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-gray-50 transition-colors" @click.stop>Examen</router-link>
+             <button type="button" @click.stop="deleteModuleAction(m.id)" class="text-xs font-medium border border-red-500 text-black px-2 py-1 rounded hover:bg-gray-50 transition-colors">Eliminar</button>
            </div>
         </div>
 
@@ -393,11 +393,11 @@ const saveDrawer = async () => {
                    <span class="text-[10px] uppercase bg-blue-100 text-blue-700 font-bold px-2 py-1 rounded w-16 text-center">{{ t.content_type }}</span>
                    <span class="text-sm font-medium">{{ j + 1 }}. {{ t.title }}</span>
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
                    <span v-if="t.has_exam" class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">Examen</span>
-                   <button type="button" @click.stop="openTopicDrawer(m.id, t.id)" class="text-xs text-[var(--color-primary)] hover:underline font-medium">Editar</button>
-                   <router-link v-if="t.has_exam" :to="`/admin/cursos/${id}/modulos/${m.id}/temas/${t.id}/preguntas`" class="text-xs text-[var(--color-primary)] hover:underline font-medium ml-2" @click.stop>Preguntas</router-link>
-                   <button type="button" @click.stop="deleteTopicAction(t.id)" class="text-xs text-red-500 hover:underline font-medium">Eliminar</button>
+                   <button type="button" @click.stop="openTopicDrawer(m.id, t.id)" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-gray-50 transition-colors">Editar</button>
+                   <router-link v-if="t.has_exam" :to="`/admin/cursos/${id}/modulos/${m.id}/temas/${t.id}/preguntas`" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-gray-50 transition-colors" @click.stop>Preguntas</router-link>
+                   <button type="button" @click.stop="deleteTopicAction(t.id)" class="text-xs font-medium border border-red-500 text-black px-2 py-1 rounded hover:bg-gray-50 transition-colors">Eliminar</button>
                 </div>
              </div>
            </div>
