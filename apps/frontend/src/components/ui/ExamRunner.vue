@@ -250,7 +250,7 @@ function reloadPage() {
       <p class="text-5xl font-extrabold text-[var(--color-primary)] mt-4">{{ result.score }}%</p>
       <p class="text-[var(--color-text-muted)] mt-2">Calificación mínima: {{ minScore }}%</p>
       <router-link :to="resultadoHref" class="btn btn-primary btn-block mt-6">
-        Continuar al siguiente tema
+        Avanzar
       </router-link>
     </div>
 
@@ -266,9 +266,9 @@ function reloadPage() {
       <p class="text-[var(--color-text-muted)] mt-1">Vamos a repasar juntos.</p>
       <p class="text-5xl font-extrabold text-[var(--color-text-muted)] mt-4">{{ result.score }}%</p>
       <p class="text-[var(--color-text-muted)] mt-2">Necesitas al menos {{ minScore }}% para aprobar.</p>
-      <router-link :to="repasoHref" class="btn btn-primary btn-block mt-6">
+      <a :href="repasoHref" class="btn btn-primary btn-block mt-6">
         Volver a ver el video
-      </router-link>
+      </a>
     </div>
   </div>
 </template>

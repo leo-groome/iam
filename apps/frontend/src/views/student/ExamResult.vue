@@ -41,7 +41,6 @@ const next = computed(() => allTemas.value[idx.value + 1]);
          class="btn btn-primary btn-block mt-6">
         {{ next ? 'Continuar al siguiente tema' : 'Ver mi certificado' }}
       </router-link>
-      <router-link :to="`/curso/${slug}`" class="btn btn-ghost btn-block mt-2">Volver al curso</router-link>
     </div>
   </div>
 </template>

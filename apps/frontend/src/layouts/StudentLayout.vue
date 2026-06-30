@@ -28,7 +28,7 @@
               class="hidden md:flex items-center gap-2 pl-1 pr-1 sm:pr-3 py-1 rounded-full transition"
               :class="isActive('/perfil') ? 'bg-[var(--color-primary-soft)] ring-2 ring-[var(--color-primary)]/30' : 'hover:bg-[var(--color-app-bg)]'"
             >
-              <span class="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white grid place-items-center font-semibold text-sm">{{ initial }}</span>
+              <UserAvatar :name="displayName || 'Estudiante'" size="w-9 h-9" />
               <span class="hidden sm:inline text-sm font-medium" :class="{ 'text-[var(--color-primary)]': isActive('/perfil') }">{{ displayName }}</span>
             </router-link>
           </div>
@@ -82,6 +82,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import UserAvatar from '@/components/ui/UserAvatar.vue';
 
 const route = useRoute();
 const authStore = useAuthStore();
