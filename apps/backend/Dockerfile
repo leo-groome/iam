@@ -5,12 +5,12 @@ RUN pip install uv
 
 FROM base AS deps
 COPY pyproject.toml uv.lock ./
-RUN uv venv /opt/venv && uv sync --no-dev
+RUN uv sync --no-dev
 
 FROM python:3.12-slim AS runtime
 WORKDIR /app
-COPY --from=deps /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+COPY --from=deps /app/.venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
 RUN adduser --disabled-password --gecos "" appuser
 COPY --chown=appuser:appuser . .
 USER appuser
