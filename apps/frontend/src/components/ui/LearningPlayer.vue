@@ -51,6 +51,7 @@ const markDoneSuccess = ref(false);
 const contentType = computed(() => props.tema?.content_type || 'video');
 const duration = computed(() => props.tema?.duration_seconds || 180);
 const videoDuration = computed(() => actualDuration.value || duration.value || 0);
+const doneStates = ['contenido_visto', 'aprobado', 'en_repaso'];
 
 let heartbeatInterval: any;
 let timer: any;
@@ -114,7 +115,7 @@ watch(
 
     // Load initial progress
     if (newTema.progress && newTema.state) {
-      if (['contenido_visto', 'aprobado', 'en_repaso'].includes(newTema.state)) {
+      if (doneStates.includes(newTema.state)) {
         contentDone.value = true;
       }
       if (newTema.content_type === 'video') {
@@ -179,9 +180,10 @@ watch(
           const pos = Math.floor(videoEl.value.currentTime);
           const maxSeen = Math.max(videoProgress.value, Math.round((pos / videoDuration.value) * 100));
           try {
-            await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
+            const resp = (await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
               body: { type: 'video', pos_seconds: pos, max_seen_pct: maxSeen },
-            });
+            })) as any;
+            applyProgressResponse(resp);
           } catch (e) {
             console.error('Video heartbeat failed', e);
           }
@@ -204,21 +206,30 @@ function setupScrollTracking(): void {
   window.addEventListener('scroll', scrollHandler, { passive: true });
 }
 
-// Flushes current video position + max-seen-pct to DB immediately so the
-// mark-content-done backend check (video_max_seen_pct >= 95) doesn't fail
-// due to a stale DB value from the last periodic heartbeat.
-async function syncVideoProgress(pct: number): Promise<void> {
+function applyProgressResponse(resp: any): void {
+  if (!resp || !doneStates.includes(resp.state) || contentDone.value) return;
+  contentDone.value = true;
+  emit('content-done');
+  markDoneSuccess.value = true;
+  setTimeout(() => { markDoneSuccess.value = false; }, 2000);
+}
+
+async function syncVideoProgress(pct: number, showSaving = false): Promise<void> {
   if (!props.tema || !videoEl.value) return;
+  if (showSaving) markingDone.value = true;
   try {
-    await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
+    const resp = (await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
       body: {
         type: 'video',
         pos_seconds: Math.floor(videoEl.value.currentTime),
         max_seen_pct: Math.min(100, pct),
       },
-    });
+    })) as any;
+    applyProgressResponse(resp);
   } catch (e) {
     console.error('syncVideoProgress heartbeat failed', e);
+  } finally {
+    if (showSaving) markingDone.value = false;
   }
 }
 
@@ -280,8 +291,7 @@ function onVideoTimeUpdate() {
   videoProgress.value = Math.max(videoProgress.value, pct);
 
   if (pct >= 95 && !contentDone.value && !markingDone.value) {
-    // Flush progress to DB first so mark-content-done backend check passes.
-    syncVideoProgress(pct).then(() => markContentDone());
+    syncVideoProgress(pct, true);
   }
 }
 
@@ -299,9 +309,7 @@ function onLoadedMetadata() {
 async function onVideoEnded() {
   playing.value = false;
   if (!contentDone.value) {
-    // Flush 100% to DB before marking done so the backend check passes.
-    await syncVideoProgress(100);
-    await markContentDone();
+    await syncVideoProgress(100, true);
   }
 }
 

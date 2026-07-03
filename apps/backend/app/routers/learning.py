@@ -54,6 +54,8 @@ router = APIRouter(tags=["learning"])
 _UNLOCKED_STATES = {"disponible", "contenido_visto", "aprobado", "en_repaso"}
 _EXAM_ALLOWED_STATES = {"contenido_visto", "aprobado", "en_repaso"}
 _EXAM_TOKEN_TTL_SECONDS = 15 * 60
+_VIDEO_COMPLETE_PCT = 95
+_VIDEO_PROGRESS_TOLERANCE_PCT = 2
 
 
 def _issue_exam_token(
@@ -193,6 +195,18 @@ def _grade_signed_answers(
     return correct, len(signed_question_ids), answers_payload
 
 
+def _video_pct_from_position(pos_seconds: int, duration_seconds: int | None) -> int:
+    if duration_seconds is None or duration_seconds <= 0:
+        return 0
+    return min(100, max(0, round((pos_seconds / duration_seconds) * 100)))
+
+
+def _complete_content(tp: TopicProgress) -> None:
+    tp.content_completed_at = datetime.now(UTC)  # type: ignore[assignment]
+    if tp.state not in ("contenido_visto", "aprobado", "en_repaso"):
+        tp.state = "contenido_visto"
+
+
 async def _require_enrollment(
     db: AsyncSession, user: User, course_id: uuid.UUID
 ) -> Enrollment:
@@ -204,7 +218,11 @@ async def _require_enrollment(
     )
     enrollment = result.scalar_one_or_none()
     with open('/tmp/backend_debug.log', 'a') as f:
-        f.write(f"DEBUG: _require_enrollment - user.id: {user.id}, user.email: {user.email}, course_id: {course_id}, enrollment found: {enrollment is not None}\n")
+        f.write(
+            "DEBUG: _require_enrollment - "
+            f"user.id: {user.id}, user.email: {user.email}, "
+            f"course_id: {course_id}, enrollment found: {enrollment is not None}\n"
+        )
     if enrollment is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not enrolled in this course"
@@ -286,8 +304,20 @@ async def topic_heartbeat(
             )
         if body.pos_seconds is not None:
             tp.video_last_pos_seconds = body.pos_seconds
+            server_pct = _video_pct_from_position(body.pos_seconds, topic.duration_seconds)
+            if (
+                body.max_seen_pct is not None
+                and body.max_seen_pct > server_pct + _VIDEO_PROGRESS_TOLERANCE_PCT
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={"code": "impossible_progress"},
+                )
+            tp.video_max_seen_pct = max(tp.video_max_seen_pct, server_pct)
         if body.max_seen_pct is not None:
             tp.video_max_seen_pct = max(tp.video_max_seen_pct, body.max_seen_pct)
+        if tp.video_max_seen_pct >= _VIDEO_COMPLETE_PCT:
+            _complete_content(tp)
     elif body.type in ("pdf",):
         if body.last_page is not None:
             tp.pdf_last_page = max(tp.pdf_last_page, body.last_page)
@@ -364,10 +394,7 @@ async def mark_content_done(
             detail={"code": "content_incomplete"},
         )
 
-    now = datetime.now(UTC)
-    tp.content_completed_at = now  # type: ignore[assignment]
-    if tp.state not in ("contenido_visto", "aprobado", "en_repaso"):
-        tp.state = "contenido_visto"
+    _complete_content(tp)
 
     await db.commit()
     await db.refresh(tp)
