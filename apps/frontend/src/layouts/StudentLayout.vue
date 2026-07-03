@@ -82,10 +82,12 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useProgressStore } from '@/stores/progress';
 import UserAvatar from '@/components/ui/UserAvatar.vue';
 
 const route = useRoute();
 const authStore = useAuthStore();
+const progressStore = useProgressStore();
 
 const displayName = computed(() => authStore.user?.full_name ?? '');
 const initial = computed(() => displayName.value.charAt(0).toUpperCase() || '·');
@@ -93,8 +95,15 @@ const initial = computed(() => displayName.value.charAt(0).toUpperCase() || '·'
 // These could eventually be connected to a Pinia store if they need to be dynamically updated by child views
 const showHeader = computed(() => route.meta.showHeader !== false);
 const wide = computed(() => route.meta.wide === true);
-const progress = computed(() => route.meta.progress ?? null);
 const courseName = computed(() => route.meta.courseName ?? null);
+const slug = computed(() => route.params.slug as string | undefined);
+
+const progress = computed(() => {
+  if (slug.value && route.path.startsWith('/curso/')) {
+    return progressStore.coursePercentage(slug.value);
+  }
+  return route.meta.progress ?? null;
+});
 
 const isActive = (path: string) => {
   if (path === '/catalogo') {

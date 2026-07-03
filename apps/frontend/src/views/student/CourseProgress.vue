@@ -29,7 +29,7 @@ const totalTemas = computed(() => {
 
 const aprobados = computed(() => {
   if (!curso.value) return 0;
-  return curso.value.modules.flatMap(m => m.topics).filter(t => t.state === 'aprobado').length;
+  return curso.value.modules.flatMap(m => m.topics).filter(t => t.has_exam ? t.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(t.state)).length;
 });
 </script>
 
@@ -52,12 +52,12 @@ const aprobados = computed(() => {
             <p class="text-xs text-[var(--color-text-muted)]">Módulo {{ mi + 1 }}</p>
             <h3 class="font-semibold">{{ mod.title }}</h3>
           </div>
-          <span class="chip">{{ Math.round((mod.topics.filter(t => t.state === 'aprobado').length / mod.topics.length) * 100) }}%</span>
+          <span class="chip">{{ mod.topics.length ? Math.round((mod.topics.filter(t => t.has_exam ? t.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(t.state)).length / mod.topics.length) * 100) : 0 }}%</span>
         </div>
         <ul class="space-y-1.5">
           <li v-for="(t, ti) in mod.topics" :key="t.id || ti" class="flex items-center gap-2 text-sm">
-            <span :class="`w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold ${t.state === 'aprobado' ? 'bg-emerald-100 text-emerald-700' : t.state === 'bloqueado' ? 'bg-[var(--color-app-bg)] text-[var(--color-text-muted)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'}`">
-              {{ t.state === 'aprobado' ? '✓' : '' }}
+            <span :class="`w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold ${(t.has_exam ? t.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(t.state)) ? 'bg-emerald-100 text-emerald-700' : t.state === 'bloqueado' ? 'bg-[var(--color-app-bg)] text-[var(--color-text-muted)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'}`">
+              {{ (t.has_exam ? t.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(t.state)) ? '✓' : '' }}
             </span>
             <span :class="t.state === 'bloqueado' ? 'text-[var(--color-text-muted)]' : ''">{{ t.title }}</span>
           </li>
