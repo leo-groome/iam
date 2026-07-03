@@ -61,8 +61,27 @@ async def list_courses(
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> CourseCardListResponse:
     courses, next_cursor = await get_courses_for_user(db, current_user, cursor, limit)
+    
+    if not courses:
+        return CourseCardListResponse(items=[], next_cursor=next_cursor)
+        
+    course_ids = [c.id for c in courses]
+    enrollments_result = await db.execute(
+        select(Enrollment.course_id, Enrollment.progress_cached).where(
+            Enrollment.user_id == current_user.id,
+            Enrollment.course_id.in_(course_ids)
+        )
+    )
+    progress_map = {row.course_id: row.progress_cached for row in enrollments_result.all()}
+
+    items = []
+    for c in courses:
+        card = CourseCard.model_validate(c)
+        card.progress_pct = progress_map.get(c.id, 0)
+        items.append(card)
+
     return CourseCardListResponse(
-        items=[CourseCard.model_validate(c) for c in courses],
+        items=items,
         next_cursor=next_cursor,
     )
 

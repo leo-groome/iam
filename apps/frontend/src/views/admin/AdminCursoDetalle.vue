@@ -90,8 +90,9 @@ const publishCourse = async () => {
   try {
     await adminService.publishCourse(id);
     router.push('/admin/cursos');
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error publishing course:', err);
+    alert('Error al publicar: ' + (err.message || 'Error desconocido'));
   } finally {
     saving.value = false;
   }
@@ -104,8 +105,9 @@ const archiveCourse = async () => {
   try {
     await adminService.archiveCourse(id);
     router.push('/admin/cursos');
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error archiving course:', err);
+    alert('Error al archivar: ' + (err.message || 'Error desconocido'));
   } finally {
     saving.value = false;
   }
@@ -118,8 +120,9 @@ const deleteCourseAction = async () => {
   try {
     await adminService.deleteCourse(id);
     router.push('/admin/cursos');
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error deleting course:', err);
+    alert('Error al eliminar: ' + (err.message || 'Error desconocido'));
   } finally {
     saving.value = false;
   }
@@ -130,8 +133,9 @@ const deleteModuleAction = async (modId: string) => {
   try {
     await adminService.deleteModule(modId);
     await loadCourse();
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error deleting module:', err);
+    alert('Error al eliminar módulo: ' + (err.message || 'Error desconocido'));
   }
 };
 
@@ -140,8 +144,9 @@ const deleteTopicAction = async (topicId: string) => {
   try {
     await adminService.deleteTopic(topicId);
     await loadCourse();
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error deleting topic:', err);
+    alert('Error al eliminar clase: ' + (err.message || 'Error desconocido'));
   }
 };
 

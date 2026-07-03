@@ -399,6 +399,18 @@ async def mark_content_done(
     await db.commit()
     await db.refresh(tp)
 
+    # Recompute course progress since non-exam topics don't trigger exam_passed
+    course_result = await db.execute(
+        select(Course).where(Course.id == topic.module.course_id)
+    )
+    course = course_result.scalar_one_or_none()
+    if course is not None:
+        from app.services.progress_engine import recompute_course_progress
+        pct = await recompute_course_progress(db, current_user, course)
+        if pct == 100:
+            current_user.status = "completado"
+        await db.commit()
+
     completed_at_raw: datetime | None = tp.content_completed_at  # type: ignore[assignment]
     return MarkContentDoneResponse(
         state=tp.state,

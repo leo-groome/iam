@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const props = defineProps<{ value: number; label?: string; showPercent?: boolean }>();
-const safe = () => Math.max(0, Math.min(100, props.value));
+const safe = () => Math.max(0, Math.min(100, Number(props.value) || 0));
 </script>
 
 <template>

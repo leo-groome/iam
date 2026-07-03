@@ -83,8 +83,9 @@ const handleDeleteModule = async () => {
   try {
     await adminService.deleteModule(modId);
     router.push(`/admin/cursos/${courseId}`);
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error deleting module:', err);
+    alert('Error al eliminar módulo: ' + (err.message || 'Error desconocido'));
   }
 };
 
@@ -92,8 +93,9 @@ const handleDeleteModuleQuestion = async (qId: string) => {
   try {
     await adminService.archiveQuestion(qId);
     moduleQuestions.value = moduleQuestions.value.filter(q => q.id !== qId);
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error deleting module question:', err);
+    alert('Error al eliminar pregunta: ' + (err.message || 'Error desconocido'));
   }
 };
 

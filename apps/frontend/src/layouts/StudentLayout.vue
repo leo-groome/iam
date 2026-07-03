@@ -3,7 +3,7 @@
     <!-- Header -->
     <header
       v-if="showHeader"
-      class="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-surface)]/85 border-b border-[var(--color-border)]"
+      class="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-surface)]/85 border-b border-[var(--color-border)] print:hidden"
     >
       <div class="w-full pl-5 pr-4 sm:pl-6 sm:pr-6">
         <div class="h-20 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
@@ -47,14 +47,14 @@
     </header>
 
     <!-- Main Content -->
-    <main :class="[`mx-auto px-4 py-6 pb-32`, wide ? 'max-w-6xl' : 'max-w-3xl']">
+    <main :class="[`mx-auto px-4 py-6 pb-32 print:p-0 print:pb-0`, wide ? 'max-w-6xl' : 'max-w-3xl']">
       <slot />
     </main>
 
     <!-- Mobile Nav -->
     <nav
       v-if="showHeader"
-      class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-[var(--color-surface)]/95 backdrop-blur-xl border-t border-[var(--color-border)]"
+      class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-[var(--color-surface)]/95 backdrop-blur-xl border-t border-[var(--color-border)] print:hidden"
     >
       <div class="flex justify-around h-16">
         <router-link
@@ -82,10 +82,12 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useProgressStore } from '@/stores/progress';
 import UserAvatar from '@/components/ui/UserAvatar.vue';
 
 const route = useRoute();
 const authStore = useAuthStore();
+const progressStore = useProgressStore();
 
 const displayName = computed(() => authStore.user?.full_name ?? '');
 const initial = computed(() => displayName.value.charAt(0).toUpperCase() || '·');
@@ -93,8 +95,15 @@ const initial = computed(() => displayName.value.charAt(0).toUpperCase() || '·'
 // These could eventually be connected to a Pinia store if they need to be dynamically updated by child views
 const showHeader = computed(() => route.meta.showHeader !== false);
 const wide = computed(() => route.meta.wide === true);
-const progress = computed(() => route.meta.progress ?? null);
 const courseName = computed(() => route.meta.courseName ?? null);
+const slug = computed(() => route.params.slug as string | undefined);
+
+const progress = computed(() => {
+  if (slug.value && route.path.startsWith('/curso/')) {
+    return progressStore.coursePercentage(slug.value);
+  }
+  return route.meta.progress ?? null;
+});
 
 const isActive = (path: string) => {
   if (path === '/catalogo') {

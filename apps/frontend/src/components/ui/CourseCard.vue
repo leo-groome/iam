@@ -42,10 +42,10 @@ const buttonLabel = computed(() => props.cta ?? (props.progress > 0 ? "Continuar
       <div v-if="progress < 100" class="mb-3">
         <div class="flex justify-between text-xs mb-1.5">
           <span class="font-medium text-[var(--color-text-muted)]">Progreso</span>
-          <span class="font-bold text-[var(--color-primary)]">{{ progress }}%</span>
+          <span class="font-bold text-[var(--color-primary)]">{{ Number(progress) || 0 }}%</span>
         </div>
         <div class="h-1.5 bg-[var(--color-primary-soft)] rounded-full overflow-hidden">
-          <div class="h-full bg-[var(--color-primary)] transition-all duration-500" :style="`width: ${progress}%`"></div>
+          <div class="h-full bg-[var(--color-primary)] transition-all duration-500" :style="{ width: `${Number(progress) || 0}%` }"></div>
         </div>
       </div>
       <span class="btn btn-primary mt-auto md:self-start group-hover:bg-[var(--color-primary-hover)]">{{ buttonLabel }}</span>

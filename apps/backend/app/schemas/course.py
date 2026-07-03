@@ -17,6 +17,7 @@ class CourseCard(BaseModel):
     age_max: int | None
     order_index: int
     status: str
+    progress_pct: int = 0
 
     @field_validator("cover_key", mode="before")
     @classmethod

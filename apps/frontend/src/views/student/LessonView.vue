@@ -87,9 +87,9 @@ const nextUrl = computed(() => nextTema.value ? `/curso/${slug}/tema/${nextTema.
 function handleContentDone() {
   const total = allTemas.value.length;
   if (total === 0) return;
-  const doneStates = ['contenido_visto', 'aprobado', 'en_repaso'];
-  const alreadyDone = allTemas.value.filter(t => doneStates.includes(t.state)).length;
-  const currentWasAlreadyDone = doneStates.includes(tema.value?.state ?? '');
+  const isDone = (t: any) => t.has_exam ? t.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(t.state);
+  const alreadyDone = allTemas.value.filter(isDone).length;
+  const currentWasAlreadyDone = isDone(tema.value);
   const newDone = currentWasAlreadyDone ? alreadyDone : alreadyDone + 1;
   progressStore.updateProgress(slug, Math.min(100, Math.round((newDone / total) * 100)));
 }

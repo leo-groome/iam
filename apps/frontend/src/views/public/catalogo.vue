@@ -117,26 +117,35 @@ const yOffsets = [0, 4, -4, 6, -6, 2, -2, 5, -5, 0, 3, -3];
         </div>
 
         <div v-else class="space-y-10">
-          <section v-if="enProgreso.length > 0">
-            <h2 class="text-lg font-semibold mb-3">Continuar donde lo dejé</h2>
-            <div class="grid gap-4">
-              <CourseCard v-for="c in enProgreso" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="c.progress_pct" :cover="c.cover_key || '/placeholder.jpg'" />
-            </div>
-          </section>
+          <template v-if="courses.length > 0">
+            <section v-if="enProgreso.length > 0">
+              <h2 class="text-lg font-semibold mb-3">Continuar donde lo dejé</h2>
+              <div class="grid gap-4">
+                <CourseCard v-for="c in enProgreso" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="c.progress_pct" :cover="c.cover_key || '/placeholder.jpg'" :href="`/curso/${c.slug}?auto_resume=1`" />
+              </div>
+            </section>
 
-          <section>
-            <h2 class="text-lg font-semibold mb-3">Cursos disponibles</h2>
-            <div class="grid gap-4">
-              <CourseCard v-for="c in nuevos" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :cover="c.cover_key || '/placeholder.jpg'" />
-            </div>
-          </section>
+            <section v-if="nuevos.length > 0">
+              <h2 class="text-lg font-semibold mb-3">Cursos disponibles</h2>
+              <div class="grid gap-4">
+                <CourseCard v-for="c in nuevos" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :cover="c.cover_key || '/placeholder.jpg'" />
+              </div>
+            </section>
 
-          <section v-if="completados.length > 0">
-            <h2 class="text-lg font-semibold mb-3">Ya completados</h2>
-            <div class="grid gap-4">
-              <CourseCard v-for="c in completados" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="100" :cover="c.cover_key || '/placeholder.jpg'" cta="Ver certificado" :href="`/curso/${c.slug}/certificado`" />
-            </div>
-          </section>
+            <section v-if="completados.length > 0">
+              <h2 class="text-lg font-semibold mb-3">Ya completados</h2>
+              <div class="grid gap-4">
+                <CourseCard v-for="c in completados" :key="c.id" :slug="c.slug" :title="c.title" :description="c.short_desc" :progress="100" :cover="c.cover_key || '/placeholder.jpg'" cta="Ver certificado" :href="`/curso/${c.slug}/certificado`" />
+              </div>
+            </section>
+          </template>
+          <template v-else>
+             <div class="card p-10 text-center rounded-3xl mt-12 bg-white/80 backdrop-blur border border-[var(--color-border)] shadow-xl relative z-10">
+               <svg class="w-16 h-16 mx-auto text-[var(--color-primary)] mb-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+               <h2 class="text-2xl font-bold mb-2">Cursos disponibles próximamente</h2>
+               <p class="text-[var(--color-text-muted)] max-w-md mx-auto">Estamos preparando nuevo contenido para ti. Vuelve pronto para descubrir nuestros nuevos cursos.</p>
+             </div>
+          </template>
         </div>
       </transition>
     </div>
