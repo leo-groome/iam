@@ -74,7 +74,7 @@ async def patch_module(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found")
     await assert_can_manage_module(db, current_user, module_id)
 
-    updates = body.model_dump(exclude_unset=True)
+    updates = body.model_dump(exclude_none=True)
     updated = await crud.update_module(db, mod, updates)
     await log_admin_action(
         db,

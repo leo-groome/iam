@@ -30,6 +30,16 @@ onMounted(async () => {
     loading.value = false;
   }
 });
+
+const allTemas = computed(() => {
+  if (!curso.value) return [];
+  return curso.value.modules.flatMap(m => m.topics);
+});
+const idx = computed(() => allTemas.value.findIndex(t => t.id === topicId));
+const nextTema = computed(() => allTemas.value[idx.value + 1]);
+const nextUrl = computed(() => {
+  return nextTema.value ? `/curso/${slug}/tema/${nextTema.value.id}` : `/curso/${slug}/certificado`;
+});
 </script>
 
 <template>
@@ -44,7 +54,7 @@ onMounted(async () => {
         <p class="text-sm text-[var(--color-primary)] font-medium">Cuestionario</p>
         <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-6">{{ tema.title }}</h1>
 
-        <ExamRunner :topicId="topicId" :cursoSlug="slug" />
+        <ExamRunner :topicId="topicId" :cursoSlug="slug" :nextUrl="nextUrl" />
 
         <div class="h-32"></div>
       </div>

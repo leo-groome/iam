@@ -221,9 +221,10 @@ const handleDeleteTopic = async () => {
   try {
     await adminService.deleteTopic(temaId);
     router.push(`/admin/cursos/${courseId}/modulos/${modId}`);
-  } catch (err) {
+  } catch (err: any) {
     errorMessage.value = 'No se pudo eliminar la clase.';
     console.error('Error deleting topic:', err);
+    alert('Error al eliminar clase: ' + (err.message || 'Error desconocido'));
   }
 };
 </script>

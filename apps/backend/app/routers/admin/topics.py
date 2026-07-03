@@ -92,7 +92,7 @@ async def patch_topic(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
     await assert_can_manage_topic(db, current_user, topic_id)
 
-    updates = body.model_dump(exclude_unset=True)
+    updates = body.model_dump(exclude_none=True)
     # R-ADM-05: min_score change only affects future attempts (snapshot is stored at attempt time)
     # No special logic needed here — the snapshot happens in exam_engine.py at attempt creation.
     updated = await crud.update_topic(db, topic, updates)

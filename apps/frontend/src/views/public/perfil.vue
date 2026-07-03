@@ -3,7 +3,9 @@ import { onMounted, ref, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { coursesService } from '@/services/courses.service';
 import UserAvatar from '@/components/ui/UserAvatar.vue';
+import { useRouter } from 'vue-router';
 
+const router = useRouter();
 const authStore = useAuthStore();
 const courses = ref([]);
 const loading = ref(true);
@@ -38,6 +40,11 @@ const age = computed(() => {
   }
   return age;
 });
+
+async function logout() {
+  await authStore.logout();
+  router.push('/');
+}
 </script>
 
 <template>
@@ -67,5 +74,5 @@ const age = computed(() => {
     </router-link>
   </div>
 
-  <router-link to="/" class="btn btn-secondary btn-block">Cerrar sesión</router-link>
+  <button @click="logout" class="btn btn-secondary btn-block">Cerrar sesión</button>
 </template>

@@ -6,6 +6,7 @@ import type { ExamResponse, QuestionOut } from '@/lib/api'
 const props = defineProps<{
   topicId: string
   cursoSlug: string
+  nextUrl?: string
 }>()
 
 // State
@@ -249,8 +250,8 @@ function reloadPage() {
       <h2 class="text-3xl font-bold">¡Aprobado!</h2>
       <p class="text-5xl font-extrabold text-[var(--color-primary)] mt-4">{{ result.score }}%</p>
       <p class="text-[var(--color-text-muted)] mt-2">Calificación mínima: {{ minScore }}%</p>
-      <router-link :to="resultadoHref" class="btn btn-primary btn-block mt-6">
-        Avanzar
+      <router-link :to="nextUrl || resultadoHref" class="btn btn-primary btn-block mt-6">
+        Continuar al siguiente tema
       </router-link>
     </div>
 

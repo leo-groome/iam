@@ -19,6 +19,13 @@ onMounted(async () => {
   try {
     curso.value = await coursesService.getBySlug(slug);
     progressStore.hydrate(slug, { course_pct: curso.value.progress_pct, modules: [] });
+    
+    if (route.query.auto_resume === '1' && curso.value.progress_pct > 0 && curso.value.progress_pct < 100) {
+      if (primerTemaPendiente.value) {
+        router.replace(`/curso/${slug}/tema/${primerTemaPendiente.value.id}`);
+        return;
+      }
+    }
   } catch (err) {
     console.error(err);
     router.replace('/catalogo');

@@ -3,7 +3,7 @@
     <!-- Header -->
     <header
       v-if="showHeader"
-      class="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-surface)]/85 border-b border-[var(--color-border)]"
+      class="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-surface)]/85 border-b border-[var(--color-border)] print:hidden"
     >
       <div class="w-full pl-5 pr-4 sm:pl-6 sm:pr-6">
         <div class="h-20 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
@@ -47,14 +47,14 @@
     </header>
 
     <!-- Main Content -->
-    <main :class="[`mx-auto px-4 py-6 pb-32`, wide ? 'max-w-6xl' : 'max-w-3xl']">
+    <main :class="[`mx-auto px-4 py-6 pb-32 print:p-0 print:pb-0`, wide ? 'max-w-6xl' : 'max-w-3xl']">
       <slot />
     </main>
 
     <!-- Mobile Nav -->
     <nav
       v-if="showHeader"
-      class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-[var(--color-surface)]/95 backdrop-blur-xl border-t border-[var(--color-border)]"
+      class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-[var(--color-surface)]/95 backdrop-blur-xl border-t border-[var(--color-border)] print:hidden"
     >
       <div class="flex justify-around h-16">
         <router-link
