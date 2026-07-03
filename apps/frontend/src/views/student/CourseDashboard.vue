@@ -18,9 +18,16 @@ const loading = ref(true);
 onMounted(async () => {
   try {
     curso.value = await coursesService.getBySlug(slug);
-    progressStore.hydrate(slug, { course_pct: curso.value.progress_pct, modules: [] });
     
-    if (route.query.auto_resume === '1' && curso.value.progress_pct > 0 && curso.value.progress_pct < 100) {
+    // Dynamically calculate accurate progress in case backend is stale
+    const allTemas = curso.value.modules.flatMap((m: any) => m.topics);
+    const isDone = (t: any) => t.has_exam ? t.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(t.state);
+    const alreadyDone = allTemas.filter(isDone).length;
+    const computedPct = allTemas.length > 0 ? Math.round((alreadyDone / allTemas.length) * 100) : 0;
+    
+    progressStore.hydrate(slug, { course_pct: Math.max(curso.value.progress_pct, computedPct), modules: [] });
+    
+    if (route.query.auto_resume === '1' && progressStore.coursePercentage(slug) > 0 && progressStore.coursePercentage(slug) < 100) {
       if (primerTemaPendiente.value) {
         router.replace(`/curso/${slug}/tema/${primerTemaPendiente.value.id}`);
         return;
@@ -37,14 +44,22 @@ onMounted(async () => {
 const joining = ref(false);
 const coverLoaded = ref(false);
 
+const isCompleted = computed(() => {
+  if (!curso.value) return false;
+  return curso.value.enrollment_status === 'completado' || progressStore.coursePercentage(slug) === 100;
+});
+
 const primerTemaPendiente = computed(() => {
   if (!curso.value) return null;
-  const all = curso.value.modules.flatMap(m => m.topics);
-  return all.find(t => t.state !== 'aprobado') ?? (curso.value.modules[0]?.topics[0] ?? null);
+  const all = curso.value.modules.flatMap((m: any) => m.topics);
+  const isDone = (t: any) => t.has_exam ? t.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(t.state);
+  return all.find(t => !isDone(t)) ?? (curso.value.modules[0]?.topics[0] ?? null);
 });
 
 const ctaHref = computed(() => {
-  if (!curso.value || !primerTemaPendiente.value) return '';
+  if (!curso.value) return '';
+  if (isCompleted.value) return `/curso/${curso.value.slug}/certificado`;
+  if (!primerTemaPendiente.value) return `/curso/${curso.value.slug}/certificado`;
   return `/curso/${curso.value.slug}/tema/${primerTemaPendiente.value.id}`;
 });
 
@@ -53,7 +68,8 @@ const ctaLabel = computed(() => {
   if (curso.value.enrollment_status === 'no_iniciado') {
     return 'Inscribirse al curso';
   }
-  return curso.value.progress_pct > 0 ? 'Continuar' : 'Empezar curso';
+  if (isCompleted.value) return 'Ver Certificado';
+  return progressStore.coursePercentage(slug) > 0 ? 'Continuar' : 'Empezar curso';
 });
 
 async function handleCtaClick() {
@@ -127,8 +143,8 @@ async function handleCtaClick() {
             </summary>
             <ul class="mt-4 space-y-2 border-t border-[var(--color-border)] pt-4">
               <li v-for="(tema, ti) in mod.topics" :key="tema.id || ti" class="flex items-center gap-3 text-sm">
-                <span :class="`w-7 h-7 rounded-full grid place-items-center text-xs font-semibold ${tema.state === 'aprobado' ? 'bg-emerald-100 text-emerald-700' : tema.state === 'bloqueado' ? 'bg-[var(--color-app-bg)] text-[var(--color-text-muted)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'}`">
-                  {{ tema.state === 'aprobado' ? '✓' : ti + 1 }}
+                <span :class="`w-7 h-7 rounded-full grid place-items-center text-xs font-semibold ${(tema.has_exam ? tema.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(tema.state)) ? 'bg-emerald-100 text-emerald-700' : tema.state === 'bloqueado' ? 'bg-[var(--color-app-bg)] text-[var(--color-text-muted)]' : 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'}`">
+                  {{ (tema.has_exam ? tema.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(tema.state)) ? '✓' : ti + 1 }}
                 </span>
                 <span :class="tema.state === 'bloqueado' ? 'text-[var(--color-text-muted)]' : ''">{{ tema.title }}</span>
                 <span class="ml-auto text-xs text-[var(--color-text-muted)]">{{ tema.duration_seconds }}s</span>

@@ -324,8 +324,8 @@ onUnmounted(() => {
 
 // Sticky CTA Bar computed options
 const canContinue = computed(() => contentDone.value);
-const buttonLabel = computed(() => props.tema?.has_exam ? 'Ir al Examen' : 'Siguiente Tema');
-const buttonHref = computed(() => props.tema?.has_exam ? props.examUrl : (props.nextUrl || '#'));
+const buttonLabel = computed(() => (props.tema?.has_exam && props.tema?.state !== 'aprobado') ? 'Ir al Examen' : 'Siguiente Tema');
+const buttonHref = computed(() => (props.tema?.has_exam && props.tema?.state !== 'aprobado') ? props.examUrl : (props.nextUrl || '#'));
 </script>
 
 <template>
