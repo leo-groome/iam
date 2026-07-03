@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onActivated, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
 import SkeletonTable from '@/components/ui/SkeletonTable.vue';
 
 const courses = ref([]);
 const loading = ref(true);
+let initialized = false;
 
-onMounted(async () => {
+const loadCourses = async () => {
   try {
     const data = await adminService.getCourses();
     courses.value = Array.isArray(data) ? data : (data as any).items ?? [];
@@ -14,6 +15,17 @@ onMounted(async () => {
     console.error('Error loading courses:', err);
   } finally {
     loading.value = false;
+  }
+};
+
+onMounted(async () => {
+  await loadCourses();
+  initialized = true;
+});
+
+onActivated(() => {
+  if (initialized) {
+    loadCourses(); // Recargar en segundo plano (lazy fetch) cuando la vista vuelve a activarse
   }
 });
 </script>
