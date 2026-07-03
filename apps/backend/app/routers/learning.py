@@ -55,7 +55,6 @@ _UNLOCKED_STATES = {"disponible", "contenido_visto", "aprobado", "en_repaso"}
 _EXAM_ALLOWED_STATES = {"contenido_visto", "aprobado", "en_repaso"}
 _EXAM_TOKEN_TTL_SECONDS = 15 * 60
 _VIDEO_COMPLETE_PCT = 95
-_VIDEO_PROGRESS_TOLERANCE_PCT = 2
 
 
 def _issue_exam_token(
@@ -305,17 +304,7 @@ async def topic_heartbeat(
         if body.pos_seconds is not None:
             tp.video_last_pos_seconds = body.pos_seconds
             server_pct = _video_pct_from_position(body.pos_seconds, topic.duration_seconds)
-            if (
-                body.max_seen_pct is not None
-                and body.max_seen_pct > server_pct + _VIDEO_PROGRESS_TOLERANCE_PCT
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail={"code": "impossible_progress"},
-                )
             tp.video_max_seen_pct = max(tp.video_max_seen_pct, server_pct)
-        if body.max_seen_pct is not None:
-            tp.video_max_seen_pct = max(tp.video_max_seen_pct, body.max_seen_pct)
         if tp.video_max_seen_pct >= _VIDEO_COMPLETE_PCT:
             _complete_content(tp)
     elif body.type in ("pdf",):

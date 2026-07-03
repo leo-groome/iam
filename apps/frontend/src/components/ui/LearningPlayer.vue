@@ -178,10 +178,10 @@ watch(
       heartbeatInterval = setInterval(async () => {
         if (playing.value && videoEl.value && props.tema) {
           const pos = Math.floor(videoEl.value.currentTime);
-          const maxSeen = Math.max(videoProgress.value, Math.round((pos / videoDuration.value) * 100));
+          const currentPct = Math.round((pos / videoDuration.value) * 100);
           try {
             const resp = (await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
-              body: { type: 'video', pos_seconds: pos, max_seen_pct: maxSeen },
+              body: { type: 'video', pos_seconds: pos, max_seen_pct: currentPct },
             })) as any;
             applyProgressResponse(resp);
           } catch (e) {

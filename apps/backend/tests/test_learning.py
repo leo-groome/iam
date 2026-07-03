@@ -230,7 +230,7 @@ async def test_heartbeat_monotonic_max_seen_pct(client: AsyncClient, scaffold, d
 
 
 @pytest.mark.asyncio
-async def test_heartbeat_rejects_impossible_video_jump(client: AsyncClient, scaffold):
+async def test_heartbeat_ignores_claimed_video_jump(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
@@ -239,9 +239,12 @@ async def test_heartbeat_rejects_impossible_video_jump(client: AsyncClient, scaf
             json={"type": "video", "pos_seconds": 1, "max_seen_pct": 95},
             headers=HEADERS,
         )
+        exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
 
-    assert resp.status_code == 422
-    assert resp.json()["detail"]["code"] == "impossible_progress"
+    assert resp.status_code == 200
+    assert resp.json()["video_max_seen_pct"] == 1
+    assert resp.json()["state"] == "disponible"
+    assert exam_resp.status_code == 403
 
 
 @pytest.mark.asyncio
