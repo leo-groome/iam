@@ -5,6 +5,7 @@ import VueDevTools from 'vite-plugin-vue-devtools';
 import path from 'path';
 
 export default defineConfig({
+  envPrefix: ['VITE_', 'PUBLIC_'],
   plugins: [
     vue(),
     VueDevTools(),
