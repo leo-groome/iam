@@ -303,7 +303,8 @@ async def topic_heartbeat(
             )
         if body.pos_seconds is not None:
             tp.video_last_pos_seconds = body.pos_seconds
-            server_pct = _video_pct_from_position(body.pos_seconds, topic.duration_seconds)
+            duration_seconds = body.duration_seconds or topic.duration_seconds
+            server_pct = _video_pct_from_position(body.pos_seconds, duration_seconds)
             tp.video_max_seen_pct = max(tp.video_max_seen_pct, server_pct)
         if tp.video_max_seen_pct >= _VIDEO_COMPLETE_PCT:
             _complete_content(tp)

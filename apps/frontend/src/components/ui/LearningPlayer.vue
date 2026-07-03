@@ -181,7 +181,12 @@ watch(
           const currentPct = Math.round((pos / videoDuration.value) * 100);
           try {
             const resp = (await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
-              body: { type: 'video', pos_seconds: pos, max_seen_pct: currentPct },
+              body: {
+                type: 'video',
+                pos_seconds: pos,
+                duration_seconds: Math.round(videoDuration.value),
+                max_seen_pct: currentPct,
+              },
             })) as any;
             applyProgressResponse(resp);
           } catch (e) {
@@ -222,6 +227,7 @@ async function syncVideoProgress(pct: number, showSaving = false): Promise<void>
       body: {
         type: 'video',
         pos_seconds: Math.floor(videoEl.value.currentTime),
+        duration_seconds: Math.round(videoDuration.value),
         max_seen_pct: Math.min(100, pct),
       },
     })) as any;

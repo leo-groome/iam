@@ -296,6 +296,32 @@ async def test_video_heartbeat_at_95_marks_content_seen(client: AsyncClient, sca
     assert exam_resp.status_code == 200
 
 
+@pytest.mark.asyncio
+async def test_video_heartbeat_uses_player_duration_when_db_duration_differs(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    t1 = scaffold["t1"]
+    t1.duration_seconds = 999
+    await db_session.commit()
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        resp = await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={
+                "type": "video",
+                "pos_seconds": 115,
+                "duration_seconds": 120,
+                "max_seen_pct": 96,
+            },
+            headers=HEADERS,
+        )
+        exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "contenido_visto"
+    assert exam_resp.status_code == 200
+
+
 # ─── Exam: submit fail → en_repaso, video_max_seen_pct = 0 ───────────────
 
 

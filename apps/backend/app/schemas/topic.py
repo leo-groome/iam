@@ -30,6 +30,7 @@ class TopicView(BaseModel):
 class HeartbeatRequest(BaseModel):
     type: str
     pos_seconds: int | None = None
+    duration_seconds: int | None = None
     max_seen_pct: int | None = None
     last_page: int | None = None
     total_pages: int | None = None
