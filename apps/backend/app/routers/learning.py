@@ -55,6 +55,7 @@ _UNLOCKED_STATES = {"disponible", "contenido_visto", "aprobado", "en_repaso"}
 _EXAM_ALLOWED_STATES = {"contenido_visto", "aprobado", "en_repaso"}
 _EXAM_TOKEN_TTL_SECONDS = 15 * 60
 _VIDEO_COMPLETE_PCT = 95
+_MIN_VIDEO_COMPLETE_SECONDS = 5
 
 
 def _issue_exam_token(
@@ -306,6 +307,12 @@ async def topic_heartbeat(
             duration_seconds = body.duration_seconds or topic.duration_seconds
             server_pct = _video_pct_from_position(body.pos_seconds, duration_seconds)
             tp.video_max_seen_pct = max(tp.video_max_seen_pct, server_pct)
+            if (
+                body.max_seen_pct is not None
+                and body.max_seen_pct >= _VIDEO_COMPLETE_PCT
+                and body.pos_seconds >= _MIN_VIDEO_COMPLETE_SECONDS
+            ):
+                tp.video_max_seen_pct = max(tp.video_max_seen_pct, body.max_seen_pct)
         if tp.video_max_seen_pct >= _VIDEO_COMPLETE_PCT:
             _complete_content(tp)
     elif body.type in ("pdf",):
