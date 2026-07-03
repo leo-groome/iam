@@ -26,9 +26,6 @@ onMounted(async () => {
 const studentName = authStore.user?.full_name || '';
 const today = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
 
-declare const html2canvas: any;
-declare const jspdf: any;
-
 const downloading = ref(false);
 
 async function downloadPdf() {
@@ -37,9 +34,9 @@ async function downloadPdf() {
   
   downloading.value = true;
   try {
-    const canvas = await html2canvas(el, { scale: 2, useCORS: true });
+    const canvas = await (window as any).html2canvas(el, { scale: 2, useCORS: true });
     const imgData = canvas.toDataURL('image/png');
-    const { jsPDF } = jspdf;
+    const { jsPDF } = (window as any).jspdf;
     
     // Create landscape PDF with dimensions matching the canvas
     const pdf = new jsPDF({
