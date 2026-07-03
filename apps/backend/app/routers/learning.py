@@ -21,7 +21,7 @@ from app.crud.exam import (
 from app.crud.topic import get_or_create_progress, get_topic_with_module
 from app.db import get_db
 from app.deps import get_current_user
-from app.models.course import Module, Topic
+from app.models.course import Course, Module, Topic
 from app.models.progress import Enrollment, ExamAttempt, TopicProgress
 from app.models.question import Question
 from app.models.user import User
