@@ -34,18 +34,23 @@ async function downloadPdf() {
   
   downloading.value = true;
   try {
-    const canvas = await (window as any).html2canvas(el, { scale: 2, useCORS: true });
-    const imgData = canvas.toDataURL('image/png');
+    const { toPng } = (window as any).htmlToImage;
+    const imgData = await toPng(el, { pixelRatio: 2, cacheBust: true });
+    
     const { jsPDF } = (window as any).jspdf;
     
-    // Create landscape PDF with dimensions matching the canvas
+    // We get dimensions from the element directly
+    const width = el.offsetWidth;
+    const height = el.offsetHeight;
+    
+    // Create landscape PDF with dimensions matching the element
     const pdf = new jsPDF({
       orientation: 'landscape',
       unit: 'px',
-      format: [canvas.width, canvas.height]
+      format: [width, height]
     });
     
-    pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+    pdf.addImage(imgData, 'PNG', 0, 0, width, height);
     pdf.save(`Certificado-${curso.value?.title || 'Curso'}.pdf`);
   } catch (err) {
     console.error('Error generating PDF:', err);
