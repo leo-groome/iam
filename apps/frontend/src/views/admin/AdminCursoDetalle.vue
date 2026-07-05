@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
 import { mediaService } from '@/services/media.service';
 
@@ -14,6 +14,9 @@ const saving = ref(false);
 
 const isUploadingCover = ref(false);
 const isUploadingMedia = ref(false);
+const deleteConfirmOpen = ref(false);
+const deleteConfirmText = ref('');
+const deleteError = ref('');
 
 // Form state
 const formData = ref<any>({
@@ -115,14 +118,31 @@ const archiveCourse = async () => {
 
 const deleteCourseAction = async () => {
   if (isNew) return;
-  if (!confirm('¿Eliminar este curso permanentemente? Esta acción no se puede deshacer.')) return;
+  deleteConfirmText.value = '';
+  deleteError.value = '';
+  deleteConfirmOpen.value = true;
+};
+
+const closeDeleteConfirm = () => {
+  if (saving.value) return;
+  deleteConfirmOpen.value = false;
+  deleteConfirmText.value = '';
+  deleteError.value = '';
+};
+
+const requiredDeleteTitle = computed(() => curso.value?.title || formData.value.title || '');
+const canConfirmDelete = computed(() => deleteConfirmText.value === requiredDeleteTitle.value);
+
+const confirmDeleteCourse = async () => {
+  if (isNew || !canConfirmDelete.value) return;
   saving.value = true;
+  deleteError.value = '';
   try {
-    await adminService.deleteCourse(id);
+    await adminService.deleteCourse(id, deleteConfirmText.value);
     router.push('/admin/cursos');
   } catch (err: any) {
     console.error('Error deleting course:', err);
-    alert('Error al eliminar: ' + (err.message || 'Error desconocido'));
+    deleteError.value = err.message || 'No se pudo eliminar el curso.';
   } finally {
     saving.value = false;
   }
@@ -339,6 +359,65 @@ const saveDrawer = async () => {
       <button class="btn btn-primary" type="button" @click="publishCourse" :disabled="isNew || saving">{{ saving ? "Publicando..." : "Publicar" }}</button>
     </div>
   </header>
+
+  <Transition name="fade">
+    <div
+      v-if="deleteConfirmOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-course-title"
+      @click.self="closeDeleteConfirm"
+    >
+      <form class="card w-full max-w-lg p-6 shadow-2xl" @submit.prevent="confirmDeleteCourse">
+        <div class="flex items-start gap-4">
+          <div class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-100 text-red-700">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <h2 id="delete-course-title" class="text-xl font-bold text-red-700">Eliminar curso permanentemente</h2>
+            <p class="mt-2 text-sm text-[var(--color-text-muted)]">
+              Esta acción eliminará el curso y su estructura. No se puede deshacer.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          Para confirmar, escribe exactamente:
+          <strong class="mt-1 block break-words">{{ requiredDeleteTitle }}</strong>
+        </div>
+
+        <div class="mt-5">
+          <label for="delete-course-confirmation" class="label">Nombre del curso</label>
+          <input
+            id="delete-course-confirmation"
+            v-model="deleteConfirmText"
+            class="input"
+            autocomplete="off"
+            :disabled="saving"
+            :placeholder="requiredDeleteTitle"
+          />
+        </div>
+
+        <p v-if="deleteError" class="mt-3 text-sm text-red-600">{{ deleteError }}</p>
+
+        <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button type="button" class="btn btn-secondary" :disabled="saving" @click="closeDeleteConfirm">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            class="btn border border-red-600 bg-red-600 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="saving || !canConfirmDelete"
+          >
+            {{ saving ? 'Eliminando...' : 'Eliminar definitivamente' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </Transition>
 
   <div v-if="!isNew && curso" class="card p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between mb-8 shadow-sm">
     <div class="flex items-center gap-4">

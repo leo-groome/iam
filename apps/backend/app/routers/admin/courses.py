@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, UTC
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import admin as crud
@@ -162,6 +162,7 @@ async def archive_course(
 @router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_course(
     course_id: uuid.UUID,
+    confirmation_title: str = Query(..., min_length=1, max_length=80),  # noqa: B008
     current_user: User = Depends(_guard),  # noqa: B008
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> None:
@@ -169,6 +170,15 @@ async def delete_course(
     if course is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     _assert_owner_or_admin(current_user, course.instructor_id)
+
+    if confirmation_title != course.title:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "confirmation_mismatch",
+                "message": "Course title confirmation does not match.",
+            },
+        )
 
     if await crud.course_has_enrollments(db, course_id):
         raise HTTPException(

@@ -31,8 +31,11 @@ export const adminService = {
     return apiPost('/api/v1/admin/courses/{id}/archive' as any, { params: { id } }) as Promise<any>;
   },
 
-  async deleteCourse(id: string): Promise<any> {
-    return apiDelete('/api/v1/admin/courses/{id}' as any, { params: { id } }) as Promise<any>;
+  async deleteCourse(id: string, confirmationTitle: string): Promise<any> {
+    return apiDelete('/api/v1/admin/courses/{id}' as any, {
+      params: { id },
+      query: { confirmation_title: confirmationTitle },
+    }) as Promise<any>;
   },
 
   // Modules

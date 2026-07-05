@@ -345,6 +345,7 @@ async def test_delete_course_with_enrollments_returns_409(
     ):
         resp = await client.delete(
             f"/api/v1/admin/courses/{course_id}",
+            params={"confirmation_title": "Course To Delete Enroll"},
             headers=ADMIN_HEADERS,
         )
 
@@ -353,6 +354,47 @@ async def test_delete_course_with_enrollments_returns_409(
 
 
 # ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_delete_course_requires_exact_title_confirmation(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+
+    with patch(
+        "app.deps.verify_stack_token",
+        _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
+    ):
+        create_resp = await client.post(
+            "/api/v1/admin/courses",
+            json={
+                "title": "Danger Delete Course",
+                "short_desc": "Course for delete confirmation",
+                "slug": "danger-delete-course",
+                "age_min": 13,
+                "age_max": 99,
+            },
+            headers=ADMIN_HEADERS,
+        )
+        assert create_resp.status_code == 201
+        course_id = create_resp.json()["id"]
+
+        mismatch = await client.delete(
+            f"/api/v1/admin/courses/{course_id}",
+            params={"confirmation_title": "danger delete course"},
+            headers=ADMIN_HEADERS,
+        )
+        deleted = await client.delete(
+            f"/api/v1/admin/courses/{course_id}",
+            params={"confirmation_title": "Danger Delete Course"},
+            headers=ADMIN_HEADERS,
+        )
+
+    assert mismatch.status_code == 422, mismatch.text
+    assert mismatch.json()["detail"]["code"] == "confirmation_mismatch"
+    assert deleted.status_code == 204, deleted.text
+
+
 # Test 6: POST module con title <3 chars -> 422
 # ---------------------------------------------------------------------------
 
