@@ -70,6 +70,38 @@ export async function sendEmailVerificationOtp(email: string): Promise<void> {
   if (!res.ok) await throwNeonAuthResponse(res)
 }
 
+export async function requestPasswordResetOtp(email: string): Promise<void> {
+  const res = await fetch(`${getAuthUrl()}/email-otp/request-password-reset`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ email }),
+  })
+
+  if (!res.ok) await throwNeonAuthResponse(res)
+}
+
+export async function resetPasswordWithOtp(
+  email: string,
+  otp: string,
+  password: string,
+): Promise<void> {
+  const res = await fetch(`${getAuthUrl()}/email-otp/reset-password`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ email, otp, password }),
+  })
+
+  if (!res.ok) await throwNeonAuthResponse(res)
+}
+
 export function isMockAuthAllowed(): boolean {
   return import.meta.env.PUBLIC_ALLOW_MOCK_AUTH === 'true'
 }

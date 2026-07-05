@@ -25,6 +25,14 @@ const selectedOption = ref<string | null>(null)
 
 const result = ref<{ score: number; passed: boolean; min_score: number; message: string } | null>(null)
 
+function getApiDetailCode(err: ApiError): string | null {
+  const detail = (err.body as { detail?: unknown } | undefined)?.detail
+  if (detail && typeof detail === 'object' && 'code' in detail) {
+    return String((detail as { code: unknown }).code)
+  }
+  return null
+}
+
 // Fetch exam on mount
 onMounted(async () => {
   try {
@@ -41,9 +49,16 @@ onMounted(async () => {
         window.location.href = '/login'
         return
       }
-      fetchError.value = err.status === 429
-        ? 'Demasiados intentos, espera unos minutos.'
-        : (err.message || 'No se pudo cargar el examen.')
+      const detailCode = getApiDetailCode(err)
+      if (err.status === 403 && (detailCode === 'topic_locked' || detailCode === 'repaso_required')) {
+        fetchError.value = 'Termina el contenido de la leccion antes de abrir el examen.'
+      } else if (err.status === 404) {
+        fetchError.value = 'Este tema no tiene preguntas configuradas.'
+      } else {
+        fetchError.value = err.status === 429
+          ? 'Demasiados intentos, espera unos minutos.'
+          : (err.message || 'No se pudo cargar el examen.')
+      }
     } else {
       fetchError.value = 'Error de red. Verifica tu conexion.'
     }
@@ -151,9 +166,14 @@ function reloadPage() {
     </div>
     <h2 class="text-xl font-bold mb-2">No se pudo cargar el examen</h2>
     <p class="text-[var(--color-text-muted)] mb-6">{{ fetchError }}</p>
-    <button @click="reloadPage" class="btn btn-primary">
-      Reintentar
-    </button>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <router-link :to="repasoHref" class="btn btn-primary">
+        Volver a la leccion
+      </router-link>
+      <button @click="reloadPage" class="btn btn-secondary">
+        Reintentar
+      </button>
+    </div>
   </div>
 
   <!-- Active exam -->

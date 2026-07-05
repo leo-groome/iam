@@ -34,6 +34,18 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/public/signup.vue'),
     meta: { layout: 'PublicLayout' }
   },
+  {
+    path: '/recuperar-contrasena',
+    name: 'RecuperarContrasena',
+    component: () => import('@/views/public/recuperar-contrasena.vue'),
+    meta: { layout: 'PublicLayout' }
+  },
+  {
+    path: '/restablecer-contrasena',
+    name: 'RestablecerContrasena',
+    component: () => import('@/views/public/restablecer-contrasena.vue'),
+    meta: { layout: 'PublicLayout' }
+  },
   // Compat: rutas legacy redirigen a /login y /signup
   { path: '/registro', redirect: (to) => ({ path: '/signup', query: to.query }) },
   {

@@ -19,7 +19,7 @@ export const coursesService = {
   },
 
   async getTopicExam(topicId: string): Promise<ExamResponse> {
-    return apiPost(`/api/v1/topics/{topic_id}/exam` as any, { params: { topic_id: topicId } }) as Promise<ExamResponse>;
+    return apiGet(`/api/v1/topics/{topic_id}/exam` as any, { params: { topic_id: topicId } }) as Promise<ExamResponse>;
   },
 
   async submitTopicExam(topicId: string, payload: any) {

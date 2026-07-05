@@ -43,6 +43,7 @@ class ModuleTopicItem(BaseModel):
     has_exam: bool
     order_index: int
     media_key: str | None = None
+    state: str = "bloqueado"
 
 
 class ModuleItem(BaseModel):

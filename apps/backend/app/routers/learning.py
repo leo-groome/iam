@@ -201,9 +201,20 @@ def _video_pct_from_position(pos_seconds: int, duration_seconds: int | None) -> 
     return min(100, max(0, round((pos_seconds / duration_seconds) * 100)))
 
 
+def _video_duration_for_progress(topic: Topic, reported_duration_seconds: int | None) -> int | None:
+    durations = [
+        duration
+        for duration in (topic.duration_seconds, reported_duration_seconds)
+        if duration is not None and duration > 0
+    ]
+    if not durations:
+        return None
+    return max(durations)
+
+
 def _complete_content(tp: TopicProgress) -> None:
     tp.content_completed_at = datetime.now(UTC)  # type: ignore[assignment]
-    if tp.state not in ("contenido_visto", "aprobado", "en_repaso"):
+    if tp.state != "aprobado":
         tp.state = "contenido_visto"
 
 
@@ -304,16 +315,13 @@ async def topic_heartbeat(
             )
         if body.pos_seconds is not None:
             tp.video_last_pos_seconds = body.pos_seconds
-            duration_seconds = body.duration_seconds or topic.duration_seconds
+            duration_seconds = _video_duration_for_progress(topic, body.duration_seconds)
             server_pct = _video_pct_from_position(body.pos_seconds, duration_seconds)
             tp.video_max_seen_pct = max(tp.video_max_seen_pct, server_pct)
-            if (
-                body.max_seen_pct is not None
-                and body.max_seen_pct >= _VIDEO_COMPLETE_PCT
-                and body.pos_seconds >= _MIN_VIDEO_COMPLETE_SECONDS
-            ):
-                tp.video_max_seen_pct = max(tp.video_max_seen_pct, body.max_seen_pct)
-        if tp.video_max_seen_pct >= _VIDEO_COMPLETE_PCT:
+        if (
+            tp.video_max_seen_pct >= _VIDEO_COMPLETE_PCT
+            and tp.video_last_pos_seconds >= _MIN_VIDEO_COMPLETE_SECONDS
+        ):
             _complete_content(tp)
     elif body.type in ("pdf",):
         if body.last_page is not None:
@@ -360,7 +368,10 @@ async def mark_content_done(
     ct = topic.content_type
 
     if ct == "video":
-        if tp.video_max_seen_pct < 95:
+        if (
+            tp.video_max_seen_pct < _VIDEO_COMPLETE_PCT
+            or tp.video_last_pos_seconds < _MIN_VIDEO_COMPLETE_SECONDS
+        ):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"code": "content_incomplete"},
@@ -491,6 +502,12 @@ async def submit_topic_exam(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"code": "topic_locked"},
+        )
+
+    if tp.state == "en_repaso" and tp.content_completed_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "repaso_required"},
         )
 
     questions = await get_questions_for_topic(db, topic_id)

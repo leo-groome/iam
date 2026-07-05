@@ -590,6 +590,14 @@ function classifyAuthError(err: unknown): string {
                 </div>
                 <p v-if="loginErrors.password" class="mt-1 text-xs text-red-600">{{ loginErrors.password }}</p>
               </div>
+              <div class="text-right">
+                <RouterLink
+                  to="/recuperar-contrasena"
+                  class="text-sm text-[var(--color-primary)] font-semibold hover:underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </RouterLink>
+              </div>
               <button type="submit" class="btn btn-primary btn-block" :disabled="isLoading">
                 <span v-if="isLoading" class="opacity-70">Iniciando sesión…</span>
                 <span v-else>Iniciar sesión</span>

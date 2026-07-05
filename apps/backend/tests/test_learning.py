@@ -280,6 +280,26 @@ async def test_mark_content_done_video_at_95_succeeds(client: AsyncClient, scaff
 
 
 @pytest.mark.asyncio
+async def test_mark_content_done_video_requires_minimum_watch_seconds(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    t1 = scaffold["t1"]
+    t1.duration_seconds = 4
+    await db_session.commit()
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "video", "pos_seconds": 4, "max_seen_pct": 100},
+            headers=HEADERS,
+        )
+        resp = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["code"] == "content_incomplete"
+
+
+@pytest.mark.asyncio
 async def test_video_heartbeat_at_95_marks_content_seen(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
 
@@ -297,7 +317,7 @@ async def test_video_heartbeat_at_95_marks_content_seen(client: AsyncClient, sca
 
 
 @pytest.mark.asyncio
-async def test_video_heartbeat_uses_player_duration_when_db_duration_differs(
+async def test_video_heartbeat_does_not_unlock_with_shorter_reported_duration(
     client: AsyncClient, scaffold, db_session: AsyncSession
 ):
     t1 = scaffold["t1"]
@@ -318,12 +338,13 @@ async def test_video_heartbeat_uses_player_duration_when_db_duration_differs(
         exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
 
     assert resp.status_code == 200
-    assert resp.json()["state"] == "contenido_visto"
-    assert exam_resp.status_code == 200
+    assert resp.json()["state"] == "disponible"
+    assert resp.json()["video_max_seen_pct"] == 12
+    assert exam_resp.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_video_heartbeat_accepts_completed_player_pct_when_duration_missing(
+async def test_video_heartbeat_ignores_completed_client_pct_without_position_progress(
     client: AsyncClient, scaffold, db_session: AsyncSession
 ):
     t1 = scaffold["t1"]
@@ -339,8 +360,9 @@ async def test_video_heartbeat_accepts_completed_player_pct_when_duration_missin
         exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
 
     assert resp.status_code == 200
-    assert resp.json()["state"] == "contenido_visto"
-    assert exam_resp.status_code == 200
+    assert resp.json()["state"] == "disponible"
+    assert resp.json()["video_max_seen_pct"] == 1
+    assert exam_resp.status_code == 403
 
 
 # ─── Exam: submit fail → en_repaso, video_max_seen_pct = 0 ───────────────
@@ -395,6 +417,91 @@ async def test_exam_fail_sets_en_repaso_and_resets_progress(
 
 
 # ─── Exam: submit pass → aprobado, progress recomputed ───────────────────
+
+
+@pytest.mark.asyncio
+async def test_exam_after_failure_requires_rewatch_before_retry(client: AsyncClient, scaffold):
+    t1 = scaffold["t1"]
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            headers=HEADERS,
+        )
+        exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
+        exam = exam_resp.json()
+        question = exam["questions"][0]
+        wrong_option = next(o for o in question["options"] if o["texto"] == "Wrong")
+
+        fail_resp = await client.post(
+            f"/api/v1/topics/{t1.id}/exam/submit",
+            json={
+                "exam_token": exam["exam_token"],
+                "answers": [{"question_id": question["id"], "option_id": wrong_option["id"]}],
+            },
+            headers=HEADERS,
+        )
+        retry_before_rewatch = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
+
+        rewatch = await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            headers=HEADERS,
+        )
+        retry_after_rewatch = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
+
+    assert fail_resp.status_code == 200
+    assert fail_resp.json()["passed"] is False
+    assert retry_before_rewatch.status_code == 403
+    assert retry_before_rewatch.json()["detail"]["code"] == "repaso_required"
+    assert rewatch.status_code == 200
+    assert rewatch.json()["state"] == "contenido_visto"
+    assert retry_after_rewatch.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_exam_submit_with_prefailure_token_requires_rewatch(client: AsyncClient, scaffold):
+    t1 = scaffold["t1"]
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            headers=HEADERS,
+        )
+
+        first_exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
+        second_exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
+        first_exam = first_exam_resp.json()
+        second_exam = second_exam_resp.json()
+
+        first_question = first_exam["questions"][0]
+        first_wrong = next(o for o in first_question["options"] if o["texto"] == "Wrong")
+        fail_resp = await client.post(
+            f"/api/v1/topics/{t1.id}/exam/submit",
+            json={
+                "exam_token": first_exam["exam_token"],
+                "answers": [{"question_id": first_question["id"], "option_id": first_wrong["id"]}],
+            },
+            headers=HEADERS,
+        )
+
+        second_question = second_exam["questions"][0]
+        second_correct = next(o for o in second_question["options"] if o["texto"] == "Correct")
+        stale_submit = await client.post(
+            f"/api/v1/topics/{t1.id}/exam/submit",
+            json={
+                "exam_token": second_exam["exam_token"],
+                "answers": [{"question_id": second_question["id"], "option_id": second_correct["id"]}],
+            },
+            headers=HEADERS,
+        )
+
+    assert fail_resp.status_code == 200
+    assert fail_resp.json()["passed"] is False
+    assert stale_submit.status_code == 403
+    assert stale_submit.json()["detail"]["code"] == "repaso_required"
 
 
 @pytest.mark.asyncio

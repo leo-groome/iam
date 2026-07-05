@@ -30,16 +30,23 @@ from app.services.progress_engine import compute_topic_state
 router = APIRouter(prefix="/courses", tags=["catalog"])
 
 
-def _build_module_item(m: Module) -> ModuleItem:
+async def _build_module_item(db: AsyncSession, current_user: User, m: Module) -> ModuleItem:
     active_topics = sorted(
         [t for t in m.topics if t.archived_at is None],
         key=lambda t: t.order_index,
     )
-    return ModuleItem(
-        id=m.id,
-        title=m.title,
-        order_index=m.order_index,
-        topics=[
+    topic_items: list[ModuleTopicItem] = []
+    for t in active_topics:
+        state = await compute_topic_state(db, current_user, t)
+        tp_result = await db.execute(
+            select(TopicProgress).where(
+                TopicProgress.user_id == current_user.id,
+                TopicProgress.topic_id == t.id,
+            )
+        )
+        tp = tp_result.scalar_one_or_none()
+        real_state = tp.state if tp is not None else state
+        topic_items.append(
             ModuleTopicItem(
                 id=t.id,
                 title=t.title,
@@ -47,9 +54,14 @@ def _build_module_item(m: Module) -> ModuleItem:
                 duration_seconds=t.duration_seconds,
                 has_exam=t.has_exam,
                 order_index=t.order_index,
+                state=real_state,
             )
-            for t in active_topics
-        ],
+        )
+    return ModuleItem(
+        id=m.id,
+        title=m.title,
+        order_index=m.order_index,
+        topics=topic_items,
     )
 
 
@@ -124,6 +136,11 @@ async def get_course_detail(
         key=lambda m: m.order_index,
     )
 
+    module_items = [
+        await _build_module_item(db, current_user, m)
+        for m in active_modules
+    ]
+
     return CourseDetail(
         id=course.id,
         slug=course.slug,
@@ -135,7 +152,7 @@ async def get_course_detail(
         age_max=course.age_max,
         order_index=course.order_index,
         status=course.status,
-        modules=[_build_module_item(m) for m in active_modules],
+        modules=module_items,
         enrollment_status=enrollment_status,
         progress_pct=progress_pct,
     )

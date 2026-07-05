@@ -51,7 +51,7 @@ const markDoneSuccess = ref(false);
 const contentType = computed(() => props.tema?.content_type || 'video');
 const duration = computed(() => props.tema?.duration_seconds || 180);
 const videoDuration = computed(() => actualDuration.value || duration.value || 0);
-const doneStates = ['contenido_visto', 'aprobado', 'en_repaso'];
+const doneStates = ['contenido_visto', 'aprobado'];
 
 let heartbeatInterval: any;
 let timer: any;
@@ -176,7 +176,7 @@ watch(
 
       // Setup periodic heartbeat
       heartbeatInterval = setInterval(async () => {
-        if (playing.value && videoEl.value && props.tema) {
+        if (playing.value && videoEl.value && props.tema && actualDuration.value && actualDuration.value > 0) {
           const pos = Math.floor(videoEl.value.currentTime);
           const currentPct = Math.round((pos / videoDuration.value) * 100);
           try {
@@ -204,8 +204,12 @@ function setupScrollTracking(): void {
     const h = document.documentElement.scrollHeight - window.innerHeight;
     const pct = h > 0 ? Math.min(100, Math.round((window.scrollY / h) * 100)) : 100;
     progress.value = pct;
-    if (pct >= 95 && !contentDone.value) {
-      markContentDone();
+    if (pct >= 95 && !contentDone.value && !markingDone.value) {
+      if (contentType.value === 'texto') {
+        onTextMarkDone();
+      } else {
+        markContentDone();
+      }
     }
   };
   window.addEventListener('scroll', scrollHandler, { passive: true });
@@ -221,6 +225,7 @@ function applyProgressResponse(resp: any): void {
 
 async function syncVideoProgress(pct: number, showSaving = false): Promise<void> {
   if (!props.tema || !videoEl.value) return;
+  if (!actualDuration.value || actualDuration.value <= 0) return;
   if (showSaving) markingDone.value = true;
   try {
     const resp = (await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
@@ -256,6 +261,15 @@ async function markContentDone() {
 }
 
 async function onTextMarkDone(): Promise<void> {
+  if (props.tema) {
+    try {
+      await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
+        body: { type: 'texto', max_seen_pct: 100 },
+      });
+    } catch (e) {
+      console.error('Text completion heartbeat failed', e);
+    }
+  }
   await markContentDone();
 }
 
