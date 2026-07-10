@@ -36,7 +36,7 @@ const title = ref('');
 const contentType = ref('video');
 const hasExam = ref(false);
 const contentBody = ref('');
-const durationMinutes = ref<number | null>(null);
+const durationSeconds = ref<number | null>(null);
 const examMinScore = ref(70);
 const mediaKey = ref('');
 const questions = ref<ExamQuestion[]>([]);
@@ -67,6 +67,14 @@ const normalizeQuestion = (q: any): ExamQuestion => {
 
 const canEditQuestions = computed(() => !isNew);
 
+const durationLabel = computed(() => {
+  const s = durationSeconds.value;
+  if (!s || s <= 0) return null;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+});
+
 onMounted(async () => {
   loading.value = true;
   try {
@@ -79,7 +87,7 @@ onMounted(async () => {
         contentType.value = tema.value.content_type;
         hasExam.value = tema.value.has_exam;
         contentBody.value = tema.value.content_body || '';
-        durationMinutes.value = tema.value.duration_seconds ? Math.round(tema.value.duration_seconds / 60) : null;
+        durationSeconds.value = tema.value.duration_seconds ?? null;
         examMinScore.value = tema.value.exam_min_score || 70;
         mediaKey.value = tema.value.media_key || '';
         questions.value = (tema.value.questions ?? []).map(normalizeQuestion);
@@ -157,14 +165,19 @@ const handleFileUpload = async (event: Event) => {
   const file = target.files?.[0];
   if (!file) return;
 
-  let scope: 'video' | 'pdf' | 'imagen' = 'imagen';
+  let scope: 'video' | 'pdf' | 'imagen' | 'audio' = 'imagen';
   if (contentType.value === 'video') scope = 'video';
   else if (contentType.value === 'pdf') scope = 'pdf';
+  else if (contentType.value === 'audio') scope = 'audio';
 
   isUploading.value = true;
   uploadPhase.value = null;
   errorMessage.value = '';
   try {
+    if (scope === 'video' || scope === 'audio') {
+      const secs = await mediaService.readMediaDuration(file);
+      if (secs) durationSeconds.value = secs;
+    }
     const key = await mediaService.uploadFile(file, scope, (phase) => {
       uploadPhase.value = phase;
     });
@@ -189,14 +202,13 @@ const handleSave = async () => {
 
   saving.value = true;
   try {
-    const dur = durationMinutes.value !== null && durationMinutes.value !== undefined ? Number(durationMinutes.value) * 60 : null;
     const score = Number(examMinScore.value) || 70;
     const formData: any = {
       title: title.value,
       content_type: contentType.value,
       has_exam: hasExam.value,
       content_body: contentBody.value || null,
-      duration_seconds: dur,
+      duration_seconds: durationSeconds.value ?? null,
       exam_min_score: score,
       media_key: mediaKey.value || null,
     };
@@ -264,35 +276,16 @@ const handleDeleteTopic = async () => {
             <option value="video">Video</option>
             <option value="pdf">PDF</option>
             <option value="imagen">Imagen / Infografía</option>
+            <option value="audio">Audio (MP3)</option>
             <option value="texto">Texto enriquecido</option>
           </select>
         </div>
 
-        <div v-if="contentType === 'texto'">
-          <label class="label">Contenido</label>
-          <textarea
-            class="input min-h-60 font-mono text-sm"
-            v-model="contentBody"
-            maxlength="20000"
-            placeholder="Escribe el contenido aquí (Markdown soportado)"
-          />
-          <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ contentBody.length }} / 20000 caracteres</p>
-        </div>
-
-        <div v-if="contentType === 'video'">
-          <label class="label">Duración (minutos)</label>
-          <input
-            type="number"
-            class="input"
-            v-model.number="durationMinutes"
-            min="1"
-            max="300"
-            placeholder="Ej: 15"
-          />
-        </div>
-
         <div v-if="contentType !== 'texto'">
           <label class="label">Archivo Multimedia</label>
+          <p v-if="(contentType === 'video' || contentType === 'audio') && durationLabel" class="text-xs text-[var(--color-text-muted)] mb-2">
+            Duración detectada automáticamente: <span class="font-medium">{{ durationLabel }}</span>
+          </p>
           <div v-if="mediaKey" class="border border-[var(--color-border)] rounded-xl p-4 flex items-center justify-between bg-[var(--color-bg-hover)] mb-4">
             <div class="flex items-center gap-3 overflow-hidden">
               <svg class="w-8 h-8 text-[var(--color-primary)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
@@ -308,17 +301,28 @@ const handleDeleteTopic = async () => {
             </p>
           </div>
           <div v-else class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
-            <input type="file" :accept="contentType === 'video' ? 'video/mp4, video/webm' : (contentType === 'pdf' ? 'application/pdf' : 'image/jpeg, image/png, image/webp')" @change="handleFileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+            <input type="file" :accept="contentType === 'video' ? 'video/mp4, video/webm' : (contentType === 'pdf' ? 'application/pdf' : (contentType === 'audio' ? 'audio/mpeg' : 'image/jpeg, image/png, image/webp'))" @change="handleFileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
             <div class="space-y-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <p class="text-sm text-[var(--color-text-muted)]">Arrastra o haz clic para subir</p>
               <p class="text-xs text-[var(--color-text-muted)]">
-                {{ contentType === 'video' ? 'Video (mp4/webm, máx 500 MB)' : (contentType === 'pdf' ? 'Documento PDF (máx 50 MB)' : 'Imagen (jpeg/png/webp, máx 10 MB)') }}
+                {{ contentType === 'video' ? 'Video (mp4/webm, máx 500 MB)' : (contentType === 'pdf' ? 'Documento PDF (máx 50 MB)' : (contentType === 'audio' ? 'Audio (mp3, máx 50 MB)' : 'Imagen (jpeg/png/webp, máx 10 MB)')) }}
               </p>
             </div>
           </div>
+        </div>
+
+        <div>
+          <label class="label">{{ contentType === 'texto' ? 'Contenido de la clase' : 'Material escrito complementario (opcional)' }}</label>
+          <textarea
+            class="input min-h-60 font-mono text-sm"
+            v-model="contentBody"
+            maxlength="20000"
+            :placeholder="contentType === 'texto' ? 'Escribe el contenido aquí (Markdown soportado)' : 'Notas, transcripción o material de apoyo (Markdown soportado)'"
+          />
+          <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ contentBody.length }} / 20000 caracteres</p>
         </div>
       </div>
 

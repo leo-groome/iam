@@ -280,6 +280,48 @@ async def test_mark_content_done_video_at_95_succeeds(client: AsyncClient, scaff
 
 
 @pytest.mark.asyncio
+async def test_mark_content_done_audio_below_95_fails(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    t1 = scaffold["t1"]
+    t1.content_type = "audio"
+    t1.media_key = "audio/abc/leccion.mp3"
+    await db_session.commit()
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "audio", "pos_seconds": 90, "max_seen_pct": 80},
+            headers=HEADERS,
+        )
+        resp = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["code"] == "content_incomplete"
+
+
+@pytest.mark.asyncio
+async def test_mark_content_done_audio_at_95_succeeds(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    t1 = scaffold["t1"]
+    t1.content_type = "audio"
+    t1.media_key = "audio/abc/leccion.mp3"
+    await db_session.commit()
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "audio", "pos_seconds": 120, "max_seen_pct": 95},
+            headers=HEADERS,
+        )
+        resp = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "contenido_visto"
+
+
+@pytest.mark.asyncio
 async def test_mark_content_done_video_requires_minimum_watch_seconds(
     client: AsyncClient, scaffold, db_session: AsyncSession
 ):
@@ -317,9 +359,12 @@ async def test_video_heartbeat_at_95_marks_content_seen(client: AsyncClient, sca
 
 
 @pytest.mark.asyncio
-async def test_video_heartbeat_does_not_unlock_with_shorter_reported_duration(
+async def test_video_heartbeat_uses_player_reported_duration(
     client: AsyncClient, scaffold, db_session: AsyncSession
 ):
+    # The player's reported duration is authoritative: an admin over-estimate of the
+    # duration (whole-minute label) must not block completion of a genuinely shorter
+    # clip. Real clip is 120s; watching to 96% unlocks even though the admin typed 999s.
     t1 = scaffold["t1"]
     t1.duration_seconds = 999
     await db_session.commit()
@@ -338,8 +383,34 @@ async def test_video_heartbeat_does_not_unlock_with_shorter_reported_duration(
         exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
 
     assert resp.status_code == 200
+    assert resp.json()["state"] == "contenido_visto"
+    assert resp.json()["video_max_seen_pct"] == 96
+    assert exam_resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_video_heartbeat_min_seconds_floor_blocks_trivial_skip(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    # Even at 100% of a very short reported duration, the 5-second minimum-watch floor
+    # keeps the content locked to prevent instant skips.
+    t1 = scaffold["t1"]
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        resp = await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={
+                "type": "video",
+                "pos_seconds": 3,
+                "duration_seconds": 3,
+                "max_seen_pct": 100,
+            },
+            headers=HEADERS,
+        )
+        exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
+
+    assert resp.status_code == 200
     assert resp.json()["state"] == "disponible"
-    assert resp.json()["video_max_seen_pct"] == 12
     assert exam_resp.status_code == 403
 
 

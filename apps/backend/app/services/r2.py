@@ -7,7 +7,7 @@ import aioboto3
 
 from app.config import settings
 
-_VALID_SCOPES = frozenset({"video", "pdf", "imagen", "cover"})
+_VALID_SCOPES = frozenset({"video", "pdf", "imagen", "cover", "audio"})
 _SLUG_RE = re.compile(r"[^a-z0-9.\-]")
 
 _session: aioboto3.Session | None = None

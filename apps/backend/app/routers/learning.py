@@ -202,14 +202,17 @@ def _video_pct_from_position(pos_seconds: int, duration_seconds: int | None) -> 
 
 
 def _video_duration_for_progress(topic: Topic, reported_duration_seconds: int | None) -> int | None:
-    durations = [
-        duration
-        for duration in (topic.duration_seconds, reported_duration_seconds)
-        if duration is not None and duration > 0
-    ]
-    if not durations:
-        return None
-    return max(durations)
+    # The player's reported duration is the real media length and is authoritative for
+    # the completion %. `topic.duration_seconds` is a coarse, whole-minute admin estimate
+    # meant only as a display label — it must NOT gate completion. Using it as the
+    # denominator (e.g. max of both) blocks honest students whenever the real clip is
+    # shorter than the rounded-up estimate, which is the common case. The 5-second
+    # minimum-watch floor in the caller still prevents trivial skips.
+    if reported_duration_seconds is not None and reported_duration_seconds > 0:
+        return reported_duration_seconds
+    if topic.duration_seconds is not None and topic.duration_seconds > 0:
+        return topic.duration_seconds
+    return None
 
 
 def _complete_content(tp: TopicProgress) -> None:
@@ -307,7 +310,7 @@ async def topic_heartbeat(
 
     tp = await get_or_create_progress(db, current_user, topic)
 
-    if body.type == "video":
+    if body.type in ("video", "audio"):
         if body.max_seen_pct is not None and body.pos_seconds is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -367,7 +370,7 @@ async def mark_content_done(
 
     ct = topic.content_type
 
-    if ct == "video":
+    if ct in ("video", "audio"):
         if (
             tp.video_max_seen_pct < _VIDEO_COMPLETE_PCT
             or tp.video_last_pos_seconds < _MIN_VIDEO_COMPLETE_SECONDS

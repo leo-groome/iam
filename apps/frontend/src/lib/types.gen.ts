@@ -1469,7 +1469,7 @@ export interface components {
              * Content Type
              * @enum {string}
              */
-            content_type: "video" | "pdf" | "imagen" | "texto";
+            content_type: "video" | "pdf" | "imagen" | "texto" | "audio";
             /** Content Body */
             content_body?: string | null;
             /** Media Key */
@@ -1570,7 +1570,7 @@ export interface components {
             /** Title */
             title?: string | null;
             /** Content Type */
-            content_type?: ("video" | "pdf" | "imagen" | "texto") | null;
+            content_type?: ("video" | "pdf" | "imagen" | "texto" | "audio") | null;
             /** Content Body */
             content_body?: string | null;
             /** Media Key */
@@ -1617,7 +1617,7 @@ export interface components {
              * Scope
              * @enum {string}
              */
-            scope: "video" | "pdf" | "imagen" | "cover";
+            scope: "video" | "pdf" | "imagen" | "cover" | "audio";
         };
         /** UploadUrlResponse */
         UploadUrlResponse: {

@@ -88,7 +88,34 @@ export async function optimizeVideoForStreaming(
 // Upload service
 // ---------------------------------------------------------------------------
 
+/**
+ * Read the real duration (in whole seconds) of a video/audio file by loading its
+ * metadata in an off-screen media element. Returns null if it can't be determined.
+ * Used to auto-register duration on upload instead of a manual admin estimate.
+ */
+export function readMediaDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const isAudio = file.type.startsWith('audio/');
+    const el = document.createElement(isAudio ? 'audio' : 'video');
+    el.preload = 'metadata';
+    const url = URL.createObjectURL(file);
+    const cleanup = () => URL.revokeObjectURL(url);
+    el.onloadedmetadata = () => {
+      const d = el.duration;
+      cleanup();
+      resolve(Number.isFinite(d) && d > 0 ? Math.round(d) : null);
+    };
+    el.onerror = () => {
+      cleanup();
+      resolve(null);
+    };
+    el.src = url;
+  });
+}
+
 export const mediaService = {
+  readMediaDuration,
+
   /**
    * Optimize (if video) and upload a file directly to Cloudflare R2.
    *
@@ -99,7 +126,7 @@ export const mediaService = {
    */
   async uploadFile(
     file: File,
-    scope: 'video' | 'pdf' | 'imagen' | 'cover',
+    scope: 'video' | 'pdf' | 'imagen' | 'cover' | 'audio',
     onPhase?: (phase: 'optimizing' | 'uploading' | 'done') => void,
   ): Promise<string> {
     // 1. For video files: apply faststart optimization before upload

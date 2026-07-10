@@ -32,7 +32,9 @@ const playing = ref(false);
 const videoWrap = ref<HTMLElement | null>(null);
 const isFullscreen = ref(false);
 
-const videoEl = ref<HTMLVideoElement | null>(null);
+// Shared by <video> and <audio> — only one renders at a time (v-if/v-else-if).
+// Both extend HTMLMediaElement (currentTime, duration, play/pause, events).
+const videoEl = ref<HTMLMediaElement | null>(null);
 const videoCurrentTime = ref(0);
 const videoProgress = ref(0);
 const actualDuration = ref<number | null>(null);
@@ -118,7 +120,7 @@ watch(
       if (doneStates.includes(newTema.state)) {
         contentDone.value = true;
       }
-      if (newTema.content_type === 'video') {
+      if (newTema.content_type === 'video' || newTema.content_type === 'audio') {
         videoCurrentTime.value = newTema.progress.video_last_pos_seconds || 0;
         videoProgress.value = newTema.progress.video_max_seen_pct || 0;
       }
@@ -132,8 +134,8 @@ watch(
           body: { topic_id: newTema.id },
         })) as any;
 
-        if (newTema.content_type === 'video') {
-          // VIDEO: construct direct Worker URL with token in query param.
+        if (newTema.content_type === 'video' || newTema.content_type === 'audio') {
+          // VIDEO / AUDIO: construct direct Worker URL with token in query param.
           // This lets the browser issue native HTTP Range Requests (206 Partial Content)
           // for true progressive streaming — no full download, no RAM spike.
           mediaStreamUrl.value = `${tokenResp.media_url}?token=${encodeURIComponent(tokenResp.token)}`;
@@ -170,7 +172,7 @@ watch(
       } catch (e) {
         console.error('PDF heartbeat failed', e);
       }
-    } else if (newTema.content_type === 'video') {
+    } else if (newTema.content_type === 'video' || newTema.content_type === 'audio') {
       // Note: seek to last position is handled inside onLoadedMetadata
       // to avoid timeupdate events firing before duration is known.
 
@@ -182,7 +184,7 @@ watch(
           try {
             const resp = (await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
               body: {
-                type: 'video',
+                type: props.tema.content_type,
                 pos_seconds: pos,
                 duration_seconds: Math.round(videoDuration.value),
                 max_seen_pct: currentPct,
@@ -230,7 +232,7 @@ async function syncVideoProgress(pct: number, showSaving = false): Promise<void>
   try {
     const resp = (await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
       body: {
-        type: 'video',
+        type: props.tema.content_type,
         pos_seconds: Math.floor(videoEl.value.currentTime),
         duration_seconds: Math.round(videoDuration.value),
         max_seen_pct: Math.min(100, pct),
@@ -457,6 +459,37 @@ const buttonHref = computed(() => (props.tema?.has_exam && props.tema?.state !==
       </div>
     </div>
 
+    <!-- AUDIO -->
+    <div v-else-if="contentType === 'audio'" class="card p-6 mb-6">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="w-12 h-12 rounded-full bg-[var(--color-primary)]/10 grid place-items-center text-[var(--color-primary)] shrink-0">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </span>
+        <div class="min-w-0">
+          <p class="font-medium truncate">{{ tema?.title }}</p>
+          <p class="text-xs text-[var(--color-text-muted)]">Audio · {{ formatTime(videoDuration) }}</p>
+        </div>
+      </div>
+      <audio
+        ref="videoEl"
+        class="w-full"
+        controls
+        controlsList="nodownload"
+        crossorigin="anonymous"
+        :src="mediaStreamUrl ?? undefined"
+        preload="metadata"
+        @loadedmetadata="onLoadedMetadata"
+        @play="onVideoPlay"
+        @pause="onVideoPause"
+        @timeupdate="onVideoTimeUpdate"
+        @ended="onVideoEnded"
+      />
+      <p class="mt-4 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        Escucha el audio completo para desbloquear el siguiente paso.
+      </p>
+    </div>
+
     <!-- PDF -->
     <div v-else-if="contentType === 'pdf'" class="card mb-6 overflow-hidden">
       <iframe
@@ -507,11 +540,18 @@ const buttonHref = computed(() => (props.tema?.has_exam && props.tema?.state !==
       </div>
     </article>
 
+    <!-- Material escrito complementario (para clases con media principal) -->
+    <article
+      v-if="contentType !== 'texto' && tema?.content_body"
+      class="card p-6 sm:p-8 mb-6 prose max-w-none"
+      v-html="tema.content_body"
+    ></article>
+
     <!-- Sticky CTA bar -->
     <div class="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] px-4 pt-3 pb-4 z-20">
       <div class="max-w-3xl mx-auto">
         <!-- Video progress bar toward unlock -->
-        <div v-if="contentType === 'video' && !canContinue && !markingDone" class="mb-3">
+        <div v-if="(contentType === 'video' || contentType === 'audio') && !canContinue && !markingDone" class="mb-3">
           <div class="flex justify-between text-xs text-[var(--color-text-muted)] mb-1.5">
             <span>Progreso</span>
             <span>{{ videoProgress }}%<span class="opacity-60"> / 95% para continuar</span></span>

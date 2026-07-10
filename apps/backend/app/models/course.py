@@ -76,7 +76,7 @@ class Topic(Base, TimestampMixin):
     __tablename__ = "topics"
     __table_args__ = (
         CheckConstraint(
-            "content_type IN ('video', 'pdf', 'imagen', 'texto')",
+            "content_type IN ('video', 'pdf', 'imagen', 'texto', 'audio')",
             name="ck_topics_content_type",
         ),
         CheckConstraint("exam_min_score >= 50 AND exam_min_score <= 100", name="ck_topics_min_score"),

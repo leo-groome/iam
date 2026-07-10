@@ -192,12 +192,17 @@ const handleTopicMediaUpload = async (event: Event) => {
   const file = target.files?.[0];
   if (!file) return;
 
-  let scope: 'video' | 'pdf' | 'imagen' = 'imagen';
+  let scope: 'video' | 'pdf' | 'imagen' | 'audio' = 'imagen';
   if (drawerData.value.content_type === 'video') scope = 'video';
   else if (drawerData.value.content_type === 'pdf') scope = 'pdf';
+  else if (drawerData.value.content_type === 'audio') scope = 'audio';
 
   isUploadingMedia.value = true;
   try {
+    if (scope === 'video' || scope === 'audio') {
+      const secs = await mediaService.readMediaDuration(file);
+      if (secs) drawerData.value.duration_seconds = secs;
+    }
     const key = await mediaService.uploadFile(file, scope);
     drawerData.value.content_url = key;
   } catch (err: any) {
@@ -273,11 +278,11 @@ const openTopicDrawer = (modId: string, topicId: string | 'nuevo') => {
     drawerMode.value = 'new';
     drawerData.value = { 
       title: '', 
-      content_type: 'video', 
-      content_body: '', 
-      duration_minutes: null, 
-      has_exam: false, 
-      exam_min_score: 70 
+      content_type: 'video',
+      content_body: '',
+      duration_seconds: null,
+      has_exam: false,
+      exam_min_score: 70
     };
   } else {
     drawerMode.value = 'edit';
@@ -286,9 +291,9 @@ const openTopicDrawer = (modId: string, topicId: string | 'nuevo') => {
     const topic = mod?.topics?.find((t: any) => t.id === topicId);
     drawerData.value = { 
       title: topic?.title ?? '', 
-      content_type: topic?.content_type ?? 'video', 
-      content_body: topic?.content_body ?? '', 
-      duration_minutes: topic?.duration_seconds ? Math.round(topic.duration_seconds / 60) : null,
+      content_type: topic?.content_type ?? 'video',
+      content_body: topic?.content_body ?? '',
+      duration_seconds: topic?.duration_seconds ?? null,
       has_exam: topic?.has_exam ?? false,
       exam_min_score: topic?.exam_min_score ?? 70,
       content_url: topic?.media_key ?? ''
@@ -316,13 +321,12 @@ const saveDrawer = async () => {
         await adminService.updateModule(activeModuleId.value!, payload);
       }
     } else if (drawerType.value === 'topic') {
-      const dur = drawerData.value.duration_minutes ? Number(drawerData.value.duration_minutes) * 60 : null;
       const payload = {
         title: drawerData.value.title,
         content_type: drawerData.value.content_type,
         has_exam: drawerData.value.has_exam,
         content_body: drawerData.value.content_body || null,
-        duration_seconds: dur,
+        duration_seconds: drawerData.value.duration_seconds ?? null,
         exam_min_score: Number(drawerData.value.exam_min_score) || 70,
         media_key: drawerData.value.content_url || null,
       };
@@ -615,18 +619,9 @@ const saveDrawer = async () => {
               <option value="video">Video</option>
               <option value="pdf">PDF / Documento</option>
               <option value="imagen">Imagen / Infografía</option>
+              <option value="audio">Audio (MP3)</option>
               <option value="texto">Artículo (Texto)</option>
             </select>
-          </div>
-          
-          <div v-if="drawerData.content_type === 'texto'">
-            <label class="label">Contenido del artículo</label>
-            <textarea class="input min-h-32 text-sm font-mono" maxlength="20000" v-model="drawerData.content_body" placeholder="Soporta Markdown..."></textarea>
-          </div>
-
-          <div v-if="drawerData.content_type === 'video'">
-            <label class="label">Duración aproximada (minutos)</label>
-            <input type="number" class="input" v-model.number="drawerData.duration_minutes" min="1" placeholder="Ej: 15" />
           </div>
 
           <div v-if="drawerData.content_type !== 'texto'">
@@ -643,11 +638,16 @@ const saveDrawer = async () => {
               <p class="text-sm text-[var(--color-text-muted)]">Subiendo archivo a R2...</p>
             </div>
             <div v-else class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-4 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
-              <input type="file" @change="handleTopicMediaUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+              <input type="file" :accept="drawerData.content_type === 'video' ? 'video/mp4, video/webm' : (drawerData.content_type === 'pdf' ? 'application/pdf' : (drawerData.content_type === 'audio' ? 'audio/mpeg' : 'image/jpeg, image/png, image/webp'))" @change="handleTopicMediaUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
               <p class="text-sm font-medium text-[var(--color-text-muted)]">Arrastra o haz clic para subir archivo</p>
-              <p class="text-xs text-[var(--color-text-muted)] mt-1">Max 500MB</p>
+              <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ drawerData.content_type === 'audio' ? 'Audio mp3 (máx 50MB)' : (drawerData.content_type === 'pdf' ? 'PDF (máx 50MB)' : (drawerData.content_type === 'imagen' ? 'Imagen (máx 10MB)' : 'Max 500MB')) }}</p>
             </div>
+          </div>
+
+          <div>
+            <label class="label">{{ drawerData.content_type === 'texto' ? 'Contenido del artículo' : 'Material escrito complementario (opcional)' }}</label>
+            <textarea class="input min-h-32 text-sm font-mono" maxlength="20000" v-model="drawerData.content_body" :placeholder="drawerData.content_type === 'texto' ? 'Soporta Markdown...' : 'Notas, transcripción o material de apoyo (Markdown)...'"></textarea>
           </div>
 
           <div class="pt-4 border-t border-[var(--color-border)]">

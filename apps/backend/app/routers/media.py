@@ -32,6 +32,7 @@ _SCOPE_ALLOWED_TYPES: dict[str, frozenset[str]] = {
     "pdf": frozenset({"application/pdf"}),
     "imagen": frozenset({"image/jpeg", "image/png", "image/webp"}),
     "cover": frozenset({"image/jpeg", "image/png", "image/webp"}),
+    "audio": frozenset({"audio/mpeg", "audio/mp4"}),
 }
 
 _TOPIC_ACCESSIBLE_STATES = frozenset({"disponible", "contenido_visto", "aprobado", "en_repaso"})
@@ -42,7 +43,7 @@ _TOPIC_ACCESSIBLE_STATES = frozenset({"disponible", "contenido_visto", "aprobado
 class UploadUrlRequest(BaseModel):
     filename: str
     content_type: str
-    scope: Literal["video", "pdf", "imagen", "cover"]
+    scope: Literal["video", "pdf", "imagen", "cover", "audio"]
 
 
 class UploadUrlResponse(BaseModel):

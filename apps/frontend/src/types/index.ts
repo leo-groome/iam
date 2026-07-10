@@ -27,7 +27,7 @@ export interface AuthResponse {
 
 // ===== Course Types =====
 export type TemaStatus = 'bloqueado' | 'disponible' | 'aprobado' | 'en_repaso';
-export type TemaType = 'video' | 'pdf' | 'imagen' | 'texto';
+export type TemaType = 'video' | 'pdf' | 'imagen' | 'texto' | 'audio';
 
 export interface Tema {
   id: string;

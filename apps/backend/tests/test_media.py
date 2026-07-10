@@ -270,6 +270,41 @@ async def test_upload_url_image_wrong_type_for_pdf_scope(client: AsyncClient, sc
     assert resp.json()["detail"]["code"] == "invalid_content_type"
 
 
+@pytest.mark.asyncio
+async def test_upload_url_audio_success(client: AsyncClient, scaffold):
+    mock_build, mock_upload = _mock_r2_upload()
+    with (
+        patch("app.deps.verify_stack_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
+        patch("app.routers.media.build_key", mock_build),
+        patch("app.routers.media.generate_upload_url", mock_upload),
+    ):
+        resp = await client.post(
+            "/api/v1/media/upload-url",
+            json={"filename": "leccion.mp3", "content_type": "audio/mpeg", "scope": "audio"},
+            headers=HEADERS,
+        )
+    assert resp.status_code == 200
+    assert "put_url" in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_upload_url_audio_wrong_type_returns_422(client: AsyncClient, scaffold):
+    mock_build, mock_upload = _mock_r2_upload()
+    with (
+        patch("app.deps.verify_stack_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
+        patch("app.routers.media.build_key", mock_build),
+        patch("app.routers.media.generate_upload_url", mock_upload),
+    ):
+        # Sending a video content-type for an audio scope
+        resp = await client.post(
+            "/api/v1/media/upload-url",
+            json={"filename": "leccion.mp4", "content_type": "video/mp4", "scope": "audio"},
+            headers=HEADERS,
+        )
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["code"] == "invalid_content_type"
+
+
 # ── /play-token ───────────────────────────────────────────────────────────────
 
 

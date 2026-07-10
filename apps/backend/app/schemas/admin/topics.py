@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-ContentType = Literal["video", "pdf", "imagen", "texto"]
+ContentType = Literal["video", "pdf", "imagen", "texto", "audio"]
 
 
 class TopicCreate(BaseModel):
