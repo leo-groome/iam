@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { apiGet, apiPost, ApiError } from '@/lib/api'
+import { sanitizeHtml } from '@/lib/sanitize'
 import type { ExamResponse, QuestionOut } from '@/lib/api'
 
 const props = defineProps<{
@@ -204,7 +205,7 @@ function reloadPage() {
 
     <!-- Question card -->
     <div v-if="currentQuestion" class="card p-6 mb-6">
-      <h2 class="text-xl font-bold mb-5">{{ currentQuestion.enunciado }}</h2>
+      <div class="rich-text text-xl font-bold mb-5" v-html="sanitizeHtml(currentQuestion.enunciado)"></div>
       <div class="space-y-2">
         <button
           v-for="opt in currentQuestion.options"

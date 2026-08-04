@@ -460,7 +460,7 @@ onBeforeUnmount(() => {
 
     <!-- TEXTO -->
     <div v-else class="card p-6 sm:p-8">
-      <div class="prose max-w-none" v-html="sanitizeHtml(block.content_body)"></div>
+      <div class="rich-text max-w-none" v-html="sanitizeHtml(block.content_body)"></div>
     </div>
   </div>
 </template>

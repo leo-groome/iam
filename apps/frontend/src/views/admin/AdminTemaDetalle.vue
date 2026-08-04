@@ -5,6 +5,7 @@ import { adminService } from '@/services/admin.service';
 import type { ContentBlockIn } from '@/services/admin.service';
 import AdminContentBlocks from '@/components/ui/AdminContentBlocks.vue';
 import type { Block } from '@/components/ui/AdminContentBlocks.vue';
+import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 
 type ExamOption = {
   texto: string;
@@ -330,7 +331,7 @@ const handleDeleteTopic = async () => {
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1">
             <label class="label">Pregunta {{ questionIndex + 1 }}</label>
-            <textarea class="input min-h-24" maxlength="300" v-model="question.enunciado" placeholder="Escribe la pregunta"></textarea>
+            <RichTextEditor v-model="question.enunciado" placeholder="Escribe la pregunta" />
             <p class="help">5-300 caracteres.</p>
           </div>
           <div class="flex gap-2 shrink-0">

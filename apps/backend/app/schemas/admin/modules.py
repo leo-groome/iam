@@ -9,13 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ModuleCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=60)
-    description: str = Field("", max_length=2000)
+    description: str = Field("", max_length=20000)
     order_index: int | None = Field(None, ge=0)
 
 
 class ModuleUpdate(BaseModel):
     title: str | None = Field(None, min_length=3, max_length=60)
-    description: str | None = Field(None, max_length=2000)
+    description: str | None = Field(None, max_length=20000)
     order_index: int | None = Field(None, ge=0)
 
 

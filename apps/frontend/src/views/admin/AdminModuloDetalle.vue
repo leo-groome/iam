@@ -2,6 +2,7 @@
 import { useRoute, useRouter } from 'vue-router';
 import { onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
+import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -141,7 +142,7 @@ const getContentTypeBadgeColor = (contentType: string): string => {
     </div>
     <div>
       <label class="label">Descripción del módulo</label>
-      <textarea class="input min-h-24" maxlength="2000" v-model="formData.description" placeholder="Describe el contenido y objetivos del módulo"></textarea>
+      <RichTextEditor v-model="formData.description" placeholder="Describe el contenido y objetivos del módulo" />
       <p class="help">Hasta 2000 caracteres.</p>
     </div>
     <div class="pt-2 border-t border-[var(--color-border)] mt-4">

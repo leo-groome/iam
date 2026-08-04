@@ -69,8 +69,11 @@ class CourseAdminListItem(BaseModel):
 
 class CourseCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=80)
-    short_desc: str = Field(..., min_length=10, max_length=160)
-    long_desc: str = Field("", max_length=2000)
+    # Descriptions store sanitized rich-text HTML; markup inflates length well
+    # beyond the visible text, so the ceilings are generous (short_desc capped by
+    # its String(500) column).
+    short_desc: str = Field(..., min_length=10, max_length=500)
+    long_desc: str = Field("", max_length=20000)
     cover_key: str | None = None
     age_min: int | None = Field(None, ge=13, le=99)
     age_max: int | None = Field(None, ge=13, le=99)
@@ -97,8 +100,8 @@ class CourseCreate(BaseModel):
 
 class CourseUpdate(BaseModel):
     title: str | None = Field(None, min_length=5, max_length=80)
-    short_desc: str | None = Field(None, min_length=10, max_length=160)
-    long_desc: str | None = Field(None, max_length=2000)
+    short_desc: str | None = Field(None, min_length=10, max_length=500)
+    long_desc: str | None = Field(None, max_length=20000)
     cover_key: str | None = None
     age_min: int | None = Field(None, ge=13, le=99)
     age_max: int | None = Field(None, ge=13, le=99)

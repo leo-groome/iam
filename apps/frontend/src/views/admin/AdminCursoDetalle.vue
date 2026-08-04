@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
 import { mediaService } from '@/services/media.service';
+import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -13,7 +14,6 @@ const loading = ref(false);
 const saving = ref(false);
 
 const isUploadingCover = ref(false);
-const isUploadingMedia = ref(false);
 const deleteConfirmOpen = ref(false);
 const deleteConfirmText = ref('');
 const deleteError = ref('');
@@ -187,32 +187,6 @@ const handleCoverUpload = async (event: Event) => {
   }
 };
 
-const handleTopicMediaUpload = async (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const file = target.files?.[0];
-  if (!file) return;
-
-  let scope: 'video' | 'pdf' | 'imagen' | 'audio' = 'imagen';
-  if (drawerData.value.content_type === 'video') scope = 'video';
-  else if (drawerData.value.content_type === 'pdf') scope = 'pdf';
-  else if (drawerData.value.content_type === 'audio') scope = 'audio';
-
-  isUploadingMedia.value = true;
-  try {
-    if (scope === 'video' || scope === 'audio') {
-      const secs = await mediaService.readMediaDuration(file);
-      if (secs) drawerData.value.duration_seconds = secs;
-    }
-    const key = await mediaService.uploadFile(file, scope);
-    drawerData.value.content_url = key;
-  } catch (err: any) {
-    console.error('Error uploading topic media:', err);
-    alert('No se pudo subir el archivo: ' + err.message);
-  } finally {
-    isUploadingMedia.value = false;
-  }
-};
-
 // --- CURRICULUM BUILDER LOGIC ---
 const expandedModules = ref<string[]>([]);
 const isExpanded = (modId: string) => expandedModules.value.includes(modId);
@@ -224,123 +198,29 @@ const toggleModule = (modId: string) => {
   }
 };
 
-// Drawer state
+// Course settings drawer (course meta only — módulos y clases se editan en sus páginas dedicadas)
 const drawerOpen = ref(false);
-const drawerType = ref<'module' | 'topic' | 'course'>('module');
-const drawerMode = ref<'new' | 'edit'>('new');
-const activeModuleId = ref<string | null>(null);
-const activeTopicId = ref<string | null>(null);
 const drawerSaving = ref(false);
-
-const drawerData = ref<any>({});
 
 const closeDrawer = () => {
   drawerOpen.value = false;
-  drawerData.value = {};
-  activeModuleId.value = null;
-  activeTopicId.value = null;
   // If we closed the course drawer while creating a new course, go back
-  if (drawerType.value === 'course' && isNew) {
+  if (isNew) {
     router.push('/admin/cursos');
   }
 };
 
 const openCourseDrawer = () => {
-  drawerType.value = 'course';
-  drawerMode.value = isNew ? 'new' : 'edit';
-  drawerOpen.value = true;
-};
-
-
-
-const openModuleDrawer = (modId: string | 'nuevo') => {
-  drawerType.value = 'module';
-  if (modId === 'nuevo') {
-    drawerMode.value = 'new';
-    drawerData.value = { title: '', description: '', max_attempts: 3 };
-  } else {
-    drawerMode.value = 'edit';
-    activeModuleId.value = modId;
-    const mod = curso.value?.modules?.find((m: any) => m.id === modId);
-    drawerData.value = { 
-      title: mod?.title ?? '', 
-      description: mod?.description ?? '',
-      max_attempts: mod?.max_attempts ?? 3 
-    };
-  }
-  drawerOpen.value = true;
-};
-
-const openTopicDrawer = (modId: string, topicId: string | 'nuevo') => {
-  drawerType.value = 'topic';
-  activeModuleId.value = modId;
-  if (topicId === 'nuevo') {
-    drawerMode.value = 'new';
-    drawerData.value = { 
-      title: '', 
-      content_type: 'video',
-      content_body: '',
-      duration_seconds: null,
-      has_exam: false,
-      exam_min_score: 70
-    };
-  } else {
-    drawerMode.value = 'edit';
-    activeTopicId.value = topicId;
-    const mod = curso.value?.modules?.find((m: any) => m.id === modId);
-    const topic = mod?.topics?.find((t: any) => t.id === topicId);
-    drawerData.value = { 
-      title: topic?.title ?? '', 
-      content_type: topic?.content_type ?? 'video',
-      content_body: topic?.content_body ?? '',
-      duration_seconds: topic?.duration_seconds ?? null,
-      has_exam: topic?.has_exam ?? false,
-      exam_min_score: topic?.exam_min_score ?? 70,
-      content_url: topic?.media_key ?? ''
-    };
-  }
   drawerOpen.value = true;
 };
 
 const saveDrawer = async () => {
   drawerSaving.value = true;
   try {
-    if (drawerType.value === 'course') {
-      await saveCourse();
-      closeDrawer();
-      return;
-    } else if (drawerType.value === 'module') {
-      const payload = {
-        title: drawerData.value.title,
-        description: drawerData.value.description,
-        max_attempts: drawerData.value.max_attempts,
-      };
-      if (drawerMode.value === 'new') {
-        await adminService.createModule(id, payload);
-      } else {
-        await adminService.updateModule(activeModuleId.value!, payload);
-      }
-    } else if (drawerType.value === 'topic') {
-      const payload = {
-        title: drawerData.value.title,
-        content_type: drawerData.value.content_type,
-        has_exam: drawerData.value.has_exam,
-        content_body: drawerData.value.content_body || null,
-        duration_seconds: drawerData.value.duration_seconds ?? null,
-        exam_min_score: Number(drawerData.value.exam_min_score) || 70,
-        media_key: drawerData.value.content_url || null,
-      };
-      if (drawerMode.value === 'new') {
-        await adminService.createTopic(activeModuleId.value!, payload);
-        if (!isExpanded(activeModuleId.value!)) toggleModule(activeModuleId.value!);
-      } else {
-        await adminService.updateTopic(activeTopicId.value!, payload);
-      }
-    }
+    await saveCourse();
     closeDrawer();
-    await loadCourse(); // Refresh curriculum tree
   } catch (err) {
-    console.error('Error saving item:', err);
+    console.error('Error saving course:', err);
   } finally {
     drawerSaving.value = false;
   }
@@ -451,7 +331,7 @@ const saveDrawer = async () => {
         <h2 class="text-xl font-bold">Plan de Estudios (Currícula)</h2>
         <p class="text-sm text-[var(--color-text-muted)]">Organiza tu curso creando módulos y clases.</p>
       </div>
-      <button type="button" @click="openModuleDrawer('nuevo')" class="btn btn-secondary">+ Agregar módulo</button>
+      <router-link :to="`/admin/cursos/${id}/modulos/nuevo`" class="btn btn-secondary">+ Agregar módulo</router-link>
     </div>
     
     <div v-if="curso.modules && curso.modules.length > 0" class="space-y-4">
@@ -467,7 +347,7 @@ const saveDrawer = async () => {
               </div>
            </div>
            <div class="flex gap-2">
-             <button type="button" @click.stop="openModuleDrawer(m.id)" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-[var(--color-primary)] hover:text-white transition-colors">Editar</button>
+             <router-link :to="`/admin/cursos/${id}/modulos/${m.id}`" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-[var(--color-primary)] hover:text-white transition-colors" @click.stop>Editar</router-link>
              <router-link :to="`/admin/cursos/${id}/modulos/${m.id}`" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-[var(--color-primary)] hover:text-white transition-colors" @click.stop>Examen</router-link>
              <button type="button" @click.stop="deleteModuleAction(m.id)" class="text-xs font-medium border border-red-500 text-black px-2 py-1 rounded hover:bg-red-500 hover:text-white transition-colors">Eliminar</button>
            </div>
@@ -483,23 +363,23 @@ const saveDrawer = async () => {
                 </div>
                 <div class="flex items-center gap-2">
                    <span v-if="t.has_exam" class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">Examen</span>
-                   <button type="button" @click.stop="openTopicDrawer(m.id, t.id)" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-[var(--color-primary)] hover:text-white transition-colors">Editar</button>
+                   <router-link :to="`/admin/cursos/${id}/modulos/${m.id}/temas/${t.id}`" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-[var(--color-primary)] hover:text-white transition-colors" @click.stop>Editar</router-link>
                    <router-link v-if="t.has_exam" :to="`/admin/cursos/${id}/modulos/${m.id}/temas/${t.id}/preguntas`" class="text-xs font-medium border border-[var(--color-primary)] text-black px-2 py-1 rounded hover:bg-[var(--color-primary)] hover:text-white transition-colors" @click.stop>Preguntas</router-link>
                    <button type="button" @click.stop="deleteTopicAction(t.id)" class="text-xs font-medium border border-red-500 text-black px-2 py-1 rounded hover:bg-red-500 hover:text-white transition-colors">Eliminar</button>
                 </div>
              </div>
            </div>
            
-           <button type="button" @click="openTopicDrawer(m.id, 'nuevo')" class="w-full text-left p-3 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface)] hover:border-[var(--color-primary)] rounded-lg border border-dashed border-[var(--color-border)] transition-colors flex items-center justify-center gap-2">
+           <router-link :to="`/admin/cursos/${id}/modulos/${m.id}/temas/nuevo`" class="w-full text-left p-3 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface)] hover:border-[var(--color-primary)] rounded-lg border border-dashed border-[var(--color-border)] transition-colors flex items-center justify-center gap-2">
              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
              Agregar nueva clase
-           </button>
+           </router-link>
         </div>
       </div>
     </div>
     <div v-else class="text-center p-8 border-2 border-dashed border-[var(--color-border)] rounded-xl mt-4 text-[var(--color-text-muted)] bg-[var(--color-surface)]">
       <p>Aún no hay contenido en este curso.</p>
-      <button type="button" @click="openModuleDrawer('nuevo')" class="btn btn-secondary mt-3">+ Agregar tu primer módulo</button>
+      <router-link :to="`/admin/cursos/${id}/modulos/nuevo`" class="btn btn-secondary mt-3">+ Agregar tu primer módulo</router-link>
     </div>
   </section>
 
@@ -513,13 +393,7 @@ const saveDrawer = async () => {
     <div v-if="drawerOpen" class="fixed inset-y-0 right-0 w-full max-w-md bg-[var(--color-surface)] shadow-2xl z-50 flex flex-col border-l border-[var(--color-border)]">
       <!-- Drawer Header -->
       <div class="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-app-bg)]">
-        <h3 class="text-lg font-bold">
-          <span v-if="drawerType === 'course'">{{ isNew ? 'Crear Nuevo Curso' : 'Ajustes del Curso' }}</span>
-          <span v-else>
-            {{ drawerMode === 'new' ? 'Crear' : 'Editar' }} 
-            {{ drawerType === 'module' ? 'Módulo' : 'Clase' }}
-          </span>
-        </h3>
+        <h3 class="text-lg font-bold">{{ isNew ? 'Crear Nuevo Curso' : 'Ajustes del Curso' }}</h3>
         <button type="button" @click="closeDrawer" class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
@@ -529,7 +403,7 @@ const saveDrawer = async () => {
       <div class="flex-1 overflow-y-auto p-6 space-y-5">
         
         <!-- COURSE FORM -->
-        <template v-if="drawerType === 'course'">
+        <template>
           <div>
             <label class="label">Título del curso</label>
             <input class="input" minlength="5" maxlength="80" v-model="formData.title" @input="onTitleInput" placeholder="Ej. Comunicación empática" />
@@ -542,12 +416,12 @@ const saveDrawer = async () => {
           </div>
           <div>
             <label class="label">Descripción corta</label>
-            <textarea class="input min-h-24" maxlength="160" v-model="formData.short_desc" placeholder="Una línea que resuma el curso"></textarea>
-            <p class="help">Hasta 160 caracteres. Se muestra en la tarjeta.</p>
+            <RichTextEditor v-model="formData.short_desc" variant="inline" placeholder="Una línea que resuma el curso" />
+            <p class="help">Se muestra en la tarjeta del catálogo. Mantenla breve.</p>
           </div>
           <div>
             <label class="label">Descripción larga</label>
-            <textarea class="input min-h-32" maxlength="2000" v-model="formData.long_desc" placeholder="Markdown soportado"></textarea>
+            <RichTextEditor v-model="formData.long_desc" placeholder="Describe el curso con formato (negritas, listas, enlaces)…" />
           </div>
           <div>
             <label class="label">Imagen de portada</label>
@@ -585,79 +459,6 @@ const saveDrawer = async () => {
                 <span>Genera certificado</span>
                 <input type="checkbox" checked />
               </label>
-            </div>
-          </div>
-        </template>
-
-        <!-- MODULE FORM -->
-        <template v-if="drawerType === 'module'">
-          <div>
-            <label class="label">Título del módulo</label>
-            <input class="input" minlength="3" maxlength="60" v-model="drawerData.title" placeholder="Ej: Introducción" />
-          </div>
-          <div>
-            <label class="label">Descripción</label>
-            <textarea class="input min-h-24" maxlength="2000" v-model="drawerData.description" placeholder="Objetivos del módulo..."></textarea>
-          </div>
-          <div class="pt-4 border-t border-[var(--color-border)]">
-            <h4 class="font-semibold mb-2">Examen Diagnóstico</h4>
-            <label class="label">Intentos Máximos</label>
-            <input type="number" class="input max-w-24" min="1" max="10" v-model.number="drawerData.max_attempts" />
-            <p class="text-xs text-[var(--color-text-muted)] mt-1">Límite antes de mostrar respuestas y avanzar.</p>
-          </div>
-        </template>
-
-        <!-- TOPIC (CLASS) FORM -->
-        <template v-if="drawerType === 'topic'">
-          <div>
-            <label class="label">Título de la clase</label>
-            <input class="input" minlength="3" maxlength="60" v-model="drawerData.title" placeholder="Ej: ¿Qué es la comunicación?" />
-          </div>
-          <div>
-            <label class="label">Tipo de contenido</label>
-            <select class="input" v-model="drawerData.content_type">
-              <option value="video">Video</option>
-              <option value="pdf">PDF / Documento</option>
-              <option value="imagen">Imagen / Infografía</option>
-              <option value="audio">Audio (MP3)</option>
-              <option value="texto">Artículo (Texto)</option>
-            </select>
-          </div>
-
-          <div v-if="drawerData.content_type !== 'texto'">
-            <label class="label">Archivo Multimedia</label>
-            <div v-if="drawerData.content_url" class="border border-[var(--color-border)] rounded-xl p-3 flex items-center justify-between bg-[var(--color-bg-hover)]">
-              <div class="flex items-center gap-3 overflow-hidden">
-                <svg class="w-8 h-8 text-[var(--color-primary)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span class="text-sm font-medium truncate">{{ drawerData.content_url.split('/').pop() || 'Archivo actual' }}</span>
-              </div>
-              <button type="button" @click="drawerData.content_url = ''" class="text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded font-medium border border-red-200">Reemplazar</button>
-            </div>
-            <div v-else-if="isUploadingMedia" class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center bg-[var(--color-app-bg)] flex flex-col items-center">
-              <svg class="animate-spin h-6 w-6 text-[var(--color-primary)] mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              <p class="text-sm text-[var(--color-text-muted)]">Subiendo archivo a R2...</p>
-            </div>
-            <div v-else class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-4 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
-              <input type="file" :accept="drawerData.content_type === 'video' ? 'video/mp4, video/webm' : (drawerData.content_type === 'pdf' ? 'application/pdf' : (drawerData.content_type === 'audio' ? 'audio/mpeg' : 'image/jpeg, image/png, image/webp'))" @change="handleTopicMediaUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-              <p class="text-sm font-medium text-[var(--color-text-muted)]">Arrastra o haz clic para subir archivo</p>
-              <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ drawerData.content_type === 'audio' ? 'Audio mp3 (máx 50MB)' : (drawerData.content_type === 'pdf' ? 'PDF (máx 50MB)' : (drawerData.content_type === 'imagen' ? 'Imagen (máx 10MB)' : 'Max 500MB')) }}</p>
-            </div>
-          </div>
-
-          <div>
-            <label class="label">{{ drawerData.content_type === 'texto' ? 'Contenido del artículo' : 'Material escrito complementario (opcional)' }}</label>
-            <textarea class="input min-h-32 text-sm font-mono" maxlength="20000" v-model="drawerData.content_body" :placeholder="drawerData.content_type === 'texto' ? 'Soporta Markdown...' : 'Notas, transcripción o material de apoyo (Markdown)...'"></textarea>
-          </div>
-
-          <div class="pt-4 border-t border-[var(--color-border)]">
-            <label class="flex items-center justify-between mb-2 cursor-pointer">
-              <span class="font-semibold text-sm">Requiere Cuestionario / Examen</span>
-              <input type="checkbox" v-model="drawerData.has_exam" />
-            </label>
-            <div v-if="drawerData.has_exam" class="mt-2">
-              <label class="label">Puntaje mínimo para aprobar (%)</label>
-              <input type="number" class="input max-w-24" min="50" max="100" v-model.number="drawerData.exam_min_score" />
             </div>
           </div>
         </template>

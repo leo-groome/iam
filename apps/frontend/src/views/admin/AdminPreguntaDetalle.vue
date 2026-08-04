@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { onMounted, ref, computed } from 'vue';
 import { adminService } from '@/services/admin.service';
 import { apiGet } from '@/lib/api';
+import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -121,7 +122,7 @@ const pageTitle = computed(() => {
   <div class="card p-6 space-y-5 max-w-2xl">
     <div>
       <label class="label">Enunciado</label>
-      <textarea class="input min-h-24" maxlength="300" placeholder="Escribe la pregunta" v-model="enunciado"></textarea>
+      <RichTextEditor v-model="enunciado" placeholder="Escribe la pregunta" />
       <p class="help">5–300 caracteres.</p>
     </div>
     <div>
