@@ -5,6 +5,7 @@ import ProgressBar from '@/components/ui/ProgressBar.vue';
 import SkeletonCard from '@/components/ui/SkeletonCard.vue';
 import SkeletonText from '@/components/ui/SkeletonText.vue';
 import { coursesService } from '@/services/courses.service';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useProgressStore } from '@/stores/progress';
 
 const route = useRoute();
@@ -117,9 +118,9 @@ async function handleCtaClick() {
             />
           </div>
           <div class="p-6 sm:p-8">
-            <p class="text-sm text-[var(--color-primary)] font-medium mb-1">{{ curso.short_desc }}</p>
+            <p class="text-sm text-[var(--color-primary)] font-medium mb-1 rich-text" v-html="sanitizeHtml(curso.short_desc)"></p>
             <h1 class="text-3xl font-bold tracking-tight">{{ curso.title }}</h1>
-            <p class="text-[var(--color-text-muted)] mt-3 leading-relaxed">{{ curso.long_desc }}</p>
+            <div class="text-[var(--color-text-muted)] mt-3 leading-relaxed rich-text" v-html="sanitizeHtml(curso.long_desc)"></div>
 
             <div class="flex flex-wrap gap-2 mt-5">
               <span class="chip">{{ curso.modules.length }} módulos</span>

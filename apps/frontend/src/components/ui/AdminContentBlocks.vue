@@ -22,13 +22,25 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: Block[]): void;
 }>();
 
-const makeEmptyBlock = (orderIndex: number): Block => ({
-  kind: 'video',
+const makeEmptyBlock = (orderIndex: number, kind: BlockKind = 'video'): Block => ({
+  kind,
   media_key: null,
   content_body: null,
   duration_seconds: null,
   order_index: orderIndex,
 });
+
+const KIND_LABELS: Record<BlockKind, string> = {
+  video: 'Video',
+  pdf: 'PDF',
+  audio: 'Audio',
+  imagen: 'Imagen',
+  texto: 'Texto',
+};
+
+// Mirrors the backend gating: only video/pdf blocks are required to complete a
+// class; the rest are complementary.
+const isRequired = (kind: BlockKind): boolean => kind === 'video' || kind === 'pdf';
 
 // Per-block transient upload UI state, keyed by array index (blocks don't
 // always have a stable id — new ones don't until saved).
@@ -58,10 +70,12 @@ const emitUpdate = (blocks: Block[]) => {
   emit('update:modelValue', blocks);
 };
 
-const addBlock = () => {
-  const blocks = [...props.modelValue, makeEmptyBlock(props.modelValue.length)];
+const addBlock = (kind: BlockKind = 'video') => {
+  const blocks = [...props.modelValue, makeEmptyBlock(props.modelValue.length, kind)];
   emitUpdate(blocks);
 };
+
+const ADD_KINDS: BlockKind[] = ['video', 'pdf', 'audio', 'imagen', 'texto'];
 
 const removeBlock = (index: number) => {
   const blocks = props.modelValue.filter((_, i) => i !== index);
@@ -82,14 +96,18 @@ const moveBlock = (index: number, direction: -1 | 1) => {
 
 const onKindChange = (index: number, kind: BlockKind) => {
   const blocks = [...props.modelValue];
-  const block = { ...blocks[index], kind };
-  // Reset fields that don't apply to the new kind.
-  if (kind === 'texto') {
-    block.media_key = null;
-  } else {
-    block.content_body = null;
-  }
-  blocks[index] = block;
+  if (blocks[index].kind === kind) return;
+  // Changing kind invalidates any previously uploaded file / body / duration —
+  // reset all of them so the correct input (upload zone vs text editor) shows
+  // and no stale media_key from another type lingers.
+  blocks[index] = {
+    ...blocks[index],
+    kind,
+    media_key: null,
+    content_body: null,
+    duration_seconds: null,
+  };
+  delete uploadState[index];
   emitUpdate(blocks);
 };
 
@@ -147,14 +165,29 @@ const durationLabel = (seconds: number | null): string | null => {
 
 <template>
   <div class="space-y-4">
+    <p class="text-sm text-[var(--color-text-muted)]">
+      Combina varios tipos de contenido en una misma clase (video, PDF, audio, imagen, texto). Agrega los bloques que necesites y ordénalos.
+      Para avanzar, el estudiante debe completar los bloques <span class="font-medium">Requeridos</span> (video y PDF).
+    </p>
+
     <div v-if="modelValue.length === 0" class="card p-8 text-center text-[var(--color-text-muted)]">
-      No hay bloques todavía. Agrega el primero.
+      No hay bloques todavía. Agrega el primero con los botones de abajo.
     </div>
 
     <div v-for="(block, index) in modelValue" :key="block.id ?? `new-${index}`" class="card p-5 space-y-4">
       <div class="flex items-start justify-between gap-3">
         <div class="flex-1">
-          <label class="label">Bloque {{ index + 1 }}</label>
+          <div class="flex items-center gap-2 mb-2">
+            <label class="label mb-0">Bloque {{ index + 1 }}</label>
+            <span
+              :class="isRequired(block.kind)
+                ? 'bg-amber-100 text-amber-800'
+                : 'bg-[var(--color-primary-soft)] text-[var(--color-primary)]'"
+              class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full"
+            >
+              {{ isRequired(block.kind) ? 'Requerido' : 'Complementario' }}
+            </span>
+          </div>
           <select class="input" :value="block.kind" @change="onKindChange(index, ($event.target as HTMLSelectElement).value as BlockKind)">
             <option value="video">Video</option>
             <option value="pdf">PDF</option>
@@ -221,6 +254,17 @@ const durationLabel = (seconds: number | null): string | null => {
       </div>
     </div>
 
-    <button type="button" @click="addBlock" class="btn btn-secondary">+ Agregar bloque</button>
+    <div class="flex flex-wrap items-center gap-2 pt-1">
+      <span class="text-sm text-[var(--color-text-muted)] mr-1">Agregar bloque:</span>
+      <button
+        v-for="k in ADD_KINDS"
+        :key="k"
+        type="button"
+        @click="addBlock(k)"
+        class="btn btn-secondary px-3 py-2 text-sm"
+      >
+        + {{ KIND_LABELS[k] }}
+      </button>
+    </div>
   </div>
 </template>

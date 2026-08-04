@@ -30,7 +30,7 @@ class OptionResponse(BaseModel):
 
 
 class QuestionCreate(BaseModel):
-    enunciado: str = Field(..., min_length=5, max_length=300)
+    enunciado: str = Field(..., min_length=5, max_length=5000)
     options: list[OptionCreate] = Field(..., min_length=3, max_length=5)
     order_index: int = Field(0, ge=0)
 
@@ -43,7 +43,7 @@ class QuestionCreate(BaseModel):
 
 
 class QuestionUpdate(BaseModel):
-    enunciado: str | None = Field(None, min_length=5, max_length=300)
+    enunciado: str | None = Field(None, min_length=5, max_length=5000)
 
 
 class QuestionResponse(BaseModel):

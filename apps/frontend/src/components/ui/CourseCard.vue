@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 interface Props {
   slug: string;
@@ -34,7 +35,7 @@ const buttonLabel = computed(() => props.cta ?? (props.progress > 0 ? "Continuar
     </div>
     <div class="p-5 md:p-6 flex flex-col flex-1 min-w-0">
       <h3 class="font-bold text-xl leading-tight mb-2">{{ title }}</h3>
-      <p class="text-[var(--color-text-muted)] text-sm leading-relaxed mb-4 line-clamp-3">{{ description }}</p>
+      <div class="rich-text text-[var(--color-text-muted)] text-sm leading-relaxed mb-4 line-clamp-3" v-html="sanitizeHtml(description)"></div>
       <div class="flex flex-wrap gap-2 mb-4">
         <span v-if="duration" class="chip">{{ duration }}</span>
         <span class="chip">Examen corto</span>
