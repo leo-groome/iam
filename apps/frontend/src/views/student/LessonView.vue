@@ -138,9 +138,7 @@ function handleContentDone() {
             :nextUrl="nextUrl"
             :hasExam="tema.has_exam"
             @content-done="handleContentDone"
-          >
-            <div v-html="tema.content_body"></div>
-          </LearningPlayer>
+          />
         </transition>
       </div>
     </transition>

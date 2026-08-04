@@ -8,11 +8,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.crud.exam import count_consecutive_failures
-from app.models.course import Course, Module, Topic
-from app.models.progress import Enrollment, ExamAttempt, TopicProgress
+from app.crud.topic import get_or_create_progress
+from app.models.course import ContentBlock, Course, Module, Topic
+from app.models.progress import ContentBlockProgress, Enrollment, ExamAttempt, TopicProgress
 from app.models.user import User
 
 _ATORADO_THRESHOLD = 3
+
+# Only 'video' content blocks gate topic completion. A video block is considered
+# watched once the reported max-seen percentage crosses this threshold AND the
+# player has reported at least this many seconds of playback (prevents trivial
+# skip-to-end claims on very short clips reporting 100% instantly).
+_VIDEO_COMPLETE_PCT = 95
+_MIN_VIDEO_COMPLETE_SECONDS = 5
+
+
+def _complete_content(tp: TopicProgress) -> None:
+    tp.content_completed_at = datetime.now(UTC)  # type: ignore[assignment]
+    if tp.state != "aprobado":
+        tp.state = "contenido_visto"
 
 
 async def _get_topic_progress(
@@ -207,6 +221,75 @@ async def on_topic_exam_passed(
             user.status = "completado"
 
 
+def _block_progress_complete(block: ContentBlock, bp: ContentBlockProgress | None) -> bool:
+    if bp is None:
+        return False
+    if block.kind == "video":
+        return (
+            bp.video_max_seen_pct >= _VIDEO_COMPLETE_PCT
+            and bp.video_last_pos_seconds >= _MIN_VIDEO_COMPLETE_SECONDS
+        )
+    if block.kind == "pdf":
+        return (
+            bp.pdf_total_pages is not None
+            and bp.pdf_total_pages > 0
+            and bp.pdf_last_page >= bp.pdf_total_pages
+        )
+    return False
+
+
+async def recompute_content_completion(
+    db: AsyncSession, user: User, topic: Topic
+) -> bool:
+    """Recompute and (if reached) persist content-completion for a topic's blocks.
+
+    Only 'video' and 'pdf' blocks gate completion (required_blocks). If the topic
+    has at least one required block, it is complete iff EVERY required block has a
+    ContentBlockProgress row for this user satisfying its kind's threshold:
+      - video: video_max_seen_pct >= _VIDEO_COMPLETE_PCT AND
+        video_last_pos_seconds >= _MIN_VIDEO_COMPLETE_SECONDS.
+      - pdf: pdf_total_pages is set and > 0, AND pdf_last_page >= pdf_total_pages
+        (the frontend reports the real page count from pdf.js).
+    If the topic has no required blocks (only audio/imagen/texto), this returns
+    False — completion for those topics is left to the honor-system
+    mark-content-done flow.
+
+    Returns whether the topic's required content is complete. As a side effect,
+    when complete, marks the TopicProgress as content-completed (flushed, not
+    committed — caller commits).
+    """
+    result = await db.execute(
+        select(Topic).where(Topic.id == topic.id).options(selectinload(Topic.blocks))
+    )
+    fresh_topic = result.scalar_one_or_none()
+    if fresh_topic is None:
+        return False
+
+    required_blocks = [b for b in fresh_topic.blocks if b.kind in ("video", "pdf")]
+    if not required_blocks:
+        return False
+
+    block_ids = [b.id for b in required_blocks]
+    bp_result = await db.execute(
+        select(ContentBlockProgress).where(
+            ContentBlockProgress.user_id == user.id,
+            ContentBlockProgress.block_id.in_(block_ids),
+        )
+    )
+    progress_by_block = {bp.block_id: bp for bp in bp_result.scalars()}
+
+    complete = all(
+        _block_progress_complete(block, progress_by_block.get(block.id))
+        for block in required_blocks
+    )
+
+    if complete:
+        tp = await get_or_create_progress(db, user, fresh_topic)
+        _complete_content(tp)
+
+    return complete
+
+
 async def on_topic_exam_failed(
     db: AsyncSession, user: User, topic: Topic, tp: TopicProgress
 ) -> None:
@@ -214,6 +297,32 @@ async def on_topic_exam_failed(
     tp.video_max_seen_pct = 0
     tp.pdf_last_page = 0
     tp.content_completed_at = None
+
+    # Force re-watch of video blocks AND re-read of pdf blocks in repaso: reset
+    # per-block progress too, so a failed exam re-gates on both required kinds.
+    gating_blocks_result = await db.execute(
+        select(ContentBlock).where(
+            ContentBlock.topic_id == topic.id,
+            ContentBlock.kind.in_(("video", "pdf")),
+        )
+    )
+    blocks_by_id = {b.id: b for b in gating_blocks_result.scalars()}
+    if blocks_by_id:
+        block_progress_result = await db.execute(
+            select(ContentBlockProgress).where(
+                ContentBlockProgress.user_id == user.id,
+                ContentBlockProgress.block_id.in_(blocks_by_id.keys()),
+            )
+        )
+        for bp in block_progress_result.scalars():
+            block = blocks_by_id[bp.block_id]
+            if block.kind == "video":
+                bp.video_max_seen_pct = 0
+                bp.video_last_pos_seconds = 0
+            elif block.kind == "pdf":
+                bp.pdf_last_page = 0
+                bp.pdf_total_pages = None
+            bp.completed_at = None
 
 
 async def on_module_exam_passed(

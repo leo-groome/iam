@@ -317,6 +317,217 @@ async def test_on_topic_exam_failed_resets_trackers(db: AsyncSession, scaffold):
     assert tp.content_completed_at is None
 
 
+@pytest.mark.asyncio
+async def test_on_topic_exam_failed_resets_video_block_progress(db: AsyncSession, scaffold):
+    from app.models.base import new_uuid
+    from app.models.course import ContentBlock
+    from app.models.progress import ContentBlockProgress, TopicProgress
+    from app.services.progress_engine import on_topic_exam_failed
+
+    t1 = scaffold["t1"]
+    user = scaffold["user"]
+
+    block = ContentBlock(id=new_uuid(), topic_id=t1.id, kind="video", duration_seconds=100, order_index=0)
+    db.add(block)
+    await db.flush()
+
+    bp = ContentBlockProgress(
+        id=new_uuid(), user_id=user.id, block_id=block.id,
+        video_max_seen_pct=96, video_last_pos_seconds=95, completed_at=datetime.now(UTC),
+    )
+    db.add(bp)
+
+    tp = TopicProgress(id=new_uuid(), user_id=user.id, topic_id=t1.id, state="contenido_visto")
+    db.add(tp)
+    await db.commit()
+    await db.refresh(t1)
+
+    await on_topic_exam_failed(db, user, t1, tp)
+    await db.commit()
+    await db.refresh(bp)
+
+    assert bp.video_max_seen_pct == 0
+    assert bp.video_last_pos_seconds == 0
+    assert bp.completed_at is None
+
+
+# ─── recompute_content_completion ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_recompute_content_completion_false_without_video_blocks(db: AsyncSession, scaffold):
+    from app.services.progress_engine import recompute_content_completion
+
+    t2 = scaffold["t2"]
+    user = scaffold["user"]
+
+    complete = await recompute_content_completion(db, user, t2)
+    assert complete is False
+
+
+@pytest.mark.asyncio
+async def test_recompute_content_completion_true_when_all_video_blocks_watched(
+    db: AsyncSession, scaffold
+):
+    from app.models.base import new_uuid
+    from app.models.course import ContentBlock
+    from app.models.progress import ContentBlockProgress
+    from app.services.progress_engine import recompute_content_completion
+
+    t1 = scaffold["t1"]
+    user = scaffold["user"]
+
+    block_a = ContentBlock(id=new_uuid(), topic_id=t1.id, kind="video", duration_seconds=100, order_index=0)
+    block_b = ContentBlock(id=new_uuid(), topic_id=t1.id, kind="video", duration_seconds=100, order_index=1)
+    db.add_all([block_a, block_b])
+    await db.flush()
+
+    db.add_all(
+        [
+            ContentBlockProgress(
+                id=new_uuid(), user_id=user.id, block_id=block_a.id,
+                video_max_seen_pct=96, video_last_pos_seconds=95,
+            ),
+            ContentBlockProgress(
+                id=new_uuid(), user_id=user.id, block_id=block_b.id,
+                video_max_seen_pct=40, video_last_pos_seconds=30,
+            ),
+        ]
+    )
+    await db.commit()
+    await db.refresh(t1)
+
+    # Only block_a complete — topic must not yet be complete.
+    partial = await recompute_content_completion(db, user, t1)
+    assert partial is False
+
+    # Now complete block_b too.
+    from sqlalchemy import select
+
+    bp_b_result = await db.execute(
+        select(ContentBlockProgress).where(ContentBlockProgress.block_id == block_b.id)
+    )
+    bp_b = bp_b_result.scalar_one()
+    bp_b.video_max_seen_pct = 96
+    bp_b.video_last_pos_seconds = 95
+    await db.commit()
+
+    complete = await recompute_content_completion(db, user, t1)
+    assert complete is True
+
+
+@pytest.mark.asyncio
+async def test_recompute_content_completion_pdf_block_gates_on_pages(
+    db: AsyncSession, scaffold
+):
+    from app.models.base import new_uuid
+    from app.models.course import ContentBlock
+    from app.models.progress import ContentBlockProgress
+    from app.services.progress_engine import recompute_content_completion
+
+    t2 = scaffold["t2"]
+    user = scaffold["user"]
+
+    block = ContentBlock(id=new_uuid(), topic_id=t2.id, kind="pdf", order_index=0)
+    db.add(block)
+    await db.flush()
+
+    bp = ContentBlockProgress(
+        id=new_uuid(), user_id=user.id, block_id=block.id,
+        pdf_last_page=2, pdf_total_pages=5,
+    )
+    db.add(bp)
+    await db.commit()
+    await db.refresh(t2)
+
+    partial = await recompute_content_completion(db, user, t2)
+    assert partial is False
+
+    bp.pdf_last_page = 5
+    await db.commit()
+
+    complete = await recompute_content_completion(db, user, t2)
+    assert complete is True
+
+
+@pytest.mark.asyncio
+async def test_recompute_content_completion_requires_both_video_and_pdf(
+    db: AsyncSession, scaffold
+):
+    from app.models.base import new_uuid
+    from app.models.course import ContentBlock
+    from app.models.progress import ContentBlockProgress
+    from app.services.progress_engine import recompute_content_completion
+
+    t1 = scaffold["t1"]
+    user = scaffold["user"]
+
+    video_block = ContentBlock(
+        id=new_uuid(), topic_id=t1.id, kind="video", duration_seconds=100, order_index=0
+    )
+    pdf_block = ContentBlock(id=new_uuid(), topic_id=t1.id, kind="pdf", order_index=1)
+    db.add_all([video_block, pdf_block])
+    await db.flush()
+
+    db.add(
+        ContentBlockProgress(
+            id=new_uuid(), user_id=user.id, block_id=video_block.id,
+            video_max_seen_pct=96, video_last_pos_seconds=95,
+        )
+    )
+    await db.commit()
+    await db.refresh(t1)
+
+    # Video complete, pdf missing entirely — must not be complete.
+    partial = await recompute_content_completion(db, user, t1)
+    assert partial is False
+
+    db.add(
+        ContentBlockProgress(
+            id=new_uuid(), user_id=user.id, block_id=pdf_block.id,
+            pdf_last_page=3, pdf_total_pages=3,
+        )
+    )
+    await db.commit()
+
+    complete = await recompute_content_completion(db, user, t1)
+    assert complete is True
+
+
+@pytest.mark.asyncio
+async def test_on_topic_exam_failed_resets_pdf_block_progress(db: AsyncSession, scaffold):
+    from app.models.base import new_uuid
+    from app.models.course import ContentBlock
+    from app.models.progress import ContentBlockProgress, TopicProgress
+    from app.services.progress_engine import on_topic_exam_failed
+
+    t1 = scaffold["t1"]
+    user = scaffold["user"]
+
+    block = ContentBlock(id=new_uuid(), topic_id=t1.id, kind="pdf", order_index=0)
+    db.add(block)
+    await db.flush()
+
+    bp = ContentBlockProgress(
+        id=new_uuid(), user_id=user.id, block_id=block.id,
+        pdf_last_page=5, pdf_total_pages=5, completed_at=datetime.now(UTC),
+    )
+    db.add(bp)
+
+    tp = TopicProgress(id=new_uuid(), user_id=user.id, topic_id=t1.id, state="contenido_visto")
+    db.add(tp)
+    await db.commit()
+    await db.refresh(t1)
+
+    await on_topic_exam_failed(db, user, t1, tp)
+    await db.commit()
+    await db.refresh(bp)
+
+    assert bp.pdf_last_page == 0
+    assert bp.pdf_total_pages is None
+    assert bp.completed_at is None
+
+
 # ─── check_user_status ───────────────────────────────────────────────────
 
 

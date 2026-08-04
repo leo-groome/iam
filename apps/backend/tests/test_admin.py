@@ -924,3 +924,235 @@ async def test_instructor_cannot_manage_nested_resources_from_other_course(
         ]
 
     assert all(resp.status_code == 403 for resp in attempts), [resp.text for resp in attempts]
+
+
+# ---------------------------------------------------------------------------
+# Content blocks — PUT /api/v1/admin/topics/{topic_id}/blocks
+# ---------------------------------------------------------------------------
+
+
+async def _make_topic_for_blocks(db: AsyncSession) -> uuid.UUID:
+    from app.models.base import new_uuid
+    from app.models.course import Course, Module, Topic
+
+    course = Course(
+        id=new_uuid(),
+        slug="blocks-course",
+        title="Blocks Course",
+        short_desc="",
+        long_desc="",
+        status="publicado",
+    )
+    db.add(course)
+    await db.flush()
+    module = Module(id=new_uuid(), course_id=course.id, title="Blocks Module", description="")
+    db.add(module)
+    await db.flush()
+    topic = Topic(
+        id=new_uuid(), module_id=module.id, title="Blocks Topic", content_type="texto", has_exam=False
+    )
+    db.add(topic)
+    await db.commit()
+    return topic.id
+
+
+@pytest.mark.asyncio
+async def test_replace_topic_blocks_happy_path_returns_ordered_blocks(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+
+    topic_id = await _make_topic_for_blocks(db)
+
+    payload = [
+        {"kind": "video", "media_key": "video/x/lecture.mp4", "order_index": 0},
+        {"kind": "pdf", "media_key": "pdf/x/slides.pdf", "order_index": 1},
+        {"kind": "audio", "media_key": "audio/x/leccion.mp3", "order_index": 2},
+        {"kind": "texto", "content_body": "Texto complementario.", "order_index": 3},
+    ]
+
+    with patch(
+        "app.deps.verify_stack_token",
+        _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
+    ):
+        put_resp = await client.put(
+            f"/api/v1/admin/topics/{topic_id}/blocks",
+            json=payload,
+            headers=ADMIN_HEADERS,
+        )
+        get_resp = await client.get(
+            f"/api/v1/admin/topics/{topic_id}",
+            headers=ADMIN_HEADERS,
+        )
+
+    assert put_resp.status_code == 200, put_resp.text
+    assert get_resp.status_code == 200, get_resp.text
+
+    blocks = get_resp.json()["blocks"]
+    assert len(blocks) == 4
+    assert [b["kind"] for b in blocks] == ["video", "pdf", "audio", "texto"]
+    assert [b["order_index"] for b in blocks] == [0, 1, 2, 3]
+    # content_type synced to the first block's kind for legacy catalog/list display
+    assert get_resp.json()["content_type"] == "video"
+
+
+@pytest.mark.asyncio
+async def test_replace_topic_blocks_empty_list_returns_422(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+
+    topic_id = await _make_topic_for_blocks(db)
+
+    with patch(
+        "app.deps.verify_stack_token",
+        _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
+    ):
+        resp = await client.put(
+            f"/api/v1/admin/topics/{topic_id}/blocks",
+            json=[],
+            headers=ADMIN_HEADERS,
+        )
+
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"]["code"] == "blocks_required"
+
+
+@pytest.mark.asyncio
+async def test_replace_topic_blocks_replaces_old_ones(client: AsyncClient, db: AsyncSession) -> None:
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+
+    topic_id = await _make_topic_for_blocks(db)
+
+    with patch(
+        "app.deps.verify_stack_token",
+        _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
+    ):
+        first = await client.put(
+            f"/api/v1/admin/topics/{topic_id}/blocks",
+            json=[{"kind": "video", "media_key": "video/a/one.mp4", "order_index": 0}],
+            headers=ADMIN_HEADERS,
+        )
+        second = await client.put(
+            f"/api/v1/admin/topics/{topic_id}/blocks",
+            json=[{"kind": "texto", "content_body": "Solo texto ahora.", "order_index": 0}],
+            headers=ADMIN_HEADERS,
+        )
+        get_resp = await client.get(
+            f"/api/v1/admin/topics/{topic_id}",
+            headers=ADMIN_HEADERS,
+        )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    blocks = get_resp.json()["blocks"]
+    assert len(blocks) == 1
+    assert blocks[0]["kind"] == "texto"
+
+
+@pytest.mark.asyncio
+async def test_replace_topic_blocks_media_key_wrong_scope_prefix_returns_422(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+
+    topic_id = await _make_topic_for_blocks(db)
+
+    # media_key belongs to the "cover" scope, not "video" — must be rejected so an
+    # instructor cannot point a block at media from another scope/course context.
+    payload = [{"kind": "video", "media_key": "cover/x/lecture.mp4", "order_index": 0}]
+
+    with patch(
+        "app.deps.verify_stack_token",
+        _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
+    ):
+        resp = await client.put(
+            f"/api/v1/admin/topics/{topic_id}/blocks",
+            json=payload,
+            headers=ADMIN_HEADERS,
+        )
+
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_replace_topic_blocks_resets_in_progress_topic_progress(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    # Editing a topic's blocks must re-gate students who saw the old content but
+    # not the new one: 'contenido_visto'/'en_repaso' TopicProgress rows for the
+    # topic go back to 'disponible' with content_completed_at cleared, while an
+    # 'aprobado' row (exam already passed) is left untouched.
+    from datetime import UTC, datetime
+
+    from app.models.base import new_uuid
+    from app.models.progress import TopicProgress
+    from app.models.user import User
+
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+
+    topic_id = await _make_topic_for_blocks(db)
+
+    student_seen = User(
+        id=new_uuid(),
+        neon_user_id="student_seen_blocks",
+        email="seen@test.com",
+        full_name="Student Seen",
+        birth_date=datetime(1995, 1, 1).date(),
+        role="estudiante",
+        status="activo",
+    )
+    student_approved = User(
+        id=new_uuid(),
+        neon_user_id="student_approved_blocks",
+        email="approved@test.com",
+        full_name="Student Approved",
+        birth_date=datetime(1995, 1, 1).date(),
+        role="estudiante",
+        status="activo",
+    )
+    db.add_all([student_seen, student_approved])
+    await db.flush()
+
+    tp_seen = TopicProgress(
+        id=new_uuid(),
+        user_id=student_seen.id,
+        topic_id=topic_id,
+        state="contenido_visto",
+        content_completed_at=datetime.now(UTC),
+    )
+    tp_approved = TopicProgress(
+        id=new_uuid(),
+        user_id=student_approved.id,
+        topic_id=topic_id,
+        state="aprobado",
+        content_completed_at=datetime.now(UTC),
+    )
+    db.add_all([tp_seen, tp_approved])
+    await db.commit()
+
+    with patch(
+        "app.deps.verify_stack_token",
+        _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
+    ):
+        resp = await client.put(
+            f"/api/v1/admin/topics/{topic_id}/blocks",
+            json=[{"kind": "video", "media_key": "video/new/lecture2.mp4", "order_index": 0}],
+            headers=ADMIN_HEADERS,
+        )
+
+    assert resp.status_code == 200, resp.text
+
+    await db.refresh(tp_seen)
+    await db.refresh(tp_approved)
+
+    assert tp_seen.state == "disponible"
+    assert tp_seen.content_completed_at is None
+
+    assert tp_approved.state == "aprobado"
+    assert tp_approved.content_completed_at is not None

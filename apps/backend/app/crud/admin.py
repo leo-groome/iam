@@ -204,6 +204,7 @@ async def get_topic_with_questions(db: AsyncSession, topic_id: uuid.UUID) -> Top
         .options(
             selectinload(Topic.questions).selectinload(Question.options),
             with_loader_criteria(Question, Question.archived_at.is_(None)),
+            selectinload(Topic.blocks),
         )
     )
     result = await db.execute(stmt)

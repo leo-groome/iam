@@ -210,6 +210,13 @@ export async function apiPatch<P extends keyof paths>(
   return apiFetch(path, { ...options, method: 'PATCH' })
 }
 
+export async function apiPut<P extends keyof paths>(
+  path: P,
+  options: MutateOptions = {},
+): Promise<unknown> {
+  return apiFetch(path, { ...options, method: 'PUT' })
+}
+
 export async function apiDelete<P extends keyof paths>(
   path: P,
   options: MutateOptions = {},

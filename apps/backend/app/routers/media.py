@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.db import get_db
 from app.deps import get_current_user, require_role
-from app.models.course import Course, Topic
+from app.models.course import ContentBlock, Course, Topic
 from app.models.progress import Enrollment
 from app.models.user import User
 from app.security.media_jwt import sign_play_token
@@ -53,7 +53,7 @@ class UploadUrlResponse(BaseModel):
 
 
 class PlayTokenRequest(BaseModel):
-    topic_id: uuid.UUID
+    block_id: uuid.UUID
 
 
 class PlayTokenResponse(BaseModel):
@@ -95,11 +95,14 @@ async def get_upload_url(
     return UploadUrlResponse(put_url=put_url, key=key, expires_in=600)
 
 
+_MEDIA_BLOCK_KINDS = frozenset({"video", "pdf", "imagen", "audio"})
+
+
 @router.post(
     "/play-token",
     response_model=PlayTokenResponse,
     status_code=status.HTTP_200_OK,
-    summary="Issue a short-lived JWT to stream a topic's media via the CF Worker",
+    summary="Issue a short-lived JWT to stream a content block's media via the CF Worker",
 )
 async def get_play_token(
     body: PlayTokenRequest,
@@ -107,12 +110,28 @@ async def get_play_token(
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> PlayTokenResponse:
     result = await db.execute(
-        select(Topic).where(Topic.id == body.topic_id).options(selectinload(Topic.module))
+        select(ContentBlock)
+        .where(ContentBlock.id == body.block_id)
+        .options(selectinload(ContentBlock.topic).selectinload(Topic.module))
     )
-    topic = result.scalar_one_or_none()
+    block = result.scalar_one_or_none()
 
-    if topic is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+    if block is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content block not found")
+
+    topic = block.topic
+
+    if block.kind not in _MEDIA_BLOCK_KINDS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "invalid_block_kind", "detail": "This content block has no playable media."},
+        )
+
+    if not block.media_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "no_media_key", "detail": "This content block has no associated media."},
+        )
 
     if topic.archived_at is not None:
         raise HTTPException(
@@ -140,22 +159,16 @@ async def get_play_token(
             detail={"code": "not_enrolled", "detail": "Not enrolled in this course."},
         )
 
-    if not topic.media_key:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "no_media_key", "detail": "This topic has no associated media."},
-        )
-
     state = await compute_topic_state(db, current_user, topic)
 
     if state not in _TOPIC_ACCESSIBLE_STATES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "topic_locked", "detail": "Access to this topic's media is not yet unlocked."},
+            detail={"code": "topic_locked", "detail": "Access to this content's media is not yet unlocked."},
         )
 
-    token = sign_play_token(current_user.id, topic.media_key, ttl_seconds=300)
-    media_url = f"{settings.r2_public_base}/{topic.media_key}"
+    token = sign_play_token(current_user.id, block.media_key, ttl_seconds=300)
+    media_url = f"{settings.r2_public_base}/{block.media_key}"
 
     return PlayTokenResponse(token=token, media_url=media_url, expires_in=300)
 

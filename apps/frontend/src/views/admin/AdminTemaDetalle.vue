@@ -2,7 +2,9 @@
 import { useRoute, useRouter } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
-import { mediaService } from '@/services/media.service';
+import type { ContentBlockIn } from '@/services/admin.service';
+import AdminContentBlocks from '@/components/ui/AdminContentBlocks.vue';
+import type { Block } from '@/components/ui/AdminContentBlocks.vue';
 
 type ExamOption = {
   texto: string;
@@ -27,19 +29,23 @@ const mod = ref<any>(null);
 const tema = ref<any>(null);
 const loading = ref(false);
 const saving = ref(false);
-const isUploading = ref(false);
-const uploadPhase = ref<'optimizing' | 'uploading' | 'done' | null>(null);
 
 const errorMessage = ref('');
 const successMessage = ref('');
 const title = ref('');
-const contentType = ref('video');
 const hasExam = ref(false);
-const contentBody = ref('');
-const durationSeconds = ref<number | null>(null);
 const examMinScore = ref(70);
-const mediaKey = ref('');
 const questions = ref<ExamQuestion[]>([]);
+
+const makeEmptyBlock = (): Block => ({
+  kind: 'video',
+  media_key: null,
+  content_body: null,
+  duration_seconds: null,
+  order_index: 0,
+});
+
+const blocks = ref<Block[]>([makeEmptyBlock()]);
 
 const makeEmptyQuestion = (): ExamQuestion => ({
   enunciado: '',
@@ -67,12 +73,13 @@ const normalizeQuestion = (q: any): ExamQuestion => {
 
 const canEditQuestions = computed(() => !isNew);
 
-const durationLabel = computed(() => {
-  const s = durationSeconds.value;
-  if (!s || s <= 0) return null;
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+const normalizeBlock = (b: any, index: number): Block => ({
+  id: b.id,
+  kind: b.kind,
+  media_key: b.media_key ?? null,
+  content_body: b.content_body ?? null,
+  duration_seconds: b.duration_seconds ?? null,
+  order_index: b.order_index ?? index,
 });
 
 onMounted(async () => {
@@ -84,13 +91,15 @@ onMounted(async () => {
       tema.value = await adminService.getTopicDetail(temaId);
       if (tema.value) {
         title.value = tema.value.title;
-        contentType.value = tema.value.content_type;
         hasExam.value = tema.value.has_exam;
-        contentBody.value = tema.value.content_body || '';
-        durationSeconds.value = tema.value.duration_seconds ?? null;
         examMinScore.value = tema.value.exam_min_score || 70;
-        mediaKey.value = tema.value.media_key || '';
         questions.value = (tema.value.questions ?? []).map(normalizeQuestion);
+        const loadedBlocks: any[] = tema.value.blocks ?? [];
+        blocks.value = loadedBlocks.length > 0
+          ? [...loadedBlocks]
+              .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+              .map((b, i) => normalizeBlock(b, i))
+          : [makeEmptyBlock()];
       }
     }
   } catch (err) {
@@ -160,36 +169,28 @@ const buildQuestionPayload = () => questions.value.map((question, questionIndex)
   })),
 }));
 
-const handleFileUpload = async (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const file = target.files?.[0];
-  if (!file) return;
-
-  let scope: 'video' | 'pdf' | 'imagen' | 'audio' = 'imagen';
-  if (contentType.value === 'video') scope = 'video';
-  else if (contentType.value === 'pdf') scope = 'pdf';
-  else if (contentType.value === 'audio') scope = 'audio';
-
-  isUploading.value = true;
-  uploadPhase.value = null;
-  errorMessage.value = '';
-  try {
-    if (scope === 'video' || scope === 'audio') {
-      const secs = await mediaService.readMediaDuration(file);
-      if (secs) durationSeconds.value = secs;
+const validateBlocks = (): string | null => {
+  if (blocks.value.length === 0) return 'Agrega al menos un bloque de contenido.';
+  for (const [index, block] of blocks.value.entries()) {
+    if (block.kind === 'texto') {
+      if (!block.content_body || !block.content_body.trim()) {
+        return `El bloque ${index + 1} (texto) necesita contenido.`;
+      }
+    } else if (!block.media_key) {
+      return `El bloque ${index + 1} (${block.kind}) necesita un archivo.`;
     }
-    const key = await mediaService.uploadFile(file, scope, (phase) => {
-      uploadPhase.value = phase;
-    });
-    mediaKey.value = key;
-  } catch (err: any) {
-    console.error('Error uploading file:', err);
-    errorMessage.value = 'No se pudo subir el archivo: ' + err.message;
-  } finally {
-    isUploading.value = false;
-    uploadPhase.value = null;
   }
+  return null;
 };
+
+const buildBlockPayload = (): ContentBlockIn[] =>
+  blocks.value.map((block, index) => ({
+    kind: block.kind,
+    media_key: block.kind === 'texto' ? null : block.media_key,
+    content_body: block.kind === 'texto' ? block.content_body : null,
+    duration_seconds: block.duration_seconds ?? null,
+    order_index: index,
+  }));
 
 const handleSave = async () => {
   errorMessage.value = '';
@@ -199,26 +200,37 @@ const handleSave = async () => {
     errorMessage.value = validationError;
     return;
   }
+  const blocksError = validateBlocks();
+  if (blocksError) {
+    errorMessage.value = blocksError;
+    return;
+  }
 
   saving.value = true;
   try {
     const score = Number(examMinScore.value) || 70;
     const formData: any = {
       title: title.value,
-      content_type: contentType.value,
       has_exam: hasExam.value,
-      content_body: contentBody.value || null,
-      duration_seconds: durationSeconds.value ?? null,
       exam_min_score: score,
-      media_key: mediaKey.value || null,
     };
+    let topicId = temaId;
     if (isNew) {
-      const created = await adminService.createTopic(modId, formData);
-      router.replace(`/admin/cursos/${courseId}/modulos/${modId}/temas/${created.id}`);
+      // The backend still requires content_type on creation; derive it from
+      // the first block so the topic row is created in a valid state before
+      // the block list (source of truth) is synced right after.
+      const created = await adminService.createTopic(modId, {
+        ...formData,
+        content_type: blocks.value[0].kind,
+      });
+      topicId = created.id;
+      await adminService.replaceTopicBlocks(topicId, buildBlockPayload());
+      router.replace(`/admin/cursos/${courseId}/modulos/${modId}/temas/${topicId}`);
       return;
     }
-    await adminService.updateTopic(temaId, formData);
-    await adminService.replaceTopicQuestions(temaId, hasExam.value ? buildQuestionPayload() : []);
+    await adminService.updateTopic(topicId, formData);
+    await adminService.replaceTopicBlocks(topicId, buildBlockPayload());
+    await adminService.replaceTopicQuestions(topicId, hasExam.value ? buildQuestionPayload() : []);
     successMessage.value = 'Tema y examen guardados.';
   } catch (err) {
     errorMessage.value = 'No se pudo guardar el tema.';
@@ -271,58 +283,8 @@ const handleDeleteTopic = async () => {
           <input class="input" minlength="3" maxlength="60" v-model="title" />
         </div>
         <div>
-          <label class="label">Tipo de contenido</label>
-          <select class="input" v-model="contentType">
-            <option value="video">Video</option>
-            <option value="pdf">PDF</option>
-            <option value="imagen">Imagen / Infografía</option>
-            <option value="audio">Audio (MP3)</option>
-            <option value="texto">Texto enriquecido</option>
-          </select>
-        </div>
-
-        <div v-if="contentType !== 'texto'">
-          <label class="label">Archivo Multimedia</label>
-          <p v-if="(contentType === 'video' || contentType === 'audio') && durationLabel" class="text-xs text-[var(--color-text-muted)] mb-2">
-            Duración detectada automáticamente: <span class="font-medium">{{ durationLabel }}</span>
-          </p>
-          <div v-if="mediaKey" class="border border-[var(--color-border)] rounded-xl p-4 flex items-center justify-between bg-[var(--color-bg-hover)] mb-4">
-            <div class="flex items-center gap-3 overflow-hidden">
-              <svg class="w-8 h-8 text-[var(--color-primary)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-              <span class="text-sm font-medium truncate">{{ mediaKey.split('/').pop() || 'Archivo actual' }}</span>
-            </div>
-            <button type="button" @click="mediaKey = ''" class="text-xs text-red-600 hover:bg-red-50 px-2.5 py-1 rounded font-medium border border-red-200">Reemplazar</button>
-          </div>
-          <div v-else-if="isUploading" class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-8 text-center bg-[var(--color-app-bg)] flex flex-col items-center">
-            <svg class="animate-spin h-6 w-6 text-[var(--color-primary)] mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            <p class="text-sm font-medium text-[var(--color-text)]">{{ uploadPhase === 'optimizing' ? 'Optimizando video para streaming...' : 'Subiendo a Cloudflare R2...' }}</p>
-            <p class="text-xs text-[var(--color-text-muted)] mt-1">
-              {{ uploadPhase === 'optimizing' ? 'Reordenando metadatos (sin recodificar)' : 'Transfiriendo directamente al CDN' }}
-            </p>
-          </div>
-          <div v-else class="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center hover:bg-[var(--color-app-bg)] transition-colors relative cursor-pointer group">
-            <input type="file" :accept="contentType === 'video' ? 'video/mp4, video/webm' : (contentType === 'pdf' ? 'application/pdf' : (contentType === 'audio' ? 'audio/mpeg' : 'image/jpeg, image/png, image/webp'))" @change="handleFileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-            <div class="space-y-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <p class="text-sm text-[var(--color-text-muted)]">Arrastra o haz clic para subir</p>
-              <p class="text-xs text-[var(--color-text-muted)]">
-                {{ contentType === 'video' ? 'Video (mp4/webm, máx 500 MB)' : (contentType === 'pdf' ? 'Documento PDF (máx 50 MB)' : (contentType === 'audio' ? 'Audio (mp3, máx 50 MB)' : 'Imagen (jpeg/png/webp, máx 10 MB)')) }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label class="label">{{ contentType === 'texto' ? 'Contenido de la clase' : 'Material escrito complementario (opcional)' }}</label>
-          <textarea
-            class="input min-h-60 font-mono text-sm"
-            v-model="contentBody"
-            maxlength="20000"
-            :placeholder="contentType === 'texto' ? 'Escribe el contenido aquí (Markdown soportado)' : 'Notas, transcripción o material de apoyo (Markdown soportado)'"
-          />
-          <p class="text-xs text-[var(--color-text-muted)] mt-1">{{ contentBody.length }} / 20000 caracteres</p>
+          <label class="label">Bloques de contenido</label>
+          <AdminContentBlocks v-model="blocks" />
         </div>
       </div>
 
