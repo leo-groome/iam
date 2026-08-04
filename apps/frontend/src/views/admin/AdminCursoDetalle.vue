@@ -403,8 +403,7 @@ const saveDrawer = async () => {
       <div class="flex-1 overflow-y-auto p-6 space-y-5">
         
         <!-- COURSE FORM -->
-        <template>
-          <div>
+        <div>
             <label class="label">Título del curso</label>
             <input class="input" minlength="5" maxlength="80" v-model="formData.title" @input="onTitleInput" placeholder="Ej. Comunicación empática" />
             <p class="help">5–80 caracteres.</p>
@@ -461,7 +460,6 @@ const saveDrawer = async () => {
               </label>
             </div>
           </div>
-        </template>
 
       </div>
 
