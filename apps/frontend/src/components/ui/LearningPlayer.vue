@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { apiPost, mediaFetch } from '@/lib/api';
+import { computed, reactive, ref } from 'vue';
+import { apiPost } from '@/lib/api';
+import ContentBlockPlayer from '@/components/ui/ContentBlockPlayer.vue';
+import type { ContentBlockView } from '@/services/courses.service';
 
 const emit = defineEmits<{ 'content-done': [] }>();
 
@@ -9,252 +11,105 @@ const props = defineProps<{
     id: string;
     title: string;
     content_type: string;
-    content_body?: string;
-    duration_seconds?: number;
-    media_key?: string;
     has_exam?: boolean;
     state?: string;
-    progress?: {
-      video_last_pos_seconds: number;
-      video_max_seen_pct: number;
-      pdf_last_page: number;
-      pdf_total_pages: number | null;
-    };
+    blocks?: ContentBlockView[];
   };
   examUrl: string;
   nextUrl?: string;
   hasExam: boolean;
 }>();
 
-// Refs and states
-const progress = ref(0);
-const playing = ref(false);
-const videoWrap = ref<HTMLElement | null>(null);
-const isFullscreen = ref(false);
-
-// Shared by <video> and <audio> — only one renders at a time (v-if/v-else-if).
-// Both extend HTMLMediaElement (currentTime, duration, play/pause, events).
-const videoEl = ref<HTMLMediaElement | null>(null);
-const videoCurrentTime = ref(0);
-const videoProgress = ref(0);
-const actualDuration = ref<number | null>(null);
-
-// Video: direct stream URL (no Blob — enables native HTTP Range Requests)
-const mediaStreamUrl = ref<string | null>(null);
-// PDF / image: still fetched as Blob (small files, no seek needed)
-const mediaBlobUrl = ref<string | null>(null);
-const mediaError = ref('');
-const loadingToken = ref(false);
-const contentDone = ref(false);
-const markingDone = ref(false);
-const videoBuffering = ref(false);
-const markDoneSuccess = ref(false);
-
-const contentType = computed(() => props.tema?.content_type || 'video');
-const duration = computed(() => props.tema?.duration_seconds || 180);
-const videoDuration = computed(() => actualDuration.value || duration.value || 0);
 const doneStates = ['contenido_visto', 'aprobado'];
 
-let heartbeatInterval: any;
-let timer: any;
-let scrollHandler: (() => void) | undefined;
+const markingDone = ref(false);
+const markDoneSuccess = ref(false);
+const contentDone = computed(() => !!props.tema?.state && doneStates.includes(props.tema.state));
 
-// Format seconds to MM:SS
-function formatTime(secs: number): string {
-  if (isNaN(secs) || secs < 0) return '0:00';
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  return `${m}:${s < 10 ? '0' : ''}${s}`;
+// Per-block progress, keyed by block id — fed by ContentBlockPlayer's
+// @progress event. Video and pdf blocks are "required" and gate class
+// completion; other kinds report into this map too (useful for badges) but
+// aren't read by allRequiredComplete.
+interface BlockProgressEntry {
+  videoMaxSeenPct?: number;
+  completed: boolean;
+  pdfLastPage?: number;
+  pdfTotalPages?: number;
 }
+const blockProgress = reactive<Record<string, BlockProgressEntry>>({});
 
-// Fullscreen
-function toggleFullscreen() {
-  const el = videoWrap.value;
-  if (!el) return;
-  if (!document.fullscreenElement) {
-    el.requestFullscreen?.().catch(() => {});
+function onBlockProgress(
+  payload:
+    | { blockId: string; kind: 'video' | 'audio'; videoMaxSeenPct: number; completed: boolean }
+    | { blockId: string; kind: 'pdf'; pdfLastPage: number; pdfTotalPages: number; completed: boolean },
+): void {
+  if (payload.kind === 'pdf') {
+    blockProgress[payload.blockId] = {
+      pdfLastPage: payload.pdfLastPage,
+      pdfTotalPages: payload.pdfTotalPages,
+      completed: payload.completed,
+    };
   } else {
-    document.exitFullscreen?.().catch(() => {});
+    blockProgress[payload.blockId] = {
+      videoMaxSeenPct: payload.videoMaxSeenPct,
+      completed: payload.completed,
+    };
   }
 }
 
-function onFsChange(): void {
-  isFullscreen.value = !!document.fullscreenElement;
+const sortedBlocks = computed<ContentBlockView[]>(() => {
+  return [...(props.tema?.blocks || [])].sort((a, b) => a.order_index - b.order_index);
+});
+
+const videoBlocks = computed(() => sortedBlocks.value.filter((b) => b.kind === 'video'));
+const pdfBlocks = computed(() => sortedBlocks.value.filter((b) => b.kind === 'pdf'));
+const requiredBlocks = computed(() => sortedBlocks.value.filter((b) => b.kind === 'video' || b.kind === 'pdf'));
+
+function videoPct(b: ContentBlockView): number {
+  const live = blockProgress[b.id];
+  return live?.videoMaxSeenPct ?? b.progress?.video_max_seen_pct ?? 0;
 }
 
-// Watch for theme changes
-watch(
-  () => props.tema,
-  async (newTema) => {
-    // Revoke previous Blob URL if any (PDF/image)
-    if (mediaBlobUrl.value) {
-      URL.revokeObjectURL(mediaBlobUrl.value);
-      mediaBlobUrl.value = null;
-    }
-    // Clear video stream URL
-    mediaStreamUrl.value = null;
-
-    mediaError.value = '';
-    loadingToken.value = false;
-    playing.value = false;
-    videoCurrentTime.value = 0;
-    videoProgress.value = 0;
-    actualDuration.value = null;
-    progress.value = 0;
-    contentDone.value = false;
-    markingDone.value = false;
-    videoBuffering.value = false;
-    markDoneSuccess.value = false;
-
-    if (heartbeatInterval) clearInterval(heartbeatInterval);
-    if (timer) clearInterval(timer);
-    if (scrollHandler) {
-      window.removeEventListener('scroll', scrollHandler);
-      scrollHandler = undefined;
-    }
-
-    if (!newTema) return;
-
-    // Load initial progress
-    if (newTema.progress && newTema.state) {
-      if (doneStates.includes(newTema.state)) {
-        contentDone.value = true;
-      }
-      if (newTema.content_type === 'video' || newTema.content_type === 'audio') {
-        videoCurrentTime.value = newTema.progress.video_last_pos_seconds || 0;
-        videoProgress.value = newTema.progress.video_max_seen_pct || 0;
-      }
-    }
-
-    // Load private media if needed
-    if (newTema.content_type !== 'texto' && newTema.media_key) {
-      loadingToken.value = true;
-      try {
-        const tokenResp = (await apiPost('/api/v1/media/play-token' as any, {
-          body: { topic_id: newTema.id },
-        })) as any;
-
-        if (newTema.content_type === 'video' || newTema.content_type === 'audio') {
-          // VIDEO / AUDIO: construct direct Worker URL with token in query param.
-          // This lets the browser issue native HTTP Range Requests (206 Partial Content)
-          // for true progressive streaming — no full download, no RAM spike.
-          mediaStreamUrl.value = `${tokenResp.media_url}?token=${encodeURIComponent(tokenResp.token)}`;
-        } else {
-          // PDF / IMAGE: fetch as Blob (small files, no streaming needed)
-          const blob = await mediaFetch(tokenResp.media_url, tokenResp.token);
-          mediaBlobUrl.value = URL.createObjectURL(blob);
-        }
-      } catch (err: any) {
-        console.error('Error fetching R2 play token/media:', err);
-        mediaError.value = err.message || 'No se pudo cargar el archivo multimedia.';
-      } finally {
-        loadingToken.value = false;
-      }
-    }
-
-    // Tracking initialization
-    if (newTema.content_type === 'texto' || newTema.content_type === 'imagen') {
-      try {
-        await apiPost(`/api/v1/topics/${newTema.id}/heartbeat` as any, {
-          body: { type: newTema.content_type },
-        });
-      } catch (e) {
-        console.error('Initial heartbeat failed', e);
-      }
-      setupScrollTracking();
-    } else if (newTema.content_type === 'pdf') {
-      try {
-        await apiPost(`/api/v1/topics/${newTema.id}/heartbeat` as any, {
-          body: { type: 'pdf', last_page: 1, total_pages: 1 },
-        });
-        contentDone.value = true;
-        await markContentDone();
-      } catch (e) {
-        console.error('PDF heartbeat failed', e);
-      }
-    } else if (newTema.content_type === 'video' || newTema.content_type === 'audio') {
-      // Note: seek to last position is handled inside onLoadedMetadata
-      // to avoid timeupdate events firing before duration is known.
-
-      // Setup periodic heartbeat
-      heartbeatInterval = setInterval(async () => {
-        if (playing.value && videoEl.value && props.tema && actualDuration.value && actualDuration.value > 0) {
-          const pos = Math.floor(videoEl.value.currentTime);
-          const currentPct = Math.round((pos / videoDuration.value) * 100);
-          try {
-            const resp = (await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
-              body: {
-                type: props.tema.content_type,
-                pos_seconds: pos,
-                duration_seconds: Math.round(videoDuration.value),
-                max_seen_pct: currentPct,
-              },
-            })) as any;
-            applyProgressResponse(resp);
-          } catch (e) {
-            console.error('Video heartbeat failed', e);
-          }
-        }
-      }, 5000);
-    }
-  },
-  { immediate: true }
-);
-
-function setupScrollTracking(): void {
-  scrollHandler = () => {
-    const h = document.documentElement.scrollHeight - window.innerHeight;
-    const pct = h > 0 ? Math.min(100, Math.round((window.scrollY / h) * 100)) : 100;
-    progress.value = pct;
-    if (pct >= 95 && !contentDone.value && !markingDone.value) {
-      if (contentType.value === 'texto') {
-        onTextMarkDone();
-      } else {
-        markContentDone();
-      }
-    }
-  };
-  window.addEventListener('scroll', scrollHandler, { passive: true });
+function pdfLastPage(b: ContentBlockView): number {
+  const live = blockProgress[b.id];
+  return live?.pdfLastPage ?? b.progress?.pdf_last_page ?? 0;
 }
 
-function applyProgressResponse(resp: any): void {
-  if (!resp || !doneStates.includes(resp.state) || contentDone.value) return;
-  contentDone.value = true;
-  emit('content-done');
-  markDoneSuccess.value = true;
-  setTimeout(() => { markDoneSuccess.value = false; }, 2000);
+function pdfTotalPages(b: ContentBlockView): number {
+  const live = blockProgress[b.id];
+  return live?.pdfTotalPages ?? b.progress?.pdf_total_pages ?? 0;
 }
 
-async function syncVideoProgress(pct: number, showSaving = false): Promise<void> {
-  if (!props.tema || !videoEl.value) return;
-  if (!actualDuration.value || actualDuration.value <= 0) return;
-  if (showSaving) markingDone.value = true;
-  try {
-    const resp = (await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
-      body: {
-        type: props.tema.content_type,
-        pos_seconds: Math.floor(videoEl.value.currentTime),
-        duration_seconds: Math.round(videoDuration.value),
-        max_seen_pct: Math.min(100, pct),
-      },
-    })) as any;
-    applyProgressResponse(resp);
-  } catch (e) {
-    console.error('syncVideoProgress heartbeat failed', e);
-  } finally {
-    if (showSaving) markingDone.value = false;
-  }
-}
+// Gating rule: no required (video/pdf) blocks → honor system (always
+// unlocked). With required blocks, every video must be ≥95% seen and every
+// pdf must have last_page ≥ total_pages — matches backend mark-content-done
+// semantics exactly.
+const allRequiredComplete = computed(() => {
+  if (requiredBlocks.value.length === 0) return true;
+  const videosOk = videoBlocks.value.every((b) => videoPct(b) >= 95);
+  const pdfsOk = pdfBlocks.value.every((b) => {
+    const total = pdfTotalPages(b);
+    return total > 0 && pdfLastPage(b) >= total;
+  });
+  return videosOk && pdfsOk;
+});
 
-async function markContentDone() {
-  if (!props.tema) return;
+const overallVideoPct = computed(() => {
+  if (videoBlocks.value.length === 0) return 100;
+  const total = videoBlocks.value.reduce((sum, b) => sum + Math.min(100, videoPct(b)), 0);
+  return Math.round(total / videoBlocks.value.length);
+});
+
+async function markContentDone(): Promise<void> {
+  if (!props.tema || !allRequiredComplete.value || contentDone.value) return;
   markingDone.value = true;
   try {
     await apiPost(`/api/v1/topics/${props.tema.id}/mark-content-done` as any);
-    contentDone.value = true;
     emit('content-done');
     markDoneSuccess.value = true;
-    setTimeout(() => { markDoneSuccess.value = false; }, 2000);
+    setTimeout(() => {
+      markDoneSuccess.value = false;
+    }, 2000);
   } catch (err) {
     console.error('Error marking content done:', err);
   } finally {
@@ -262,309 +117,68 @@ async function markContentDone() {
   }
 }
 
-async function onTextMarkDone(): Promise<void> {
-  if (props.tema) {
-    try {
-      await apiPost(`/api/v1/topics/${props.tema.id}/heartbeat` as any, {
-        body: { type: 'texto', max_seen_pct: 100 },
-      });
-    } catch (e) {
-      console.error('Text completion heartbeat failed', e);
-    }
-  }
-  await markContentDone();
-}
-
-// Video Playback
-function toggleVideoPlayback() {
-  if (!videoEl.value) return;
-  if (playing.value) {
-    videoEl.value.pause();
-  } else {
-    videoEl.value.play();
-  }
-}
-
-function onVideoPlay() {
-  playing.value = true;
-  videoBuffering.value = false;
-}
-
-function onVideoWaiting() {
-  videoBuffering.value = true;
-}
-
-function onVideoCanPlay() {
-  videoBuffering.value = false;
-}
-
-function onVideoPause() {
-  playing.value = false;
-}
-
-function onVideoTimeUpdate() {
-  if (!videoEl.value) return;
-  // Guard: if metadata hasn't loaded yet, actualDuration is null and the
-  // division would produce NaN or Infinity, firing a false 95% trigger.
-  if (!actualDuration.value || actualDuration.value <= 0) return;
-
-  videoCurrentTime.value = videoEl.value.currentTime;
-  const pct = Math.round((videoEl.value.currentTime / videoDuration.value) * 100);
-  videoProgress.value = Math.max(videoProgress.value, pct);
-
-  if (pct >= 95 && !contentDone.value && !markingDone.value) {
-    syncVideoProgress(pct, true);
-  }
-}
-
-function onLoadedMetadata() {
-  if (videoEl.value) {
-    actualDuration.value = videoEl.value.duration;
-    // Seek to last saved position here — after metadata is loaded and
-    // duration is known, avoiding timeupdate events with unknown duration.
-    if (videoCurrentTime.value > 0) {
-      videoEl.value.currentTime = videoCurrentTime.value;
-    }
-  }
-}
-
-async function onVideoEnded() {
-  playing.value = false;
-  if (!contentDone.value) {
-    await syncVideoProgress(100, true);
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('fullscreenchange', onFsChange);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('fullscreenchange', onFsChange);
-  // Only revoke Blob URLs (PDF/image) — video uses direct stream URL, no revoke needed
-  if (mediaBlobUrl.value) {
-    URL.revokeObjectURL(mediaBlobUrl.value);
-  }
-  if (heartbeatInterval) clearInterval(heartbeatInterval);
-  if (timer) clearInterval(timer);
-  if (scrollHandler) {
-    window.removeEventListener('scroll', scrollHandler);
-  }
-});
-
-// Sticky CTA Bar computed options
 const canContinue = computed(() => contentDone.value);
-const buttonLabel = computed(() => (props.tema?.has_exam && props.tema?.state !== 'aprobado') ? 'Ir al Examen' : 'Siguiente Tema');
-const buttonHref = computed(() => (props.tema?.has_exam && props.tema?.state !== 'aprobado') ? props.examUrl : (props.nextUrl || '#'));
+const buttonLabel = computed(() => ((props.tema?.has_exam && props.tema?.state !== 'aprobado') ? 'Ir al Examen' : 'Siguiente Tema'));
+const buttonHref = computed(() => ((props.tema?.has_exam && props.tema?.state !== 'aprobado') ? props.examUrl : (props.nextUrl || '#')));
+
+function blockLabel(kind: ContentBlockView['kind']): string {
+  switch (kind) {
+    case 'video':
+      return 'Video';
+    case 'audio':
+      return 'Audio';
+    case 'pdf':
+      return 'PDF';
+    case 'imagen':
+      return 'Imagen';
+    default:
+      return 'Texto';
+  }
+}
 </script>
 
 <template>
   <div>
-    <!-- Error banner -->
-    <div
-      v-if="mediaError"
-      class="rounded-xl px-4 py-3 text-sm border flex gap-3 items-start bg-red-50 border-red-200 text-red-800 mb-4"
-      role="alert"
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-      <span>{{ mediaError }}</span>
-    </div>
-
-    <!-- Loading skeleton -->
-    <div v-if="loadingToken" class="card overflow-hidden mb-6 animate-pulse">
-      <div class="aspect-video bg-[var(--color-app-bg)]"></div>
-    </div>
-
-    <!-- VIDEO -->
-    <div v-else-if="contentType === 'video'" class="card overflow-hidden mb-6">
-      <div
-        ref="videoWrap"
-        :class="[
-          'bg-black relative',
-          isFullscreen ? 'w-screen h-screen' : 'aspect-video',
-        ]"
-      >
-        <video
-          ref="videoEl"
-          class="w-full h-full object-contain"
-          :src="mediaStreamUrl ?? undefined"
-          crossorigin="anonymous"
-          @loadedmetadata="onLoadedMetadata"
-          @play="onVideoPlay"
-          @pause="onVideoPause"
-          @timeupdate="onVideoTimeUpdate"
-          @ended="onVideoEnded"
-          @waiting="onVideoWaiting"
-          @stalled="onVideoWaiting"
-          @canplay="onVideoCanPlay"
-          @canplaythrough="onVideoCanPlay"
-          preload="metadata"
-          playsinline
-          controlsList="nodownload"
-        />
-
-        <!-- Buffering spinner overlay -->
-        <Transition name="fade-fast">
-          <div
-            v-if="videoBuffering && !loadingToken"
-            class="absolute inset-0 grid place-items-center bg-black/50 z-10 pointer-events-none"
-          >
-            <div class="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin"></div>
-          </div>
-        </Transition>
-
-        <!-- Big center play button when paused -->
-        <button
-          v-if="!playing && mediaStreamUrl"
-          @click="toggleVideoPlayback"
-          class="absolute inset-0 w-full h-full grid place-items-center bg-black/20 group"
-          aria-label="Reproducir"
+    <div v-for="block in sortedBlocks" :key="block.id" class="mb-6">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">{{ blockLabel(block.kind) }}</span>
+        <span
+          v-if="block.kind === 'video' || block.kind === 'pdf'"
+          class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
         >
-          <span class="w-20 h-20 rounded-full bg-white/95 grid place-items-center text-[var(--color-primary)] shadow-2xl group-hover:scale-105 transition">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          </span>
-        </button>
-
-        <!-- Bottom controls bar -->
-        <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent z-15">
-          <div class="flex items-center gap-3 text-white text-xs">
-            <button
-              @click="toggleVideoPlayback"
-              class="text-white/90 hover:text-white p-1.5 rounded-md hover:bg-white/10 transition"
-              :aria-label="playing ? 'Pausar' : 'Reproducir'"
-            >
-              <svg v-if="!playing" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
-            </button>
-            <span>{{ formatTime(videoCurrentTime) }}</span>
-            <div class="flex-1 h-1.5 bg-white/20 rounded-full overflow-hidden">
-              <div class="h-full bg-white transition-all" :style="{ width: videoProgress + '%' }"></div>
-            </div>
-            <span>{{ formatTime(videoDuration) }}</span>
-            <button
-              @click.stop="toggleFullscreen"
-              class="text-white/90 hover:text-white p-1.5 rounded-md hover:bg-white/10 transition"
-              :aria-label="isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'"
-              :title="isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'"
-            >
-              <svg v-if="!isFullscreen" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
-              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="p-4 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-        Ve el video completo para desbloquear el siguiente paso.
-      </div>
-    </div>
-
-    <!-- AUDIO -->
-    <div v-else-if="contentType === 'audio'" class="card p-6 mb-6">
-      <div class="flex items-center gap-3 mb-4">
-        <span class="w-12 h-12 rounded-full bg-[var(--color-primary)]/10 grid place-items-center text-[var(--color-primary)] shrink-0">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          Requerido
         </span>
-        <div class="min-w-0">
-          <p class="font-medium truncate">{{ tema?.title }}</p>
-          <p class="text-xs text-[var(--color-text-muted)]">Audio · {{ formatTime(videoDuration) }}</p>
-        </div>
+        <span v-else class="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--color-border)] text-[var(--color-text-muted)]">
+          Complementario
+        </span>
+        <span v-if="block.kind === 'pdf' && pdfTotalPages(block) > 0" class="text-[10px] text-[var(--color-text-muted)]">
+          pág. {{ Math.min(pdfLastPage(block), pdfTotalPages(block)) }}/{{ pdfTotalPages(block) }}
+        </span>
       </div>
-      <audio
-        ref="videoEl"
-        class="w-full"
-        controls
-        controlsList="nodownload"
-        crossorigin="anonymous"
-        :src="mediaStreamUrl ?? undefined"
-        preload="metadata"
-        @loadedmetadata="onLoadedMetadata"
-        @play="onVideoPlay"
-        @pause="onVideoPause"
-        @timeupdate="onVideoTimeUpdate"
-        @ended="onVideoEnded"
-      />
-      <p class="mt-4 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-        Escucha el audio completo para desbloquear el siguiente paso.
-      </p>
+      <ContentBlockPlayer :tema-id="tema!.id" :block="block" @progress="onBlockProgress" />
     </div>
 
-    <!-- PDF -->
-    <div v-else-if="contentType === 'pdf'" class="card mb-6 overflow-hidden">
-      <iframe
-        v-if="mediaBlobUrl"
-        :src="mediaBlobUrl"
-        class="w-full aspect-[3/4] border-0"
-        title="Documento PDF"
-      />
-      <div v-else class="aspect-[3/4] grid place-items-center text-[var(--color-text-muted)] p-6">
-        <div class="text-center">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-          <p>Cargando documento...</p>
-        </div>
-      </div>
+    <div v-if="sortedBlocks.length === 0" class="card p-8 text-center text-[var(--color-text-muted)] mb-6">
+      Esta clase todavía no tiene contenido publicado.
     </div>
-
-    <!-- IMAGEN -->
-    <div v-else-if="contentType === 'imagen'" class="card p-6 mb-6">
-      <img
-
-        v-if="mediaBlobUrl"
-        :src="mediaBlobUrl"
-        alt="Infografía del tema"
-        class="w-full rounded-lg"
-        loading="lazy"
-      />
-      <div v-else class="aspect-[4/3] bg-[var(--color-app-bg)] grid place-items-center rounded-lg text-[var(--color-text-muted)]">
-        Cargando imagen...
-      </div>
-    </div>
-
-    <!-- TEXTO -->
-    <article v-else class="card p-6 sm:p-8 mb-6 prose max-w-none">
-      <slot />
-      <div class="mt-8 pt-6 border-t border-[var(--color-border)] not-prose">
-        <button
-          v-if="!contentDone"
-          @click="onTextMarkDone"
-          :disabled="markingDone"
-          class="btn btn-primary w-full sm:w-auto disabled:opacity-50"
-        >
-          {{ markingDone ? 'Guardando...' : 'Marcar como leído' }}
-        </button>
-        <p v-else class="text-sm text-emerald-600 font-medium flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          Contenido completado
-        </p>
-      </div>
-    </article>
-
-    <!-- Material escrito complementario (para clases con media principal) -->
-    <article
-      v-if="contentType !== 'texto' && tema?.content_body"
-      class="card p-6 sm:p-8 mb-6 prose max-w-none"
-      v-html="tema.content_body"
-    ></article>
 
     <!-- Sticky CTA bar -->
     <div class="fixed bottom-0 left-0 right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] px-4 pt-3 pb-4 z-20">
       <div class="max-w-3xl mx-auto">
         <!-- Video progress bar toward unlock -->
-        <div v-if="(contentType === 'video' || contentType === 'audio') && !canContinue && !markingDone" class="mb-3">
+        <div v-if="videoBlocks.length > 0 && !canContinue && !markingDone" class="mb-3">
           <div class="flex justify-between text-xs text-[var(--color-text-muted)] mb-1.5">
-            <span>Progreso</span>
-            <span>{{ videoProgress }}%<span class="opacity-60"> / 95% para continuar</span></span>
+            <span>Progreso de video</span>
+            <span>{{ overallVideoPct }}%<span class="opacity-60"> / 95% para continuar</span></span>
           </div>
           <div class="h-1 bg-[var(--color-border)] rounded-full overflow-hidden">
             <div
               class="h-full bg-[var(--color-primary)] transition-all duration-500 rounded-full"
-              :style="{ width: Math.min(100, (videoProgress / 95) * 100) + '%' }"
+              :style="{ width: Math.min(100, (overallVideoPct / 95) * 100) + '%' }"
             ></div>
           </div>
         </div>
 
-        <!-- Registering progress indicator -->
         <Transition name="fade-fast">
           <div v-if="markingDone" class="flex items-center justify-center gap-2 text-sm text-[var(--color-text-muted)] mb-2">
             <div class="w-4 h-4 rounded-full border-2 border-[var(--color-primary)]/30 border-t-[var(--color-primary)] animate-spin"></div>
@@ -572,7 +186,8 @@ const buttonHref = computed(() => (props.tema?.has_exam && props.tema?.state !==
           </div>
         </Transition>
 
-        <!-- CTA button with unlock transition -->
+        <!-- Single CTA slot: "Marcar como completado" until the class is
+             done server-side, then it transforms into the next-step link. -->
         <Transition name="cta-unlock" mode="out-in">
           <router-link v-if="canContinue" key="active" :to="buttonHref" class="btn btn-block btn-primary flex items-center justify-center gap-2">
             <Transition name="fade-fast" mode="out-in">
@@ -580,9 +195,15 @@ const buttonHref = computed(() => (props.tema?.has_exam && props.tema?.state !==
             </Transition>
             {{ buttonLabel }}
           </router-link>
-          <span v-else key="disabled" class="btn btn-block btn-primary opacity-40 pointer-events-none cursor-not-allowed">
-            {{ buttonLabel }}
-          </span>
+          <button
+            v-else
+            key="mark-done"
+            @click="markContentDone"
+            :disabled="!allRequiredComplete || markingDone"
+            class="btn btn-block btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {{ markingDone ? 'Guardando...' : 'Marcar como completado' }}
+          </button>
         </Transition>
       </div>
     </div>

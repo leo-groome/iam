@@ -1,4 +1,25 @@
-import { apiBlob, apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
+import { apiBlob, apiGet, apiPost, apiPatch, apiPut, apiDelete } from '@/lib/api';
+
+export type BlockKind = 'video' | 'pdf' | 'imagen' | 'audio' | 'texto';
+
+/** Content block as returned by the backend (GET topic detail). */
+export interface ContentBlockOut {
+  id: string;
+  kind: BlockKind;
+  media_key: string | null;
+  content_body: string | null;
+  duration_seconds: number | null;
+  order_index: number;
+}
+
+/** Content block payload sent to PUT /admin/topics/{id}/blocks. */
+export interface ContentBlockIn {
+  kind: BlockKind;
+  media_key: string | null;
+  content_body: string | null;
+  duration_seconds: number | null;
+  order_index: number;
+}
 
 export const adminService = {
   // Dashboard
@@ -122,6 +143,13 @@ export const adminService = {
     return apiPost('/api/v1/admin/topics/{topic_id}/questions/bulk' as any, {
       params: { topic_id: topicId },
       body: questions,
+    }) as Promise<any>;
+  },
+
+  async replaceTopicBlocks(topicId: string, blocks: ContentBlockIn[]): Promise<any> {
+    return apiPut('/api/v1/admin/topics/{topic_id}/blocks' as any, {
+      params: { topic_id: topicId },
+      body: blocks,
     }) as Promise<any>;
   },
 

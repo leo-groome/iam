@@ -18,7 +18,11 @@ from app.crud.exam import (
     get_questions_for_topic,
     save_attempt,
 )
-from app.crud.topic import get_or_create_progress, get_topic_with_module
+from app.crud.topic import (
+    get_or_create_block_progress,
+    get_or_create_progress,
+    get_topic_with_module,
+)
 from app.db import get_db
 from app.deps import get_current_user
 from app.models.course import Course, Module, Topic
@@ -33,6 +37,8 @@ from app.schemas.exam import (
     QuestionOut,
 )
 from app.schemas.topic import (
+    ContentBlockProgressView,
+    ContentBlockView,
     HeartbeatRequest,
     HeartbeatResponse,
     MarkContentDoneResponse,
@@ -40,11 +46,14 @@ from app.schemas.topic import (
     TopicView,
 )
 from app.services.progress_engine import (
+    _complete_content,
     check_user_status,
     compute_topic_state,
     on_module_exam_passed,
     on_topic_exam_failed,
     on_topic_exam_passed,
+    recompute_content_completion,
+    recompute_course_progress,
 )
 
 limiter = Limiter(key_func=get_remote_address)
@@ -54,8 +63,6 @@ router = APIRouter(tags=["learning"])
 _UNLOCKED_STATES = {"disponible", "contenido_visto", "aprobado", "en_repaso"}
 _EXAM_ALLOWED_STATES = {"contenido_visto", "aprobado", "en_repaso"}
 _EXAM_TOKEN_TTL_SECONDS = 15 * 60
-_VIDEO_COMPLETE_PCT = 95
-_MIN_VIDEO_COMPLETE_SECONDS = 5
 
 
 def _issue_exam_token(
@@ -201,24 +208,24 @@ def _video_pct_from_position(pos_seconds: int, duration_seconds: int | None) -> 
     return min(100, max(0, round((pos_seconds / duration_seconds) * 100)))
 
 
-def _video_duration_for_progress(topic: Topic, reported_duration_seconds: int | None) -> int | None:
-    # The player's reported duration is the real media length and is authoritative for
-    # the completion %. `topic.duration_seconds` is a coarse, whole-minute admin estimate
-    # meant only as a display label — it must NOT gate completion. Using it as the
-    # denominator (e.g. max of both) blocks honest students whenever the real clip is
-    # shorter than the rounded-up estimate, which is the common case. The 5-second
-    # minimum-watch floor in the caller still prevents trivial skips.
+def _video_duration_for_progress(
+    db_duration_seconds: int | None, reported_duration_seconds: int | None
+) -> int | None:
+    # block.duration_seconds is auto-detected server-side-of-trust: the admin upload
+    # flow reads it from the actual media file (readMediaDuration in the frontend,
+    # via an off-screen <video>/<audio> element's loadedmetadata event) and rounds to
+    # whole seconds — it is the real clip length, not a coarse estimate. It is
+    # therefore authoritative for the completion % denominator whenever present and
+    # positive: a client cannot shrink the denominator by reporting a smaller
+    # duration_seconds in the heartbeat body to fake 100%. The client-reported
+    # duration is only used as a fallback when the DB has no duration on record
+    # (e.g. legacy rows created before auto-detection). The 5-second minimum-watch
+    # floor in the caller still prevents trivial skips on very short clips.
+    if db_duration_seconds is not None and db_duration_seconds > 0:
+        return db_duration_seconds
     if reported_duration_seconds is not None and reported_duration_seconds > 0:
         return reported_duration_seconds
-    if topic.duration_seconds is not None and topic.duration_seconds > 0:
-        return topic.duration_seconds
     return None
-
-
-def _complete_content(tp: TopicProgress) -> None:
-    tp.content_completed_at = datetime.now(UTC)  # type: ignore[assignment]
-    if tp.state != "aprobado":
-        tp.state = "contenido_visto"
 
 
 async def _require_enrollment(
@@ -231,12 +238,6 @@ async def _require_enrollment(
         )
     )
     enrollment = result.scalar_one_or_none()
-    with open('/tmp/backend_debug.log', 'a') as f:
-        f.write(
-            "DEBUG: _require_enrollment - "
-            f"user.id: {user.id}, user.email: {user.email}, "
-            f"course_id: {course_id}, enrollment found: {enrollment is not None}\n"
-        )
     if enrollment is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not enrolled in this course"
@@ -272,6 +273,29 @@ async def get_topic(
     # Use persisted state if not bloqueado
     real_state = tp.state if tp.state != "bloqueado" else state
 
+    block_views: list[ContentBlockView] = []
+    for block in topic.blocks:
+        bp = await get_or_create_block_progress(db, current_user, block)
+        block_views.append(
+            ContentBlockView(
+                id=block.id,
+                kind=block.kind,
+                media_key=block.media_key,
+                content_body=block.content_body,
+                duration_seconds=block.duration_seconds,
+                order_index=block.order_index,
+                progress=ContentBlockProgressView(
+                    video_last_pos_seconds=bp.video_last_pos_seconds,
+                    video_max_seen_pct=bp.video_max_seen_pct,
+                    pdf_last_page=bp.pdf_last_page,
+                    pdf_total_pages=bp.pdf_total_pages,
+                    completed=bp.completed_at is not None,
+                ),
+            )
+        )
+
+    await db.commit()
+
     return TopicView(
         id=topic.id,
         title=topic.title,
@@ -288,6 +312,7 @@ async def get_topic(
             pdf_last_page=tp.pdf_last_page,
             pdf_total_pages=tp.pdf_total_pages,
         ),
+        blocks=block_views,
     )
 
 
@@ -308,44 +333,53 @@ async def topic_heartbeat(
             detail={"code": "topic_locked"},
         )
 
-    tp = await get_or_create_progress(db, current_user, topic)
+    if body.block_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "missing_block"},
+        )
 
-    if body.type in ("video", "audio"):
+    block = next((b for b in topic.blocks if b.id == body.block_id), None)
+    if block is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "block_not_found"})
+
+    bp = await get_or_create_block_progress(db, current_user, block)
+
+    if block.kind in ("video", "audio"):
         if body.max_seen_pct is not None and body.pos_seconds is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"code": "missing_video_position"},
             )
         if body.pos_seconds is not None:
-            tp.video_last_pos_seconds = body.pos_seconds
-            duration_seconds = _video_duration_for_progress(topic, body.duration_seconds)
+            bp.video_last_pos_seconds = body.pos_seconds
+            duration_seconds = _video_duration_for_progress(block.duration_seconds, body.duration_seconds)
             server_pct = _video_pct_from_position(body.pos_seconds, duration_seconds)
-            tp.video_max_seen_pct = max(tp.video_max_seen_pct, server_pct)
-        if (
-            tp.video_max_seen_pct >= _VIDEO_COMPLETE_PCT
-            and tp.video_last_pos_seconds >= _MIN_VIDEO_COMPLETE_SECONDS
-        ):
-            _complete_content(tp)
-    elif body.type in ("pdf",):
+            bp.video_max_seen_pct = max(bp.video_max_seen_pct, server_pct)
+    elif block.kind == "pdf":
         if body.last_page is not None:
-            tp.pdf_last_page = max(tp.pdf_last_page, body.last_page)
+            bp.pdf_last_page = max(bp.pdf_last_page, body.last_page)
         if body.total_pages is not None:
-            tp.pdf_total_pages = body.total_pages
-    elif body.type == "texto":
-        if body.max_seen_pct is not None:
-            tp.video_max_seen_pct = max(tp.video_max_seen_pct, body.max_seen_pct)
+            bp.pdf_total_pages = body.total_pages
+    # imagen/texto: no gating progress to track — pure display blocks.
+
+    await db.flush()
+
+    tp = await get_or_create_progress(db, current_user, topic)
+    await recompute_content_completion(db, current_user, topic)
 
     await db.commit()
+    await db.refresh(bp)
     await db.refresh(tp)
 
     real_state = tp.state if tp.state != "bloqueado" else state
 
     return HeartbeatResponse(
         state=real_state,
-        video_last_pos_seconds=tp.video_last_pos_seconds,
-        video_max_seen_pct=tp.video_max_seen_pct,
-        pdf_last_page=tp.pdf_last_page,
-        pdf_total_pages=tp.pdf_total_pages,
+        video_last_pos_seconds=bp.video_last_pos_seconds,
+        video_max_seen_pct=bp.video_max_seen_pct,
+        pdf_last_page=bp.pdf_last_page,
+        pdf_total_pages=bp.pdf_total_pages,
     )
 
 
@@ -368,44 +402,18 @@ async def mark_content_done(
                 detail={"code": "topic_locked"},
             )
 
-    ct = topic.content_type
+    required_blocks = [b for b in topic.blocks if b.kind in ("video", "pdf")]
 
-    if ct in ("video", "audio"):
-        if (
-            tp.video_max_seen_pct < _VIDEO_COMPLETE_PCT
-            or tp.video_last_pos_seconds < _MIN_VIDEO_COMPLETE_SECONDS
-        ):
+    if required_blocks:
+        complete = await recompute_content_completion(db, current_user, topic)
+        if not complete:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"code": "content_incomplete"},
             )
-    elif ct == "pdf":
-        if tp.pdf_total_pages is None or tp.pdf_last_page < tp.pdf_total_pages:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={"code": "content_incomplete"},
-            )
-    elif ct == "imagen":
-        # Validate at least 5 seconds since first heartbeat (use content_completed_at as proxy
-        # for first interaction timestamp — we use updated_at instead)
-        # Server trusts client but checks that topic_progress row is not brand-new (updated_at > created_at + 5s)
-        now = datetime.now(UTC)
-        created: datetime | None = tp.created_at  # type: ignore[assignment]
-        if created is not None:
-            # created_at is timezone-aware from DB, compare safely
-            elapsed = (now - created).total_seconds() if hasattr(created, "tzinfo") and created.tzinfo else 0
-            if elapsed < 5:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail={"code": "content_incomplete"},
-                )
-    elif ct == "texto" and tp.video_max_seen_pct < 90:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "content_incomplete"},
-        )
-
-    _complete_content(tp)
+    else:
+        # No video/pdf blocks: honor-system completion (audio/imagen/texto never gate).
+        _complete_content(tp)
 
     await db.commit()
     await db.refresh(tp)
@@ -416,7 +424,6 @@ async def mark_content_done(
     )
     course = course_result.scalar_one_or_none()
     if course is not None:
-        from app.services.progress_engine import recompute_course_progress
         pct = await recompute_course_progress(db, current_user, course)
         if pct == 100:
             current_user.status = "completado"

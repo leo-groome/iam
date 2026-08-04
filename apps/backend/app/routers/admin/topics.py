@@ -13,11 +13,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import admin as crud
+from app.crud.topic import replace_topic_blocks
 from app.db import get_db
 from app.deps import require_role
 from app.models.user import User
 from app.routers.admin.permissions import assert_can_manage_module, assert_can_manage_topic
-from app.schemas.admin.topics import TopicCreate, TopicReorderBody, TopicResponse, TopicUpdate, TopicWithQuestionsResponse
+from app.schemas.admin.topics import (
+    ContentBlockIn,
+    TopicCreate,
+    TopicReorderBody,
+    TopicResponse,
+    TopicUpdate,
+    TopicWithQuestionsResponse,
+)
 from app.services.audit import log_admin_action
 
 router = APIRouter(tags=["admin-topics"])
@@ -140,6 +148,44 @@ async def delete_topic(
     )
     await db.delete(topic)
     await db.commit()
+
+
+@router.put("/api/v1/admin/topics/{topic_id}/blocks", response_model=TopicWithQuestionsResponse)
+async def replace_topic_blocks_endpoint(
+    topic_id: uuid.UUID,
+    body: list[ContentBlockIn],
+    current_user: User = Depends(_guard),  # noqa: B008
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> TopicWithQuestionsResponse:
+    await assert_can_manage_topic(db, current_user, topic_id)
+
+    if not body:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "blocks_required",
+                "message": "A topic must have at least one content block.",
+            },
+        )
+
+    topic = await crud.get_topic_with_questions(db, topic_id)
+    if topic is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+
+    await replace_topic_blocks(db, topic, body)
+
+    await log_admin_action(
+        db,
+        actor_id=current_user.id,
+        action="replace_blocks",
+        entity="topic_blocks",
+        entity_id=topic_id,
+        payload={"block_count": len(body), "kinds": [b.kind for b in body]},
+    )
+    await db.commit()
+
+    topic = await crud.get_topic_with_questions(db, topic_id)
+    return TopicWithQuestionsResponse.model_validate(topic)
 
 
 @router.post("/api/v1/admin/topics/reorder", response_model=list[TopicResponse])

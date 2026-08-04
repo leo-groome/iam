@@ -110,3 +110,30 @@ class Topic(Base, TimestampMixin):
         "ExamAttempt", back_populates="topic", foreign_keys="ExamAttempt.topic_id",
         passive_deletes=True,
     )
+    blocks: Mapped[list["ContentBlock"]] = relationship(
+        "ContentBlock", back_populates="topic", cascade="all, delete-orphan",
+        order_by="ContentBlock.order_index", passive_deletes=True,
+    )
+
+
+class ContentBlock(Base, TimestampMixin):
+    __tablename__ = "content_blocks"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('video', 'pdf', 'imagen', 'texto', 'audio')",
+            name="ck_content_blocks_kind",
+        ),
+        Index("ix_content_blocks_topic_order", "topic_id", "order_index"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    topic_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("topics.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    media_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    topic: Mapped["Topic"] = relationship("Topic", back_populates="blocks")

@@ -74,7 +74,7 @@ async def client(engine) -> AsyncGenerator[AsyncClient, None]:
 @pytest_asyncio.fixture
 async def scaffold(db_session: AsyncSession):
     from app.models.base import new_uuid
-    from app.models.course import Course, Module, Topic
+    from app.models.course import ContentBlock, Course, Module, Topic
     from app.models.progress import Enrollment
     from app.models.user import User
 
@@ -144,6 +144,23 @@ async def scaffold(db_session: AsyncSession):
         order_index=1,
     )
     db_session.add_all([topic_with_media, topic_no_media])
+    await db_session.flush()
+
+    block_with_media = ContentBlock(
+        id=new_uuid(),
+        topic_id=topic_with_media.id,
+        kind="video",
+        media_key="video/abc123/lecture.mp4",
+        order_index=0,
+    )
+    block_no_media = ContentBlock(
+        id=new_uuid(),
+        topic_id=topic_no_media.id,
+        kind="pdf",
+        media_key=None,
+        order_index=0,
+    )
+    db_session.add_all([block_with_media, block_no_media])
 
     enrollment = Enrollment(
         id=new_uuid(),
@@ -156,6 +173,8 @@ async def scaffold(db_session: AsyncSession):
     await db_session.commit()
     await db_session.refresh(topic_with_media)
     await db_session.refresh(topic_no_media)
+    await db_session.refresh(block_with_media)
+    await db_session.refresh(block_no_media)
 
     return {
         "admin": admin,
@@ -165,6 +184,8 @@ async def scaffold(db_session: AsyncSession):
         "mod1": mod1,
         "topic_with_media": topic_with_media,
         "topic_no_media": topic_no_media,
+        "block_with_media": block_with_media,
+        "block_no_media": block_no_media,
     }
 
 
@@ -310,7 +331,7 @@ async def test_upload_url_audio_wrong_type_returns_422(client: AsyncClient, scaf
 
 @pytest.mark.asyncio
 async def test_play_token_topic_locked_returns_403(client: AsyncClient, scaffold):
-    topic = scaffold["topic_with_media"]
+    block = scaffold["block_with_media"]
     with (
         patch(
             "app.deps.verify_stack_token",
@@ -324,7 +345,7 @@ async def test_play_token_topic_locked_returns_403(client: AsyncClient, scaffold
     ):
         resp = await client.post(
             "/api/v1/media/play-token",
-            json={"topic_id": str(topic.id)},
+            json={"block_id": str(block.id)},
             headers=HEADERS,
         )
     assert resp.status_code == 403
@@ -333,7 +354,7 @@ async def test_play_token_topic_locked_returns_403(client: AsyncClient, scaffold
 
 @pytest.mark.asyncio
 async def test_play_token_requires_enrollment(client: AsyncClient, scaffold):
-    topic = scaffold["topic_with_media"]
+    block = scaffold["block_with_media"]
     with (
         patch(
             "app.deps.verify_stack_token",
@@ -347,7 +368,7 @@ async def test_play_token_requires_enrollment(client: AsyncClient, scaffold):
     ):
         resp = await client.post(
             "/api/v1/media/play-token",
-            json={"topic_id": str(topic.id)},
+            json={"block_id": str(block.id)},
             headers=HEADERS,
         )
     assert resp.status_code == 403
@@ -356,7 +377,7 @@ async def test_play_token_requires_enrollment(client: AsyncClient, scaffold):
 
 @pytest.mark.asyncio
 async def test_play_token_topic_no_media_key_returns_422(client: AsyncClient, scaffold):
-    topic_no_media = scaffold["topic_no_media"]
+    block_no_media = scaffold["block_no_media"]
     with (
         patch(
             "app.deps.verify_stack_token",
@@ -370,7 +391,7 @@ async def test_play_token_topic_no_media_key_returns_422(client: AsyncClient, sc
     ):
         resp = await client.post(
             "/api/v1/media/play-token",
-            json={"topic_id": str(topic_no_media.id)},
+            json={"block_id": str(block_no_media.id)},
             headers=HEADERS,
         )
     assert resp.status_code == 422
@@ -381,7 +402,7 @@ async def test_play_token_topic_no_media_key_returns_422(client: AsyncClient, sc
 async def test_play_token_returns_valid_jwt(client: AsyncClient, scaffold):
     from app.security.media_jwt import verify_play_token
 
-    topic = scaffold["topic_with_media"]
+    block = scaffold["block_with_media"]
     student = scaffold["student"]
 
     with (
@@ -397,7 +418,7 @@ async def test_play_token_returns_valid_jwt(client: AsyncClient, scaffold):
     ):
         resp = await client.post(
             "/api/v1/media/play-token",
-            json={"topic_id": str(topic.id)},
+            json={"block_id": str(block.id)},
             headers=HEADERS,
         )
 
@@ -406,17 +427,17 @@ async def test_play_token_returns_valid_jwt(client: AsyncClient, scaffold):
     assert "token" in data
     assert "media_url" in data
     assert data["expires_in"] == 300
-    assert topic.media_key in data["media_url"]
+    assert block.media_key in data["media_url"]
 
     # Decode and verify the JWT locally
     claims = verify_play_token(data["token"])
-    assert claims["key"] == topic.media_key
+    assert claims["key"] == block.media_key
     assert claims["sub"] == str(student.id)
     assert claims["aud"] == "r2-worker"
 
 
 @pytest.mark.asyncio
-async def test_play_token_topic_not_found_returns_404(client: AsyncClient, scaffold):
+async def test_play_token_block_not_found_returns_404(client: AsyncClient, scaffold):
     import uuid
 
     with (
@@ -431,7 +452,7 @@ async def test_play_token_topic_not_found_returns_404(client: AsyncClient, scaff
     ):
         resp = await client.post(
             "/api/v1/media/play-token",
-            json={"topic_id": str(uuid.uuid4())},
+            json={"block_id": str(uuid.uuid4())},
             headers=HEADERS,
         )
     assert resp.status_code == 404

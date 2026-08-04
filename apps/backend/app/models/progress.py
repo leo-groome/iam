@@ -59,6 +59,29 @@ class TopicProgress(Base, TimestampMixin):
     topic: Mapped["Topic"] = relationship("Topic", back_populates="topic_progress")  # type: ignore[name-defined]  # noqa: F821
 
 
+class ContentBlockProgress(Base, TimestampMixin):
+    __tablename__ = "content_block_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "block_id", name="uq_content_block_progress_user_block"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    block_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("content_blocks.id", ondelete="CASCADE"), nullable=False
+    )
+    video_last_pos_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    video_max_seen_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pdf_last_page: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pdf_total_pages: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completed_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped["User"] = relationship("User")  # type: ignore[name-defined]  # noqa: F821
+    block: Mapped["ContentBlock"] = relationship("ContentBlock")  # type: ignore[name-defined]  # noqa: F821
+
+
 class ExamAttempt(Base):
     __tablename__ = "exam_attempts"
     __table_args__ = (

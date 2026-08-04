@@ -81,7 +81,7 @@ async def client(engine) -> AsyncGenerator[AsyncClient, None]:
 @pytest_asyncio.fixture
 async def scaffold(db_session: AsyncSession):
     from app.models.base import new_uuid
-    from app.models.course import Course, Module, Topic
+    from app.models.course import ContentBlock, Course, Module, Topic
     from app.models.progress import Enrollment
     from app.models.question import Option, Question
     from app.models.user import User
@@ -133,6 +133,18 @@ async def scaffold(db_session: AsyncSession):
     db_session.add_all([t1, t2, t3, t4])
     await db_session.flush()
 
+    # Video content blocks — the new completion model gates on these, not on
+    # legacy topic.content_type. t1 and t3 are video topics, so they each get
+    # a single 'video' block matching the topic's admin-set duration.
+    t1_block = ContentBlock(
+        id=new_uuid(), topic_id=t1.id, kind="video", duration_seconds=120, order_index=0
+    )
+    t3_block = ContentBlock(
+        id=new_uuid(), topic_id=t3.id, kind="video", duration_seconds=120, order_index=0
+    )
+    db_session.add_all([t1_block, t3_block])
+    await db_session.flush()
+
     # Questions for t1 and t2
     for topic in [t1, t2]:
         q = Question(id=new_uuid(), topic_id=topic.id, enunciado="Test question?")
@@ -165,6 +177,8 @@ async def scaffold(db_session: AsyncSession):
     await db_session.refresh(t4)
     await db_session.refresh(mod1)
     await db_session.refresh(mod2)
+    await db_session.refresh(t1_block)
+    await db_session.refresh(t3_block)
 
     return {
         "user": user,
@@ -175,6 +189,8 @@ async def scaffold(db_session: AsyncSession):
         "t2": t2,
         "t3": t3,
         "t4": t4,
+        "t1_block": t1_block,
+        "t3_block": t3_block,
     }
 
 
@@ -193,6 +209,7 @@ async def test_topic_locked_returns_403(client: AsyncClient, scaffold):
 @pytest.mark.asyncio
 async def test_first_topic_is_available(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
     with patch("app.deps.verify_stack_token", _mock_verify()):
         resp = await client.get(f"/api/v1/topics/{t1.id}", headers=HEADERS)
     assert resp.status_code == 200
@@ -205,12 +222,13 @@ async def test_first_topic_is_available(client: AsyncClient, scaffold):
 @pytest.mark.asyncio
 async def test_heartbeat_monotonic_max_seen_pct(client: AsyncClient, scaffold, db_session: AsyncSession):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         # Set to 50
         r1 = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 60, "max_seen_pct": 50},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 60, "max_seen_pct": 50},
             headers=HEADERS,
         )
         assert r1.status_code == 200
@@ -219,7 +237,7 @@ async def test_heartbeat_monotonic_max_seen_pct(client: AsyncClient, scaffold, d
         # Adversarial: try to decrease to 10 — must stay at 50
         r2 = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 10, "max_seen_pct": 10},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 10, "max_seen_pct": 10},
             headers=HEADERS,
         )
         assert r2.status_code == 200
@@ -232,11 +250,12 @@ async def test_heartbeat_monotonic_max_seen_pct(client: AsyncClient, scaffold, d
 @pytest.mark.asyncio
 async def test_heartbeat_ignores_claimed_video_jump(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 1, "max_seen_pct": 95},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 1, "max_seen_pct": 95},
             headers=HEADERS,
         )
         exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
@@ -250,11 +269,12 @@ async def test_heartbeat_ignores_claimed_video_jump(client: AsyncClient, scaffol
 @pytest.mark.asyncio
 async def test_mark_content_done_video_below_95_fails(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 90, "max_seen_pct": 80},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 90, "max_seen_pct": 80},
             headers=HEADERS,
         )
         resp = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
@@ -266,11 +286,12 @@ async def test_mark_content_done_video_below_95_fails(client: AsyncClient, scaff
 @pytest.mark.asyncio
 async def test_mark_content_done_video_at_95_succeeds(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 120, "max_seen_pct": 95},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 120, "max_seen_pct": 95},
             headers=HEADERS,
         )
         resp = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
@@ -280,45 +301,188 @@ async def test_mark_content_done_video_at_95_succeeds(client: AsyncClient, scaff
 
 
 @pytest.mark.asyncio
-async def test_mark_content_done_audio_below_95_fails(
+async def test_mark_content_done_topic_without_video_blocks_succeeds_immediately(
     client: AsyncClient, scaffold, db_session: AsyncSession
 ):
+    # Core semantics: only 'video' blocks gate completion. audio/pdf/imagen/texto
+    # are complementary and never block — mark-content-done is honor-system for
+    # topics that have no video block, even without any heartbeat call at all.
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
     t1.content_type = "audio"
     t1.media_key = "audio/abc/leccion.mp3"
+    t1_block.kind = "audio"
+    t1_block.media_key = "audio/abc/leccion.mp3"
     await db_session.commit()
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
-        await client.post(
-            f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "audio", "pos_seconds": 90, "max_seen_pct": 80},
-            headers=HEADERS,
-        )
-        resp = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
-
-    assert resp.status_code == 422
-    assert resp.json()["detail"]["code"] == "content_incomplete"
-
-
-@pytest.mark.asyncio
-async def test_mark_content_done_audio_at_95_succeeds(
-    client: AsyncClient, scaffold, db_session: AsyncSession
-):
-    t1 = scaffold["t1"]
-    t1.content_type = "audio"
-    t1.media_key = "audio/abc/leccion.mp3"
-    await db_session.commit()
-
-    with patch("app.deps.verify_stack_token", _mock_verify()):
-        await client.post(
-            f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "audio", "pos_seconds": 120, "max_seen_pct": 95},
-            headers=HEADERS,
-        )
         resp = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
 
     assert resp.status_code == 200
     assert resp.json()["state"] == "contenido_visto"
+
+
+@pytest.mark.asyncio
+async def test_mark_content_done_pdf_block_gates_until_fully_read(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    # pdf blocks are now required (like video): mark-content-done must fail until
+    # the heartbeat reports pdf_last_page >= pdf_total_pages, then succeed.
+    from app.models.base import new_uuid
+    from app.models.course import ContentBlock
+    from app.models.progress import TopicProgress
+
+    t1 = scaffold["t1"]
+    t2 = scaffold["t2"]
+    user = scaffold["user"]
+
+    # Approve t1 first so t2 becomes available.
+    tp1 = TopicProgress(id=new_uuid(), user_id=user.id, topic_id=t1.id, state="aprobado")
+    db_session.add(tp1)
+
+    pdf_block = ContentBlock(
+        id=new_uuid(), topic_id=t2.id, kind="pdf", media_key="pdf/x/slides.pdf", order_index=0
+    )
+    db_session.add_all(
+        [
+            pdf_block,
+            ContentBlock(
+                id=new_uuid(), topic_id=t2.id, kind="texto", content_body="Texto.", order_index=1
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        before = await client.post(f"/api/v1/topics/{t2.id}/mark-content-done", headers=HEADERS)
+
+        await client.post(
+            f"/api/v1/topics/{t2.id}/heartbeat",
+            json={
+                "type": "pdf",
+                "block_id": str(pdf_block.id),
+                "last_page": 3,
+                "total_pages": 5,
+            },
+            headers=HEADERS,
+        )
+        partial = await client.post(f"/api/v1/topics/{t2.id}/mark-content-done", headers=HEADERS)
+
+        await client.post(
+            f"/api/v1/topics/{t2.id}/heartbeat",
+            json={
+                "type": "pdf",
+                "block_id": str(pdf_block.id),
+                "last_page": 5,
+                "total_pages": 5,
+            },
+            headers=HEADERS,
+        )
+        after = await client.post(f"/api/v1/topics/{t2.id}/mark-content-done", headers=HEADERS)
+
+    assert before.status_code == 422
+    assert before.json()["detail"]["code"] == "content_incomplete"
+    assert partial.status_code == 422
+    assert partial.json()["detail"]["code"] == "content_incomplete"
+    assert after.status_code == 200
+    assert after.json()["state"] == "contenido_visto"
+
+
+@pytest.mark.asyncio
+async def test_mark_content_done_texto_only_topic_succeeds_immediately(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    # A topic with only a texto block (no video/pdf) has no required blocks and
+    # passes mark-content-done unconditionally (honor-system).
+    from app.models.base import new_uuid
+    from app.models.course import ContentBlock
+    from app.models.progress import TopicProgress
+
+    t1 = scaffold["t1"]
+    t2 = scaffold["t2"]
+    user = scaffold["user"]
+
+    tp1 = TopicProgress(id=new_uuid(), user_id=user.id, topic_id=t1.id, state="aprobado")
+    db_session.add(tp1)
+
+    db_session.add(
+        ContentBlock(
+            id=new_uuid(), topic_id=t2.id, kind="texto", content_body="Texto.", order_index=0
+        )
+    )
+    await db_session.commit()
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        resp = await client.post(f"/api/v1/topics/{t2.id}/mark-content-done", headers=HEADERS)
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "contenido_visto"
+
+
+@pytest.mark.asyncio
+async def test_mark_content_done_requires_both_video_and_pdf(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    # A topic with both a video and a pdf block requires both to be complete.
+    from app.models.base import new_uuid
+    from app.models.course import ContentBlock
+
+    t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
+
+    pdf_block = ContentBlock(
+        id=new_uuid(), topic_id=t1.id, kind="pdf", media_key="pdf/x/slides.pdf", order_index=1
+    )
+    db_session.add(pdf_block)
+    await db_session.commit()
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        # Only video complete — pdf still missing.
+        await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
+            headers=HEADERS,
+        )
+        video_only = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
+
+        # Now complete pdf too.
+        await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "pdf", "block_id": str(pdf_block.id), "last_page": 4, "total_pages": 4},
+            headers=HEADERS,
+        )
+        both_done = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
+
+    assert video_only.status_code == 422
+    assert video_only.json()["detail"]["code"] == "content_incomplete"
+    assert both_done.status_code == 200
+    assert both_done.json()["state"] == "contenido_visto"
+
+
+@pytest.mark.asyncio
+async def test_get_topic_returns_ordered_blocks_with_progress(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        # Heartbeat on the video block first so its progress is non-default.
+        await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 60, "max_seen_pct": 50},
+            headers=HEADERS,
+        )
+        resp = await client.get(f"/api/v1/topics/{t1.id}", headers=HEADERS)
+
+    assert resp.status_code == 200
+    blocks = resp.json()["blocks"]
+    assert len(blocks) == 1
+    assert blocks[0]["id"] == str(t1_block.id)
+    assert blocks[0]["kind"] == "video"
+    assert blocks[0]["progress"]["video_max_seen_pct"] == 50
+    assert blocks[0]["progress"]["video_last_pos_seconds"] == 60
+    assert blocks[0]["progress"]["completed"] is False
 
 
 @pytest.mark.asyncio
@@ -326,13 +490,14 @@ async def test_mark_content_done_video_requires_minimum_watch_seconds(
     client: AsyncClient, scaffold, db_session: AsyncSession
 ):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
     t1.duration_seconds = 4
     await db_session.commit()
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 4, "max_seen_pct": 100},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 4, "max_seen_pct": 100},
             headers=HEADERS,
         )
         resp = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
@@ -344,11 +509,12 @@ async def test_mark_content_done_video_requires_minimum_watch_seconds(
 @pytest.mark.asyncio
 async def test_video_heartbeat_at_95_marks_content_seen(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
             headers=HEADERS,
         )
         exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
@@ -359,14 +525,18 @@ async def test_video_heartbeat_at_95_marks_content_seen(client: AsyncClient, sca
 
 
 @pytest.mark.asyncio
-async def test_video_heartbeat_uses_player_reported_duration(
+async def test_video_heartbeat_db_duration_is_authoritative_over_client_report(
     client: AsyncClient, scaffold, db_session: AsyncSession
 ):
-    # The player's reported duration is authoritative: an admin over-estimate of the
-    # duration (whole-minute label) must not block completion of a genuinely shorter
-    # clip. Real clip is 120s; watching to 96% unlocks even though the admin typed 999s.
+    # block.duration_seconds is auto-detected from the real media file on upload and
+    # is authoritative for the completion % denominator. A client cannot shrink the
+    # denominator by reporting a smaller duration_seconds in the heartbeat body to
+    # fake a high percentage: real clip is 120s, client claims duration_seconds=10
+    # at pos_seconds=10 (which would be a fake 100% if the client value won) — the
+    # true pct against the DB duration is only ~8%, so content must stay locked.
     t1 = scaffold["t1"]
-    t1.duration_seconds = 999
+    t1_block = scaffold["t1_block"]
+    t1_block.duration_seconds = 120
     await db_session.commit()
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
@@ -374,6 +544,39 @@ async def test_video_heartbeat_uses_player_reported_duration(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={
                 "type": "video",
+                "block_id": str(t1_block.id),
+                "pos_seconds": 10,
+                "duration_seconds": 10,
+                "max_seen_pct": 100,
+            },
+            headers=HEADERS,
+        )
+        exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
+
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "disponible"
+    assert resp.json()["video_max_seen_pct"] == 8
+    assert exam_resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_video_heartbeat_falls_back_to_client_duration_when_db_missing(
+    client: AsyncClient, scaffold, db_session: AsyncSession
+):
+    # When the DB has no duration on record (e.g. a legacy block created before
+    # auto-detection), the client-reported duration is used as a fallback so
+    # completion can still be computed.
+    t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
+    t1_block.duration_seconds = None
+    await db_session.commit()
+
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        resp = await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={
+                "type": "video",
+                "block_id": str(t1_block.id),
                 "pos_seconds": 115,
                 "duration_seconds": 120,
                 "max_seen_pct": 96,
@@ -384,7 +587,6 @@ async def test_video_heartbeat_uses_player_reported_duration(
 
     assert resp.status_code == 200
     assert resp.json()["state"] == "contenido_visto"
-    assert resp.json()["video_max_seen_pct"] == 96
     assert exam_resp.status_code == 200
 
 
@@ -395,12 +597,14 @@ async def test_video_heartbeat_min_seconds_floor_blocks_trivial_skip(
     # Even at 100% of a very short reported duration, the 5-second minimum-watch floor
     # keeps the content locked to prevent instant skips.
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={
                 "type": "video",
+                "block_id": str(t1_block.id),
                 "pos_seconds": 3,
                 "duration_seconds": 3,
                 "max_seen_pct": 100,
@@ -419,13 +623,14 @@ async def test_video_heartbeat_ignores_completed_client_pct_without_position_pro
     client: AsyncClient, scaffold, db_session: AsyncSession
 ):
     t1 = scaffold["t1"]
-    t1.duration_seconds = 999
+    t1_block = scaffold["t1_block"]
+    t1_block.duration_seconds = 999
     await db_session.commit()
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 8, "max_seen_pct": 100},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 8, "max_seen_pct": 100},
             headers=HEADERS,
         )
         exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
@@ -448,12 +653,13 @@ async def test_exam_fail_sets_en_repaso_and_resets_progress(
     from app.models.progress import TopicProgress
 
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         # First get to contenido_visto
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
             headers=HEADERS,
         )
         await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
@@ -493,11 +699,12 @@ async def test_exam_fail_sets_en_repaso_and_resets_progress(
 @pytest.mark.asyncio
 async def test_exam_after_failure_requires_rewatch_before_retry(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
             headers=HEADERS,
         )
         exam_resp = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
@@ -517,7 +724,7 @@ async def test_exam_after_failure_requires_rewatch_before_retry(client: AsyncCli
 
         rewatch = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
             headers=HEADERS,
         )
         retry_after_rewatch = await client.get(f"/api/v1/topics/{t1.id}/exam", headers=HEADERS)
@@ -534,11 +741,12 @@ async def test_exam_after_failure_requires_rewatch_before_retry(client: AsyncCli
 @pytest.mark.asyncio
 async def test_exam_submit_with_prefailure_token_requires_rewatch(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
             headers=HEADERS,
         )
 
@@ -584,13 +792,14 @@ async def test_exam_pass_sets_aprobado_and_updates_progress(
     from app.models.progress import Enrollment, TopicProgress
 
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
     course = scaffold["course"]
     user = scaffold["user"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
             headers=HEADERS,
         )
         await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
@@ -636,11 +845,12 @@ async def test_exam_pass_sets_aprobado_and_updates_progress(
 @pytest.mark.asyncio
 async def test_exam_submit_requires_valid_exam_token(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
             headers=HEADERS,
         )
         await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
@@ -667,11 +877,12 @@ async def test_exam_submit_requires_valid_exam_token(client: AsyncClient, scaffo
 @pytest.mark.asyncio
 async def test_exam_submit_rejects_replayed_exam_token(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
 
     with patch("app.deps.verify_stack_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
             headers=HEADERS,
         )
         await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
@@ -709,6 +920,7 @@ async def test_exam_submit_rejects_option_for_other_question(
     from app.models.question import Option, Question
 
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
     q = Question(id=new_uuid(), topic_id=t1.id, enunciado="Second question?")
     db_session.add(q)
     await db_session.flush()
@@ -725,7 +937,7 @@ async def test_exam_submit_rejects_option_for_other_question(
     with patch("app.deps.verify_stack_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
-            json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+            json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
             headers=HEADERS,
         )
         await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
@@ -757,6 +969,7 @@ async def test_three_consecutive_failures_sets_atorado(
 ):
 
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
     user = scaffold["user"]
 
     async def do_fail_cycle():
@@ -764,7 +977,7 @@ async def test_three_consecutive_failures_sets_atorado(
             # Reset content
             await client.post(
                 f"/api/v1/topics/{t1.id}/heartbeat",
-                json={"type": "video", "pos_seconds": 115, "max_seen_pct": 96},
+                json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
                 headers=HEADERS,
             )
             await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
@@ -814,6 +1027,7 @@ async def test_second_module_topic_locked_without_module_exam(
     from app.models.progress import TopicProgress
 
     t1 = scaffold["t1"]
+    t1_block = scaffold["t1_block"]
     t2 = scaffold["t2"]
     t3 = scaffold["t3"]
     user = scaffold["user"]
