@@ -136,6 +136,8 @@ onMounted(() => {
   }
   isReady.value = true
 
+  if (authStore.isAuthenticated) return
+
   if (mode.value === 'register' && !onboardingData) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('hasCompletedOnboarding')

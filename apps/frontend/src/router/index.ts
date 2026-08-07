@@ -3,11 +3,13 @@ import { useAuthStore } from '@/stores/auth'
 
 const routes: Array<RouteRecordRaw> = [
   // Públicas
-  { 
-    path: '/', 
+  {
+    path: '/',
     redirect: () => {
+      const store = useAuthStore()
+      if (store.isAuthenticated) return '/catalogo'
       return localStorage.getItem('hasCompletedOnboarding') ? '/login' : '/onboarding'
-    } 
+    }
   },
   {
     path: '/onboarding',
@@ -15,7 +17,10 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/public/OnboardingView.vue'),
     meta: { layout: 'PublicLayout' },
     beforeEnter: (to, from, next) => {
-      if (localStorage.getItem('hasCompletedOnboarding')) {
+      const store = useAuthStore()
+      if (store.isAuthenticated) {
+        next('/catalogo')
+      } else if (localStorage.getItem('hasCompletedOnboarding')) {
         next('/login')
       } else {
         next()
