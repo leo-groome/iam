@@ -41,7 +41,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: apps/backend/uv.lock
       - run: uv sync --frozen
-      - name: Lint (informativo: hay deuda previa en ruff)
+      - name: Lint (informativo, hay deuda previa en ruff)
         run: uv run ruff check .
         continue-on-error: true
       - name: Tests
