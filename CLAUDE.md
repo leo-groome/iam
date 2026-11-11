@@ -3,20 +3,31 @@
 ## Stack
 - **Frontend:** Vue 3 SPA + Vue Router + Pinia + Tailwind (Vite) — deploy en Vercel
 - **Backend:** FastAPI (Python 3.12) + SQLAlchemy 2.0 async + asyncpg — deploy en Railway
-- **DB:** PostgreSQL en Neon.com (`postgresql+asyncpg://`)
-- **Auth:** Neon Auth — JWT validado en `/api/v1/auth/me`, expuesto via Pinia `useAuthStore()`
+- **Auth service:** Better Auth + Hono (Node 22) en `apps/auth` — deploy en Railway
+- **DB:** PostgreSQL en Railway (`postgresql+asyncpg://`), schemas `public` (app) y `auth` (Better Auth)
+- **Auth:** Better Auth (servicio propio `apps/auth`) — JWT EdDSA validado por el backend vía JWKS; expuesto via Pinia `useAuthStore()`
 - **Storage:** Cloudflare R2 (media/certificados)
 - **Email:** Resend
 
 ## Monorepo
 ```
 apps/
+  auth/      Better Auth (Hono)
   backend/   FastAPI app
   frontend/  Vue 3 SPA
+  landing/   Astro
+docs/        documentación (docs/README.md)
+compose.yaml entorno dev completo
 ```
 
 ## Dev
 ```bash
+# Todo el stack
+docker compose up --build
+
+# Auth (desde apps/auth/)
+pnpm dev
+
 # Backend (desde apps/backend/)
 uv run uvicorn app.main:app --reload
 
@@ -28,7 +39,7 @@ cd apps/backend && set -a && source .env && set +a && uv run alembic upgrade hea
 ```
 
 ## Auth flow
-1. Frontend obtiene JWT vía Neon Auth (lib `@stackframe/js`)
+1. Frontend abre sesión en `apps/auth` (lib `better-auth/client`, cookie) y pide el JWT en `GET /api/auth/token`
 2. `apiFetch` en `src/lib/api.ts` añade `Authorization: Bearer <token>` a cada request
 3. `useAuthStore` (Pinia) mantiene `user` reactivo cargado desde `/api/v1/auth/me`
 4. Router guard en `src/router/index.ts` redirige a `/login` si `requiresAuth` y no hay sesión
@@ -48,8 +59,8 @@ cd apps/backend && set -a && source .env && set +a && uv run alembic upgrade hea
 - `/admin/cursos/:id/modulos/:modId/examen-diagnostico/:qId` → editar pregunta diagnóstica a nivel módulo (reusa `AdminPreguntaDetalle.vue`)
 
 ## DB — convenciones
-- SSL inyectado via `connect_args={"ssl": "require"}` en el engine (no en la URL)
-- URL limpia: `postgresql+asyncpg://...host/neondb` (sin query params)
+- SSL vía `DB_SSL` (`require` | `disable`) inyectado con `connect_args` en el engine (no en la URL)
+- URL limpia: `postgresql+asyncpg://...host/railway` (sin query params)
 - UUIDs como PK en todas las tablas
 - Timestamps con timezone en todos los modelos (`TimestampMixin`)
 - Migraciones en `apps/backend/alembic/versions/`

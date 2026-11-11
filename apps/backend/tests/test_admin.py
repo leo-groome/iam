@@ -13,7 +13,7 @@ Test matrix (all 12 required cases):
 10. Reports CSV streaming devuelve content correcto (enrollments + completions)
 11. Stuck students filter funciona
 
-SQLite via aiosqlite. verify_stack_token is monkeypatched per test.
+SQLite via aiosqlite. verify_access_token is monkeypatched per test.
 db_session is the authoritative session for direct DB inspection/mutation.
 The client fixture shares the same engine via dependency_override.
 """
@@ -33,10 +33,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 TEST_DB_URL = "sqlite+aiosqlite:///./test_admin.db"
 
-FAKE_ADMIN_SUB = "neon_admin_001"
-FAKE_INSTRUCTOR_SUB = "neon_instructor_001"
-FAKE_INSTRUCTOR2_SUB = "neon_instructor_002"
-FAKE_STUDENT_SUB = "neon_student_001"
+FAKE_ADMIN_SUB = "auth_admin_001"
+FAKE_INSTRUCTOR_SUB = "auth_instructor_001"
+FAKE_INSTRUCTOR2_SUB = "auth_instructor_002"
+FAKE_STUDENT_SUB = "auth_student_001"
 
 ADMIN_HEADERS = {"Authorization": "Bearer admin-token"}
 INSTRUCTOR_HEADERS = {"Authorization": "Bearer instructor-token"}
@@ -106,8 +106,8 @@ async def client(engine, session_factory) -> AsyncGenerator[AsyncClient, None]:
 
 
 def _make_claims(sub: str, email: str, name: str) -> Any:
-    from app.security.neon_auth import StackAuthClaims
-    return StackAuthClaims(sub=sub, email=email, name=name)
+    from app.security.auth_jwt import AuthClaims
+    return AuthClaims(sub=sub, email=email, name=name)
 
 
 def _mock_verify_for(sub: str, email: str, name: str) -> AsyncMock:
@@ -127,7 +127,7 @@ async def _sync_user(
     headers: dict[str, str],
 ) -> dict[str, Any]:
     """Create user via /auth/sync endpoint."""
-    with patch("app.routers.auth.verify_stack_token", _mock_verify_for(sub, email, name)):
+    with patch("app.routers.auth.verify_access_token", _mock_verify_for(sub, email, name)):
         resp = await client.post(
             "/api/v1/auth/sync",
             json={"full_name": name, "birth_date": _birth_date(25)},
@@ -143,7 +143,7 @@ async def _promote(db: AsyncSession, sub: str, role: str) -> None:
 
     from app.models.user import User
 
-    result = await db.execute(select(User).where(User.neon_user_id == sub))
+    result = await db.execute(select(User).where(User.auth_user_id == sub))
     user = result.scalar_one_or_none()
     if user:
         user.role = role
@@ -155,7 +155,7 @@ async def _get_user(db: AsyncSession, sub: str):  # type: ignore[return]
 
     from app.models.user import User
 
-    result = await db.execute(select(User).where(User.neon_user_id == sub))
+    result = await db.execute(select(User).where(User.auth_user_id == sub))
     return result.scalar_one()
 
 
@@ -168,7 +168,7 @@ async def _get_user(db: AsyncSession, sub: str):  # type: ignore[return]
 async def test_student_cannot_access_admin(client: AsyncClient, db: AsyncSession) -> None:
     await _sync_user(client, FAKE_STUDENT_SUB, "student@test.com", "Student", STUDENT_HEADERS)
 
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_STUDENT_SUB, "student@test.com", "Student")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_STUDENT_SUB, "student@test.com", "Student")):
         resp = await client.get("/api/v1/admin/courses", headers=STUDENT_HEADERS)
 
     assert resp.status_code == 403, resp.text
@@ -185,7 +185,7 @@ async def test_instructor_creates_course_owns_it(client: AsyncClient, db: AsyncS
     await _promote(db, FAKE_INSTRUCTOR_SUB, "instructor")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_INSTRUCTOR_SUB, "instructor@test.com", "Instructor"),
     ):
         resp = await client.post(
@@ -219,7 +219,7 @@ async def test_instructor_cannot_edit_other_course(client: AsyncClient, db: Asyn
     await _promote(db, FAKE_INSTRUCTOR_SUB, "instructor")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_INSTRUCTOR_SUB, "instructor@test.com", "Instructor"),
     ):
         resp = await client.post(
@@ -240,7 +240,7 @@ async def test_instructor_cannot_edit_other_course(client: AsyncClient, db: Asyn
     await _promote(db, FAKE_INSTRUCTOR2_SUB, "instructor")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_INSTRUCTOR2_SUB, "instructor2@test.com", "Instructor Two"),
     ):
         resp = await client.patch(
@@ -263,7 +263,7 @@ async def test_admin_can_edit_any_course(client: AsyncClient, db: AsyncSession) 
     await _promote(db, FAKE_INSTRUCTOR_SUB, "instructor")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_INSTRUCTOR_SUB, "instructor@test.com", "Instructor"),
     ):
         resp = await client.post(
@@ -284,7 +284,7 @@ async def test_admin_can_edit_any_course(client: AsyncClient, db: AsyncSession) 
     await _promote(db, FAKE_ADMIN_SUB, "admin")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.patch(
@@ -310,7 +310,7 @@ async def test_delete_course_with_enrollments_returns_409(
     await _promote(db, FAKE_ADMIN_SUB, "admin")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.post(
@@ -340,7 +340,7 @@ async def test_delete_course_with_enrollments_returns_409(
     await db.commit()
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.delete(
@@ -362,7 +362,7 @@ async def test_delete_course_requires_exact_title_confirmation(
     await _promote(db, FAKE_ADMIN_SUB, "admin")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         create_resp = await client.post(
@@ -405,7 +405,7 @@ async def test_create_module_short_title_422(client: AsyncClient, db: AsyncSessi
     await _promote(db, FAKE_ADMIN_SUB, "admin")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.post(
@@ -444,7 +444,7 @@ async def test_create_question_two_options_422(client: AsyncClient, db: AsyncSes
     topic_id = uuid.uuid4()
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.post(
@@ -511,7 +511,7 @@ async def test_replace_topic_questions_bulk_archives_old_questions(client: Async
     second_payload = [first_payload[1]]
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         first = await client.post(
@@ -549,7 +549,7 @@ async def test_reorder_modules_persists(client: AsyncClient, db: AsyncSession) -
     await _promote(db, FAKE_ADMIN_SUB, "admin")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.post(
@@ -602,7 +602,7 @@ async def test_audit_log_written_on_course_create(client: AsyncClient, db: Async
     await _promote(db, FAKE_ADMIN_SUB, "admin")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.post(
@@ -647,7 +647,7 @@ async def test_report_csv_enrollments(client: AsyncClient, db: AsyncSession) -> 
     await _promote(db, FAKE_ADMIN_SUB, "admin")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.get(
@@ -668,7 +668,7 @@ async def test_report_csv_completions(client: AsyncClient, db: AsyncSession) -> 
     await _promote(db, FAKE_ADMIN_SUB, "admin")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.get(
@@ -712,7 +712,7 @@ async def test_stuck_students_filter(client: AsyncClient, db: AsyncSession) -> N
     await db.commit()
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.get("/api/v1/admin/students", headers=ADMIN_HEADERS)
@@ -736,7 +736,7 @@ async def test_student_detail_exposes_progress_status_and_attempt_titles(client:
 
     student = User(
         id=new_uuid(),
-        neon_user_id="neon_detail_student",
+        auth_user_id="auth_detail_student",
         email="detail@student.test",
         full_name="Detail Student",
         birth_date=date(2000, 1, 1),
@@ -784,7 +784,7 @@ async def test_student_detail_exposes_progress_status_and_attempt_titles(client:
     await db.commit()
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.get(f"/api/v1/admin/students/{student.id}", headers=ADMIN_HEADERS)
@@ -814,7 +814,7 @@ async def test_instructor_cannot_manage_nested_resources_from_other_course(
     await _promote(db, FAKE_INSTRUCTOR2_SUB, "instructor")
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_INSTRUCTOR_SUB, "instructor@test.com", "Instructor"),
     ):
         course_resp = await client.post(
@@ -863,7 +863,7 @@ async def test_instructor_cannot_manage_nested_resources_from_other_course(
         question_id = question_resp.json()["id"]
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_INSTRUCTOR2_SUB, "instructor2@test.com", "Instructor Two"),
     ):
         attempts = [
@@ -967,7 +967,7 @@ async def test_replace_topic_blocks_happy_path_returns_ordered_blocks(
     ]
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         put_resp = await client.put(
@@ -1001,7 +1001,7 @@ async def test_replace_topic_blocks_empty_list_returns_422(
     topic_id = await _make_topic_for_blocks(db)
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.put(
@@ -1022,7 +1022,7 @@ async def test_replace_topic_blocks_replaces_old_ones(client: AsyncClient, db: A
     topic_id = await _make_topic_for_blocks(db)
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         first = await client.put(
@@ -1061,7 +1061,7 @@ async def test_replace_topic_blocks_media_key_wrong_scope_prefix_returns_422(
     payload = [{"kind": "video", "media_key": "cover/x/lecture.mp4", "order_index": 0}]
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.put(
@@ -1094,7 +1094,7 @@ async def test_replace_topic_blocks_resets_in_progress_topic_progress(
 
     student_seen = User(
         id=new_uuid(),
-        neon_user_id="student_seen_blocks",
+        auth_user_id="student_seen_blocks",
         email="seen@test.com",
         full_name="Student Seen",
         birth_date=datetime(1995, 1, 1).date(),
@@ -1103,7 +1103,7 @@ async def test_replace_topic_blocks_resets_in_progress_topic_progress(
     )
     student_approved = User(
         id=new_uuid(),
-        neon_user_id="student_approved_blocks",
+        auth_user_id="student_approved_blocks",
         email="approved@test.com",
         full_name="Student Approved",
         birth_date=datetime(1995, 1, 1).date(),
@@ -1131,7 +1131,7 @@ async def test_replace_topic_blocks_resets_in_progress_topic_progress(
     await db.commit()
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User"),
     ):
         resp = await client.put(
@@ -1155,7 +1155,7 @@ async def test_replace_topic_blocks_resets_in_progress_topic_progress(
 async def _ticket_course(client, db):
     await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin", ADMIN_HEADERS)
     await _promote(db, FAKE_ADMIN_SUB, "admin")
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         response = await client.post("/api/v1/admin/courses", json={
             "title": "Curso de prueba", "slug": "curso-ticket", "short_desc": "Descripción de prueba",
         }, headers=ADMIN_HEADERS)
@@ -1166,7 +1166,7 @@ async def _ticket_course(client, db):
 @pytest.mark.asyncio
 async def test_course_duplicate_slug_returns_clear_conflict_and_original_persists(client, db):
     course = await _ticket_course(client, db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         duplicate = await client.post("/api/v1/admin/courses", json={
             "title": "Otro curso", "slug": course["slug"], "short_desc": "Descripción de otro curso",
         }, headers=ADMIN_HEADERS)
@@ -1182,7 +1182,7 @@ async def test_course_duplicate_slug_returns_clear_conflict_and_original_persist
 @pytest.mark.parametrize("limit", [1, 2])
 async def test_module_attempt_limit_and_description_survive_course_reload(client, db, limit):
     course = await _ticket_course(client, db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         created = await client.post(f"/api/v1/admin/courses/{course['id']}/modules", json={
             "title": "Módulo de prueba", "description": "Descripción que no debe perderse", "max_attempts": 3,
         }, headers=ADMIN_HEADERS)
@@ -1201,7 +1201,7 @@ async def test_module_attempt_limit_and_description_survive_course_reload(client
 @pytest.mark.parametrize("limit", [0, 11, 1.5])
 async def test_invalid_attempt_limit_does_not_update_module(client, db, limit):
     course = await _ticket_course(client, db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
                                    json={"title": "Módulo de prueba", "max_attempts": 1}, headers=ADMIN_HEADERS)
         failed = await client.patch(f"/api/v1/admin/modules/{module.json()['id']}",
@@ -1218,7 +1218,7 @@ async def test_question_options_saved_atomically_by_id_with_feedback_and_history
     from sqlalchemy import select
 
     course = await _ticket_course(client, db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
                                    json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
         module_id = module.json()["id"]
@@ -1268,7 +1268,7 @@ async def test_question_options_saved_atomically_by_id_with_feedback_and_history
 @pytest.mark.asyncio
 async def test_topic_feedback_bulk_save_and_limit_survive_reload(client, db):
     course = await _ticket_course(client, db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
                                    json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
         topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={
@@ -1304,7 +1304,7 @@ def _bulk_q(text: str, **extra):
 @pytest.mark.asyncio
 async def test_bulk_questions_keeps_ids_and_rejects_empty_when_exam(client, db):
     course = await _ticket_course(client, db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
                                    json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
         topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={
@@ -1330,7 +1330,7 @@ async def test_bulk_questions_keeps_ids_and_rejects_empty_when_exam(client, db):
 @pytest.mark.asyncio
 async def test_options_endpoint_removed_and_question_order_increments(client, db):
     course = await _ticket_course(client, db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
                                    json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
         topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={
@@ -1360,7 +1360,7 @@ async def test_replace_topic_blocks_same_ids_keeps_progress(client: AsyncClient,
     await _promote(db, FAKE_ADMIN_SUB, "admin")
     topic_id = await _make_topic_for_blocks(db)
     student = User(
-        id=new_uuid(), neon_user_id="keep_progress", email="keep@test.com", full_name="Keep",
+        id=new_uuid(), auth_user_id="keep_progress", email="keep@test.com", full_name="Keep",
         birth_date=datetime(1995, 1, 1).date(), role="estudiante", status="activo",
     )
     db.add(student)
@@ -1370,7 +1370,7 @@ async def test_replace_topic_blocks_same_ids_keeps_progress(client: AsyncClient,
     await db.commit()
 
     pdf = {"kind": "pdf", "media_key": "pdf/abc/doc.pdf", "order_index": 0}
-    with patch("app.deps.verify_stack_token",
+    with patch("app.deps.verify_access_token",
                _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User")):
         first = await client.put(f"/api/v1/admin/topics/{topic_id}/blocks",
                                  json=[pdf, {"kind": "texto", "content_body": "<p>Hola</p>", "order_index": 1}],
@@ -1412,7 +1412,7 @@ async def test_replace_topic_blocks_same_ids_keeps_progress(client: AsyncClient,
 @pytest.mark.asyncio
 async def test_publish_blocked_when_exam_topic_has_no_questions(client, db):
     course = await _ticket_course(client, db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
                                    json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
         topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={
@@ -1441,7 +1441,7 @@ async def test_replace_topic_blocks_rejects_bad_keys_and_empty_text(client, db, 
     await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
     await _promote(db, FAKE_ADMIN_SUB, "admin")
     topic_id = await _make_topic_for_blocks(db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User")):
         resp = await client.put(f"/api/v1/admin/topics/{topic_id}/blocks", json=[bad], headers=ADMIN_HEADERS)
     assert resp.status_code == 422, resp.text
 
@@ -1453,7 +1453,7 @@ async def test_replace_topic_blocks_rejects_missing_object(client, db):
     await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
     await _promote(db, FAKE_ADMIN_SUB, "admin")
     topic_id = await _make_topic_for_blocks(db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User")), \
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User")), \
          patch("app.routers.admin.topics.inspect_object", AsyncMock(return_value="no existe")):
         resp = await client.put(f"/api/v1/admin/topics/{topic_id}/blocks",
                                 json=[{"kind": "pdf", "media_key": "pdf/abc/doc.pdf", "order_index": 0}],
@@ -1465,7 +1465,7 @@ async def test_replace_topic_blocks_rejects_missing_object(client, db):
 @pytest.mark.asyncio
 async def test_question_enunciado_min_length_counts_text_not_html(client, db):
     course = await _ticket_course(client, db)
-    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+    with patch("app.deps.verify_access_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
         module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
                                    json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
         topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={

@@ -1,7 +1,7 @@
 """Auth endpoint tests.
 
-Uses SQLite in-memory (aiosqlite) so tests run without a real Neon connection.
-verify_stack_token is monkeypatched — no network calls in tests.
+Uses SQLite in-memory (aiosqlite) so tests run without a real database connection.
+verify_access_token is monkeypatched — no network calls in tests.
 
 Test matrix:
 - sync: new valid user -> 200, user created in DB
@@ -82,7 +82,7 @@ async def client(engine) -> AsyncGenerator[AsyncClient, None]:
 # Helpers
 # ---------------------------------------------------------------------------
 
-FAKE_SUB = "neon_test_user_001"
+FAKE_SUB = "auth_test_user_001"
 FAKE_EMAIL = "test@example.com"
 FAKE_NAME = "Test User"
 
@@ -94,13 +94,13 @@ VALID_CLAIMS = {
 
 
 def _make_claims(**overrides: Any):
-    from app.security.neon_auth import StackAuthClaims
+    from app.security.auth_jwt import AuthClaims
     data = {**VALID_CLAIMS, **overrides}
-    return StackAuthClaims(**data)
+    return AuthClaims(**data)
 
 
 def _mock_verify(claims_override: dict | None = None):
-    """Return an async mock for verify_stack_token returning StackAuthClaims."""
+    """Return an async mock for verify_access_token returning AuthClaims."""
     claims = _make_claims(**(claims_override or {}))
     return AsyncMock(return_value=claims)
 
@@ -121,7 +121,7 @@ def _birth_date_age(age: int) -> str:
 @pytest.mark.asyncio
 async def test_sync_new_valid_user(client: AsyncClient) -> None:
     """New user with valid age is created; role forced to 'estudiante'."""
-    with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+    with patch("app.routers.auth.verify_access_token", _mock_verify()):
         resp = await client.post(
             "/api/v1/auth/sync",
             json={"full_name": "Test User", "birth_date": _birth_date_age(20)},
@@ -140,7 +140,7 @@ async def test_sync_new_valid_user(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_sync_lowercases_email_from_claims(client: AsyncClient) -> None:
     with patch(
-        "app.routers.auth.verify_stack_token",
+        "app.routers.auth.verify_access_token",
         _mock_verify({"email": "TEST@Example.COM"}),
     ):
         resp = await client.post(
@@ -156,7 +156,7 @@ async def test_sync_lowercases_email_from_claims(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_sync_under_age(client: AsyncClient) -> None:
     """User aged 12 must be rejected with 422 under_age."""
-    with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+    with patch("app.routers.auth.verify_access_token", _mock_verify()):
         resp = await client.post(
             "/api/v1/auth/sync",
             json={"full_name": "Young User", "birth_date": _birth_date_age(12)},
@@ -171,7 +171,7 @@ async def test_sync_under_age(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_sync_invalid_age_over_120(client: AsyncClient) -> None:
     """User aged 121 must be rejected with 422 invalid_age."""
-    with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+    with patch("app.routers.auth.verify_access_token", _mock_verify()):
         resp = await client.post(
             "/api/v1/auth/sync",
             json={"full_name": "Ancient User", "birth_date": _birth_date_age(121)},
@@ -186,7 +186,7 @@ async def test_sync_invalid_age_over_120(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_sync_exactly_13(client: AsyncClient) -> None:
     """User aged exactly 13 must be accepted (boundary)."""
-    with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+    with patch("app.routers.auth.verify_access_token", _mock_verify()):
         resp = await client.post(
             "/api/v1/auth/sync",
             json={"full_name": "Teen User", "birth_date": _birth_date_age(13)},
@@ -199,7 +199,7 @@ async def test_sync_exactly_13(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_sync_idempotent_update(client: AsyncClient) -> None:
     """Calling sync twice updates name but never changes role."""
-    with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+    with patch("app.routers.auth.verify_access_token", _mock_verify()):
         await client.post(
             "/api/v1/auth/sync",
             json={"full_name": "Original Name", "birth_date": _birth_date_age(25)},
@@ -235,7 +235,7 @@ async def test_me_invalid_token(client: AsyncClient) -> None:
     import jwt as _jwt
 
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         AsyncMock(side_effect=_jwt.InvalidTokenError("bad token")),
     ):
         resp = await client.get("/api/v1/auth/me", headers=HEADERS)
@@ -246,7 +246,7 @@ async def test_me_invalid_token(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_me_valid_token_no_db_user(client: AsyncClient) -> None:
     """Valid JWT but no DB user row -> 409 setup_required."""
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.get("/api/v1/auth/me", headers=HEADERS)
 
     assert resp.status_code == 409
@@ -257,14 +257,14 @@ async def test_me_valid_token_no_db_user(client: AsyncClient) -> None:
 async def test_me_valid_user(client: AsyncClient) -> None:
     """Valid JWT + DB user -> 200 UserPublic."""
     # First create the user via sync
-    with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+    with patch("app.routers.auth.verify_access_token", _mock_verify()):
         await client.post(
             "/api/v1/auth/sync",
             json={"full_name": "Valid User", "birth_date": _birth_date_age(25)},
             headers=HEADERS,
         )
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.get("/api/v1/auth/me", headers=HEADERS)
 
     assert resp.status_code == 200
@@ -275,14 +275,14 @@ async def test_me_valid_user(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_me_alias_valid_user(client: AsyncClient) -> None:
-    with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+    with patch("app.routers.auth.verify_access_token", _mock_verify()):
         await client.post(
             "/api/v1/auth/sync",
             json={"full_name": "Alias User", "birth_date": _birth_date_age(25)},
             headers=HEADERS,
         )
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.get("/api/v1/me", headers=HEADERS)
 
     assert resp.status_code == 200
@@ -292,14 +292,14 @@ async def test_me_alias_valid_user(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_logout(client: AsyncClient) -> None:
     """Logout endpoint is stateless; always 204 for authenticated user."""
-    with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+    with patch("app.routers.auth.verify_access_token", _mock_verify()):
         await client.post(
             "/api/v1/auth/sync",
             json={"full_name": "Logout User", "birth_date": _birth_date_age(25)},
             headers=HEADERS,
         )
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post("/api/v1/auth/me/logout", headers=HEADERS)
 
     assert resp.status_code == 204
@@ -313,7 +313,7 @@ async def test_logout(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_sync_cannot_set_role(client: AsyncClient) -> None:
     """Client cannot inject role via request body (field not in schema)."""
-    with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+    with patch("app.routers.auth.verify_access_token", _mock_verify()):
         resp = await client.post(
             "/api/v1/auth/sync",
             # role field is not in SyncRequest; Pydantic ignores it
@@ -330,7 +330,7 @@ async def test_rate_limit_returns_error_contract(client):
     """IAM-010: el 429 usa {"error": {"code", "message"}}."""
     last = None
     for _ in range(8):
-        with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+        with patch("app.routers.auth.verify_access_token", _mock_verify()):
             last = await client.post(
                 "/api/v1/auth/sync",
                 json={"full_name": "Test User", "birth_date": _birth_date_age(20)},

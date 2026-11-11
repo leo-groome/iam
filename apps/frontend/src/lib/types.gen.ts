@@ -15,7 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Auth Sync
-         * @description Create or update a user row from a validated Neon Auth JWT + birth_date.
+         * @description Create or update a user row from a validated Better Auth JWT + birth_date.
          *
          *     Steps:
          *     1. Validate JWT -> extract sub, email, name.
@@ -61,7 +61,7 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description Stateless logout — Neon Auth manages the session client-side.
+         * @description Stateless logout — Better Auth manages the session client-side.
          */
         post: operations["logout_api_v1_auth_me_logout_post"];
         delete?: never;

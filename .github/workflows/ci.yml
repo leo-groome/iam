@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PNPM_VERSION: "10.11.0"
+  NODE_VERSION: "22"
+
+jobs:
+  backend:
+    name: Backend (pytest + migraciones)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: iam
+          POSTGRES_PASSWORD: iam
+          POSTGRES_DB: iam
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U iam -d iam" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/backend/uv.lock
+      - run: uv sync --frozen
+      - name: Lint (informativo: hay deuda previa en ruff)
+        run: uv run ruff check .
+        continue-on-error: true
+      - name: Tests
+        run: uv run pytest -q
+      - name: Migraciones limpias (upgrade → downgrade -1 → upgrade)
+        env:
+          DATABASE_URL: postgresql+asyncpg://iam:iam@localhost:5432/iam
+          DB_SSL: disable
+          AUTH_BASE_URL: http://localhost:3001
+          R2_ACCOUNT_ID: ci
+          R2_ACCESS_KEY_ID: ci
+          R2_SECRET_ACCESS_KEY: ci
+          R2_PUBLIC_BASE: http://localhost
+          MEDIA_JWT_SECRET: ci-secret-ci-secret-ci-secret-ci-00
+          FRONTEND_URL: http://localhost:4321
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade -1
+          uv run alembic upgrade head
+
+  auth:
+    name: Auth (Better Auth)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/auth
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: iam
+          POSTGRES_PASSWORD: iam
+          POSTGRES_DB: iam
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U iam -d iam" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: apps/auth/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - name: Tests (Postgres real)
+        env:
+          TEST_DATABASE_URL: postgresql://iam:iam@localhost:5432/iam
+        run: pnpm test
+
+  frontend:
+    name: Frontend (build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: apps/frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # vue-tsc aún tiene deuda de tipos previa; el build de Vite es el gate por ahora.
+      - run: pnpm build
+        env:
+          PUBLIC_API_URL: http://localhost:8000
+          VITE_AUTH_URL: http://localhost:3001
+
+  landing:
+    name: Landing (build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/landing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: apps/landing/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  docker:
+    name: Docker build (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    needs: [backend, auth, frontend, landing]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            context: apps/backend
+          - service: auth
+            context: apps/auth
+          - service: frontend
+            context: apps/frontend
+            build-args: |
+              PUBLIC_API_URL=http://localhost:8000
+              VITE_AUTH_URL=http://localhost:3001
+          - service: landing
+            context: apps/landing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: false
+          build-args: ${{ matrix.build-args }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  compose:
+    name: Compose válido
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config -q

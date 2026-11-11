@@ -13,16 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 TEST_DB_URL = "sqlite+aiosqlite:///./test_learning.db"
 
-FAKE_SUB = "neon_learning_user_001"
+FAKE_SUB = "auth_learning_user_001"
 FAKE_EMAIL = "learning@example.com"
 FAKE_NAME = "Learning User"
 HEADERS = {"Authorization": "Bearer fake-token"}
 
 
 def _make_claims(**overrides):
-    from app.security.neon_auth import StackAuthClaims
+    from app.security.auth_jwt import AuthClaims
 
-    return StackAuthClaims(
+    return AuthClaims(
         sub=overrides.get("sub", FAKE_SUB),
         email=overrides.get("email", FAKE_EMAIL),
         name=overrides.get("name", FAKE_NAME),
@@ -92,7 +92,7 @@ async def scaffold(db_session: AsyncSession):
 
     user = User(
         id=new_uuid(),
-        neon_user_id=FAKE_SUB,
+        auth_user_id=FAKE_SUB,
         email=FAKE_EMAIL,
         full_name=FAKE_NAME,
         birth_date=_birth_date_age(25),
@@ -204,7 +204,7 @@ async def scaffold(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_topic_locked_returns_403(client: AsyncClient, scaffold):
     t2 = scaffold["t2"]
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.get(f"/api/v1/topics/{t2.id}", headers=HEADERS)
     assert resp.status_code == 403
     assert resp.json()["detail"]["code"] == "topic_locked"
@@ -214,7 +214,7 @@ async def test_topic_locked_returns_403(client: AsyncClient, scaffold):
 async def test_first_topic_is_available(client: AsyncClient, scaffold):
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.get(f"/api/v1/topics/{t1.id}", headers=HEADERS)
     assert resp.status_code == 200
     assert resp.json()["state"] == "disponible"
@@ -228,7 +228,7 @@ async def test_heartbeat_monotonic_max_seen_pct(client: AsyncClient, scaffold, d
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         # Set to 50
         r1 = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
@@ -256,7 +256,7 @@ async def test_heartbeat_ignores_claimed_video_jump(client: AsyncClient, scaffol
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 1, "max_seen_pct": 95},
@@ -275,7 +275,7 @@ async def test_mark_content_done_video_below_95_fails(client: AsyncClient, scaff
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 90, "max_seen_pct": 80},
@@ -292,7 +292,7 @@ async def test_mark_content_done_video_at_95_succeeds(client: AsyncClient, scaff
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 120, "max_seen_pct": 95},
@@ -319,7 +319,7 @@ async def test_mark_content_done_topic_without_video_blocks_succeeds_immediately
     t1_block.media_key = "audio/abc/leccion.mp3"
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(f"/api/v1/topics/{t1.id}/mark-content-done", headers=HEADERS)
 
     assert resp.status_code == 200
@@ -357,7 +357,7 @@ async def test_mark_content_done_pdf_block_gates_until_fully_read(
     )
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         before = await client.post(f"/api/v1/topics/{t2.id}/mark-content-done", headers=HEADERS)
 
         await client.post(
@@ -416,7 +416,7 @@ async def test_mark_content_done_texto_only_topic_succeeds_immediately(
     )
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(f"/api/v1/topics/{t2.id}/mark-content-done", headers=HEADERS)
 
     assert resp.status_code == 200
@@ -440,7 +440,7 @@ async def test_mark_content_done_requires_both_video_and_pdf(
     db_session.add(pdf_block)
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         # Only video complete — pdf still missing.
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
@@ -470,7 +470,7 @@ async def test_get_topic_returns_ordered_blocks_with_progress(
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         # Heartbeat on the video block first so its progress is non-default.
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
@@ -498,7 +498,7 @@ async def test_mark_content_done_video_requires_minimum_watch_seconds(
     t1.duration_seconds = 4
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 4, "max_seen_pct": 100},
@@ -515,7 +515,7 @@ async def test_video_heartbeat_at_95_marks_content_seen(client: AsyncClient, sca
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
@@ -543,7 +543,7 @@ async def test_video_heartbeat_db_duration_is_authoritative_over_client_report(
     t1_block.duration_seconds = 120
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={
@@ -575,7 +575,7 @@ async def test_video_heartbeat_falls_back_to_client_duration_when_db_missing(
     t1_block.duration_seconds = None
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={
@@ -603,7 +603,7 @@ async def test_video_heartbeat_min_seconds_floor_blocks_trivial_skip(
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={
@@ -631,7 +631,7 @@ async def test_video_heartbeat_ignores_completed_client_pct_without_position_pro
     t1_block.duration_seconds = 999
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 8, "max_seen_pct": 100},
@@ -659,7 +659,7 @@ async def test_exam_fail_sets_en_repaso_and_resets_progress(
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         # First get to contenido_visto
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
@@ -705,7 +705,7 @@ async def test_exam_after_failure_requires_rewatch_before_retry(client: AsyncCli
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
@@ -747,7 +747,7 @@ async def test_exam_submit_with_prefailure_token_requires_rewatch(client: AsyncC
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
@@ -800,7 +800,7 @@ async def test_exam_pass_sets_aprobado_and_updates_progress(
     course = scaffold["course"]
     user = scaffold["user"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
@@ -851,7 +851,7 @@ async def test_exam_submit_requires_valid_exam_token(client: AsyncClient, scaffo
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
@@ -883,7 +883,7 @@ async def test_exam_submit_rejects_replayed_exam_token(client: AsyncClient, scaf
     t1 = scaffold["t1"]
     t1_block = scaffold["t1_block"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
@@ -938,7 +938,7 @@ async def test_exam_submit_rejects_option_for_other_question(
     db_session.add(other_option)
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",
             json={"type": "video", "block_id": str(t1_block.id), "pos_seconds": 115, "max_seen_pct": 96},
@@ -977,7 +977,7 @@ async def test_three_consecutive_failures_sets_atorado(
     user = scaffold["user"]
 
     async def do_fail_cycle():
-        with patch("app.deps.verify_stack_token", _mock_verify()):
+        with patch("app.deps.verify_access_token", _mock_verify()):
             # Reset content
             await client.post(
                 f"/api/v1/topics/{t1.id}/heartbeat",
@@ -1012,7 +1012,7 @@ async def test_three_consecutive_failures_sets_atorado(
 async def test_module_exam_blocked_if_topics_not_approved(client: AsyncClient, scaffold):
     mod1 = scaffold["mod1"]
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.get(f"/api/v1/modules/{mod1.id}/exam", headers=HEADERS)
 
     assert resp.status_code == 403
@@ -1048,7 +1048,7 @@ async def test_second_module_topic_locked_without_module_exam(
     await db_session.commit()
 
     # t3 is in mod2 — mod1 has an exam, so t3 should be locked without mod1 exam passed
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.get(f"/api/v1/topics/{t3.id}", headers=HEADERS)
 
     assert resp.status_code == 403
@@ -1091,7 +1091,7 @@ async def test_one_attempt_limit_blocks_start_and_preissued_delivery_and_keeps_f
 
     target, question = await _ready_ticket_exam(db_session, scaffold, scope, 1)
     endpoint = f"/api/v1/{scope}s/{target.id}/exam"
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         first = await client.get(endpoint, headers=HEADERS)
         preissued = await client.get(endpoint, headers=HEADERS)
         assert first.status_code == 200, first.text
@@ -1124,7 +1124,7 @@ async def test_one_attempt_limit_blocks_start_and_preissued_delivery_and_keeps_f
 async def test_two_attempts_allow_second_and_return_selected_correct_feedback(client, scaffold, db_session, scope):
     target, _ = await _ready_ticket_exam(db_session, scaffold, scope, 2)
     endpoint = f"/api/v1/{scope}s/{target.id}/exam"
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         first = await client.get(endpoint, headers=HEADERS)
         failed = await client.post(endpoint + "/submit", headers=HEADERS, json={
             "exam_token": first.json()["exam_token"], "answers": _ticket_answers(first.json()),
@@ -1156,12 +1156,12 @@ async def test_reducing_limit_counts_existing_history_and_does_not_delete_it(cli
                       min_score_snapshot=70, answers={str(question.id): str(question.options[0].id)})
     db_session.add(old)
     await db_session.commit()
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         before = await client.get(f"/api/v1/topics/{target.id}/exam", headers=HEADERS)
     assert before.json()["attempts_remaining"] == 2
     target.max_attempts = 1
     await db_session.commit()
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         after = await client.get(f"/api/v1/topics/{target.id}/exam", headers=HEADERS)
     assert after.status_code == 403
     preserved = await db_session.scalar(select(ExamAttempt).where(ExamAttempt.id == old.id))
@@ -1171,7 +1171,7 @@ async def test_reducing_limit_counts_existing_history_and_does_not_delete_it(cli
 @pytest.mark.asyncio
 async def test_heartbeat_video_jump_rejected_when_enforced(client: AsyncClient, scaffold):
     t1, block = scaffold["t1"], scaffold["t1_block"]
-    with patch("app.deps.verify_stack_token", _mock_verify()), \
+    with patch("app.deps.verify_access_token", _mock_verify()), \
          patch.object(settings, "enforce_realtime_heartbeat", True):
         r = await client.post(
             f"/api/v1/topics/{t1.id}/heartbeat",

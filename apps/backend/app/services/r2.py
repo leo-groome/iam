@@ -20,6 +20,18 @@ def _get_session() -> aioboto3.Session:
     return _session
 
 
+def _endpoint(*, internal: bool) -> str:
+    """Endpoint S3/R2.
+
+    `internal=False`: el que ve el navegador (URLs prefirmadas).
+    `internal=True`: el que usa el propio backend (HEAD/GET); en Docker local difiere
+    del público (p. ej. http://s3:9090 vs http://localhost:9000). En R2 real son iguales.
+    """
+    if internal and settings.r2_internal_endpoint_url:
+        return settings.r2_internal_endpoint_url
+    return settings.r2_endpoint_url or f"https://{settings.r2_account_id}.r2.cloudflarestorage.com"
+
+
 def _slug(filename: str) -> str:
     name = filename.lower().replace(" ", "-")
     return _SLUG_RE.sub("", name)[:120] or "file"
@@ -57,7 +69,7 @@ async def inspect_object(key: str, scope: str) -> str | None:
 
     Devuelve un mensaje de error o None si todo está bien.
     """
-    endpoint = settings.r2_endpoint_url or f"https://{settings.r2_account_id}.r2.cloudflarestorage.com"
+    endpoint = _endpoint(internal=True)
     async with _get_session().client(
         "s3",
         endpoint_url=endpoint,
@@ -85,7 +97,7 @@ async def inspect_object(key: str, scope: str) -> str | None:
 async def generate_upload_url(
     key: str, content_type: str, expires_in: int = 600, content_length: int | None = None
 ) -> str:
-    endpoint = settings.r2_endpoint_url or f"https://{settings.r2_account_id}.r2.cloudflarestorage.com"
+    endpoint = _endpoint(internal=False)
     session = _get_session()
     async with session.client(
         "s3",
@@ -114,7 +126,7 @@ async def count_pdf_pages(key: str) -> int:
 
     from pypdf import PdfReader
 
-    endpoint = settings.r2_endpoint_url or f"https://{settings.r2_account_id}.r2.cloudflarestorage.com"
+    endpoint = _endpoint(internal=True)
     async with _get_session().client(
         "s3",
         endpoint_url=endpoint,

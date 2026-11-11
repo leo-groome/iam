@@ -17,7 +17,7 @@ test.describe('IAM Training Platform E2E Tests', () => {
   });
 
   test('Registration (Sign Up) flow creates user and redirects to catalog', async ({ context, page }) => {
-    // Stub Neon Auth signUp/token calls to bypass network calls
+    // Stub auth service signUp/token calls to bypass network calls
     await context.addInitScript(() => {
       let stubbed = false;
       Object.defineProperty(window, 'authClient', {
@@ -32,7 +32,7 @@ test.describe('IAM Training Platform E2E Tests', () => {
             stubbed = true;
             val.signUp = {
               email: async (credentials: any) => {
-                document.cookie = `neon-auth-token=mock-token:mock_student_id:${credentials.email}:Student User:student; path=/; max-age=3600`;
+                document.cookie = `iam-auth-token=mock-token:mock_student_id:${credentials.email}:Student User:student; path=/; max-age=3600`;
                 return { data: { user: { id: 'mock_student_id' } }, error: null };
               },
             };
@@ -83,7 +83,7 @@ test.describe('IAM Training Platform E2E Tests', () => {
     // Inject mock student token cookie directly
     await context.addCookies([
       {
-        name: 'neon-auth-token',
+        name: 'iam-auth-token',
         value: 'mock-token:mock_student_id:student@example.com:Student User:student',
         domain: 'localhost',
         path: '/',
@@ -103,7 +103,7 @@ test.describe('IAM Training Platform E2E Tests', () => {
     // Inject mock admin token cookie directly
     await context.addCookies([
       {
-        name: 'neon-auth-token',
+        name: 'iam-auth-token',
         value: 'mock-token:mock_admin_id:admin@example.com:Admin User:admin',
         domain: 'localhost',
         path: '/',

@@ -6,9 +6,9 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 # Only public browser configuration belongs in build arguments.
 ARG PUBLIC_API_URL
-ARG VITE_NEON_AUTH_URL
-ENV PUBLIC_API_URL=$PUBLIC_API_URL VITE_NEON_AUTH_URL=$VITE_NEON_AUTH_URL
-RUN test -n "$PUBLIC_API_URL" && test -n "$VITE_NEON_AUTH_URL" && pnpm build
+ARG VITE_AUTH_URL
+ENV PUBLIC_API_URL=$PUBLIC_API_URL VITE_AUTH_URL=$VITE_AUTH_URL
+RUN test -n "$PUBLIC_API_URL" && test -n "$VITE_AUTH_URL" && pnpm build
 
 FROM nginx:stable-alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf

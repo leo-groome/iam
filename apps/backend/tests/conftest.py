@@ -15,8 +15,8 @@ from sqlalchemy.ext.asyncio import create_async_engine as _real_create_async_eng
 # Must be set BEFORE any app.* import (including conftest-level imports).
 _TEST_ENV = {
     "DATABASE_URL": "sqlite+aiosqlite:///./test_auth.db",
-    "NEON_AUTH_URL": "https://test.neonauth.us-east-2.aws.neon.build/neondb/auth",
-    "NEON_AUTH_JWKS_URL": "https://test.neonauth.us-east-2.aws.neon.build/neondb/auth/.well-known/jwks.json",
+    "AUTH_BASE_URL": "http://auth.test.local:3001",
+    "AUTH_JWKS_URL": "http://auth.test.local:3001/api/auth/jwks",
     "R2_ACCOUNT_ID": "test_account",
     "R2_ACCESS_KEY_ID": "test_key_id",
     "R2_SECRET_ACCESS_KEY": "test_secret",

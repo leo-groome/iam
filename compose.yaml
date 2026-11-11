@@ -1,4 +1,13 @@
-name: iam-local
+# Entorno de desarrollo completo: `docker compose up --build`
+#   frontend :4321 · auth :3001 · backend :8000 · postgres :5433 · s3 mock :9000 · media gateway :8787
+# Producción (Railway) NO usa este archivo: ver docs/deployment.md.
+name: iam
+
+x-pg-healthcheck: &pg-healthcheck
+  test: ["CMD-SHELL", "pg_isready -U iam -d iam"]
+  interval: 5s
+  timeout: 3s
+  retries: 10
 
 services:
   db:
@@ -6,38 +15,65 @@ services:
     environment:
       POSTGRES_USER: iam
       POSTGRES_PASSWORD: iam
-      POSTGRES_DB: iam_qa
+      POSTGRES_DB: iam
     volumes:
       - iam_pgdata:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5433:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U iam -d iam_qa"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+    healthcheck: *pg-healthcheck
+
+  auth:
+    build:
+      context: apps/auth
+    env_file:
+      - path: apps/auth/.env
+        required: false
+    environment:
+      NODE_ENV: development # sin RESEND_API_KEY el OTP se imprime en los logs (solo dev)
+      DATABASE_URL: postgresql://iam:iam@db:5432/iam
+      DB_SSL: disable
+      BETTER_AUTH_URL: http://localhost:3001
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-secret-change-me-0123456789abcdef}
+      TRUSTED_ORIGINS: http://localhost:4321
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Campus IAM <no-reply@example.com>}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3001:3001"
 
   backend:
     build:
       context: apps/backend
     env_file:
-      - apps/backend/.env
+      - path: apps/backend/.env
+        required: false
     environment:
-      DATABASE_URL: postgresql+asyncpg://iam:iam@db:5432/iam_qa
+      DATABASE_URL: postgresql+asyncpg://iam:iam@db:5432/iam
       DB_SSL: disable
-      ALLOW_MOCK_AUTH: "true"
+      # iss/aud = URL pública del auth; el JWKS se baja por la red interna de Docker.
+      AUTH_BASE_URL: http://localhost:3001
+      AUTH_JWKS_URL: http://auth:3001/api/auth/jwks
+      ALLOW_MOCK_AUTH: ${ALLOW_MOCK_AUTH:-false}
       FRONTEND_URL: http://localhost:4321
-      RESEND_API_KEY: ""
-      # Local S3 mock instead of the production R2 bucket (overrides .env creds).
-      R2_ENDPOINT_URL: http://localhost:9000
-      R2_ACCOUNT_ID: local
-      R2_ACCESS_KEY_ID: minioadmin
-      R2_SECRET_ACCESS_KEY: minioadmin-local-secret
-      R2_BUCKET: iam-qa
-      R2_PUBLIC_BASE: http://localhost:8787
-      MEDIA_JWT_SECRET: local-qa-media-secret-0123456789abcdef
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      # Por defecto S3 mock local; define R2_* en .env (raíz) para usar Cloudflare R2 real.
+      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL-http://localhost:9000}
+      # Llamadas servidor→S3 por la red de Docker (el navegador usa R2_ENDPOINT_URL).
+      R2_INTERNAL_ENDPOINT_URL: ${R2_INTERNAL_ENDPOINT_URL-http://s3:9090}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-local}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-minioadmin}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin-local-secret}
+      R2_BUCKET: ${R2_BUCKET:-iam-qa}
+      R2_PUBLIC_BASE: ${R2_PUBLIC_BASE:-http://localhost:8787}
+      MEDIA_JWT_SECRET: ${MEDIA_JWT_SECRET:-local-qa-media-secret-0123456789abcdef}
     depends_on:
       db:
+        condition: service_healthy
+      auth:
         condition: service_healthy
       s3:
         condition: service_started
@@ -49,6 +85,23 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install --global pnpm@10.11.0 && pnpm install --frozen-lockfile && pnpm dev --host 0.0.0.0 --port 4321"
+    environment:
+      PUBLIC_API_URL: http://localhost:8000
+      VITE_AUTH_URL: http://localhost:3001
+      PUBLIC_ALLOW_MOCK_AUTH: ${ALLOW_MOCK_AUTH:-false}
+    volumes:
+      - ./apps/frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "127.0.0.1:4321:4321"
+    depends_on:
+      - backend
+      - auth
 
   s3:
     image: adobe/s3mock:latest
@@ -66,7 +119,7 @@ services:
     build:
       context: infra/local-media
     environment:
-      MEDIA_JWT_SECRET: local-qa-media-secret-0123456789abcdef
+      MEDIA_JWT_SECRET: ${MEDIA_JWT_SECRET:-local-qa-media-secret-0123456789abcdef}
       S3_ENDPOINT: http://s3:9090
       S3_ACCESS_KEY: minioadmin
       S3_SECRET_KEY: minioadmin-local-secret
@@ -76,34 +129,19 @@ services:
     ports:
       - "127.0.0.1:8787:8787"
 
+  # docker compose --profile seed run --rm seed   (usuarios mock; requiere ALLOW_MOCK_AUTH=true)
   seed:
     profiles: ["seed"]
     build:
       context: apps/backend
     environment:
-      DATABASE_URL: postgresql+asyncpg://iam:iam@db:5432/iam_qa
+      DATABASE_URL: postgresql+asyncpg://iam:iam@db:5432/iam
       DB_SSL: disable
     depends_on:
       backend:
         condition: service_healthy
     command: ["python", "seed_e2e.py"]
     restart: "no"
-
-  frontend:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "npm install --global pnpm@10.11.0 && pnpm install --frozen-lockfile && pnpm dev --host 0.0.0.0 --port 4321"
-    environment:
-      PUBLIC_API_URL: http://localhost:8000
-      PUBLIC_ALLOW_MOCK_AUTH: "true"
-      VITE_NEON_AUTH_URL: ${VITE_NEON_AUTH_URL:-https://ep-dawn-dew-ai5mwyh8.neonauth.c-4.us-east-1.aws.neon.tech/neondb/auth}
-    volumes:
-      - ./apps/frontend:/app
-      - frontend_node_modules:/app/node_modules
-    ports:
-      - "127.0.0.1:4321:4321"
-    depends_on:
-      - backend
 
 volumes:
   iam_pgdata:

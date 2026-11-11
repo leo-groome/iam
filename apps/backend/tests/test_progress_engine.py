@@ -44,7 +44,7 @@ async def scaffold(db: AsyncSession):
 
     user = User(
         id=new_uuid(),
-        neon_user_id="test_engine_user",
+        auth_user_id="test_engine_user",
         email="engine@test.com",
         full_name="Engine User",
         birth_date=_birth_date_age(25),
