@@ -140,6 +140,8 @@ class ContentBlock(Base, TimestampMixin):
     media_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Páginas reales del PDF, contadas en el servidor (autoritativo; el cliente no decide).
+    pdf_total_pages: Mapped[int | None] = mapped_column(Integer, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     topic: Mapped["Topic"] = relationship("Topic", back_populates="blocks")

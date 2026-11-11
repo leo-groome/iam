@@ -46,6 +46,7 @@ from app.schemas.topic import (
     TopicProgressDetail,
     TopicView,
 )
+from app.services.heartbeat_guard import credited_pdf_page, credited_video_pct
 from app.services.progress_engine import (
     _complete_content,
     check_user_status,
@@ -56,6 +57,7 @@ from app.services.progress_engine import (
     recompute_content_completion,
     recompute_course_progress,
 )
+from app.services.r2 import count_pdf_pages
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -201,6 +203,14 @@ def _grade_signed_answers(
             correct += 1
 
     return correct, len(signed_question_ids), answers_payload
+
+
+def _seconds_since(moment: datetime | None, now: datetime) -> float | None:
+    if moment is None:
+        return None
+    if moment.tzinfo is None:  # SQLite devuelve datetimes naive
+        moment = moment.replace(tzinfo=UTC)
+    return max(0.0, (now - moment).total_seconds())
 
 
 def _video_pct_from_position(pos_seconds: int, duration_seconds: int | None) -> int:
@@ -378,6 +388,9 @@ async def topic_heartbeat(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "block_not_found"})
 
     bp = await get_or_create_block_progress(db, current_user, block)
+    now = datetime.now(UTC)
+    elapsed = _seconds_since(bp.last_heartbeat_at, now)
+    bp.last_heartbeat_at = now
 
     if block.kind in ("video", "audio"):
         if body.max_seen_pct is not None and body.pos_seconds is None:
@@ -388,13 +401,32 @@ async def topic_heartbeat(
         if body.pos_seconds is not None:
             bp.video_last_pos_seconds = body.pos_seconds
             duration_seconds = _video_duration_for_progress(block.duration_seconds, body.duration_seconds)
-            server_pct = _video_pct_from_position(body.pos_seconds, duration_seconds)
-            bp.video_max_seen_pct = max(bp.video_max_seen_pct, server_pct)
+            if settings.enforce_realtime_heartbeat:
+                bp.video_max_seen_pct = credited_video_pct(
+                    bp.video_max_seen_pct, duration_seconds, body.pos_seconds, elapsed
+                )
+            else:
+                server_pct = _video_pct_from_position(body.pos_seconds, duration_seconds)
+                bp.video_max_seen_pct = max(bp.video_max_seen_pct, server_pct)
     elif block.kind == "pdf":
-        if body.last_page is not None:
-            bp.pdf_last_page = max(bp.pdf_last_page, body.last_page)
-        if body.total_pages is not None:
-            bp.pdf_total_pages = body.total_pages
+        # El total de páginas lo decide el servidor (cuenta del PDF real en R2), nunca el cliente.
+        if block.pdf_total_pages is None and settings.verify_pdf_pages_server_side and block.media_key:
+            try:
+                block.pdf_total_pages = await count_pdf_pages(block.media_key)
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail={"code": "pdf_unavailable"},
+                ) from exc
+        total = block.pdf_total_pages or body.total_pages
+        if total:
+            bp.pdf_total_pages = total
+            if body.last_page is not None:
+                if settings.enforce_realtime_heartbeat:
+                    page = credited_pdf_page(bp.pdf_last_page, total, body.last_page, elapsed)
+                else:
+                    page = min(body.last_page, total)
+                bp.pdf_last_page = max(bp.pdf_last_page, page)
     # imagen/texto: no gating progress to track — pure display blocks.
 
     await db.flush()

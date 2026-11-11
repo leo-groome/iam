@@ -47,6 +47,28 @@ async def get_course_admin(db: AsyncSession, course_id: uuid.UUID) -> Course | N
     return result.scalar_one_or_none()
 
 
+async def topics_with_exam_but_no_questions(db: AsyncSession, course_id: uuid.UUID) -> list[Topic]:
+    """Temas activos con `has_exam` y 0 preguntas activas (callejón sin salida para el alumno)."""
+    active_questions = (
+        select(func.count(Question.id))
+        .where(Question.topic_id == Topic.id, Question.archived_at.is_(None))
+        .correlate(Topic)
+        .scalar_subquery()
+    )
+    stmt = (
+        select(Topic)
+        .join(Module, Module.id == Topic.module_id)
+        .where(
+            Module.course_id == course_id,
+            Topic.has_exam.is_(True),
+            Topic.archived_at.is_(None),
+            active_questions == 0,
+        )
+        .order_by(Module.order_index, Topic.order_index)
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
 async def create_course(db: AsyncSession, data: dict[str, object]) -> Course:
     course = Course(**data)
     db.add(course)

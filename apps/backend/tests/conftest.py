@@ -25,6 +25,8 @@ _TEST_ENV = {
     "FRONTEND_URL": "http://localhost:5173",
     "RESEND_API_KEY": "",
     "CERTIFICATE_VERIFY_BASE_URL": "http://localhost:8000",
+    "ENFORCE_REALTIME_HEARTBEAT": "false",
+    "VERIFY_PDF_PAGES_SERVER_SIDE": "false",
 }
 
 for key, value in _TEST_ENV.items():
@@ -55,3 +57,14 @@ app.db.AsyncSessionLocal = __import__("sqlalchemy.ext.asyncio", fromlist=["async
     autocommit=False,
     autoflush=False,
 )
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _stub_r2_inspect(monkeypatch):
+    """Los tests no hablan con R2: la inspección de objetos pasa por defecto."""
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr("app.routers.admin.topics.inspect_object", AsyncMock(return_value=None))

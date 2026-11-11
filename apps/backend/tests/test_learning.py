@@ -1168,3 +1168,16 @@ async def test_reducing_limit_counts_existing_history_and_does_not_delete_it(cli
     assert preserved.score == 50 and preserved.answers == old.answers
 
 
+@pytest.mark.asyncio
+async def test_heartbeat_video_jump_rejected_when_enforced(client: AsyncClient, scaffold):
+    t1, block = scaffold["t1"], scaffold["t1_block"]
+    with patch("app.deps.verify_stack_token", _mock_verify()), \
+         patch.object(settings, "enforce_realtime_heartbeat", True):
+        r = await client.post(
+            f"/api/v1/topics/{t1.id}/heartbeat",
+            json={"type": "video", "block_id": str(block.id), "pos_seconds": 9999, "duration_seconds": 9999,
+                  "max_seen_pct": 100},
+            headers=HEADERS,
+        )
+    assert r.status_code == 200
+    assert r.json()["video_max_seen_pct"] < 10

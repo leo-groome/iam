@@ -135,6 +135,18 @@ async def publish_course(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
     _assert_owner_or_admin(current_user, course.instructor_id)
 
+    broken = await crud.topics_with_exam_but_no_questions(db, course_id)
+    if broken:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "exam_without_questions",
+                "message": "Hay clases con examen activo y sin preguntas: "
+                + ", ".join(t.title for t in broken),
+                "topic_ids": [str(t.id) for t in broken],
+            },
+        )
+
     updated = await crud.update_course(db, course, {"status": "publicado"})
     await log_admin_action(
         db,

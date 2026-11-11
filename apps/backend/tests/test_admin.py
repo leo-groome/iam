@@ -1409,3 +1409,56 @@ async def test_replace_topic_blocks_same_ids_keeps_progress(client: AsyncClient,
     assert left == []
 
 
+@pytest.mark.asyncio
+async def test_publish_blocked_when_exam_topic_has_no_questions(client, db):
+    course = await _ticket_course(client, db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
+                                   json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
+        topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={
+            "title": "Clase sin preguntas", "content_type": "texto",
+        }, headers=ADMIN_HEADERS)
+        assert topic.json()["has_exam"] is False  # default seguro
+        await client.patch(f"/api/v1/admin/topics/{topic.json()['id']}", json={"has_exam": True},
+                           headers=ADMIN_HEADERS)
+        blocked = await client.post(f"/api/v1/admin/courses/{course['id']}/publish", headers=ADMIN_HEADERS)
+        await client.post(f"/api/v1/admin/topics/{topic.json()['id']}/questions/bulk",
+                          json=[_bulk_q("Pregunta uno")], headers=ADMIN_HEADERS)
+        ok = await client.post(f"/api/v1/admin/courses/{course['id']}/publish", headers=ADMIN_HEADERS)
+    assert blocked.status_code == 422
+    assert blocked.json()["detail"]["code"] == "exam_without_questions"
+    assert ok.status_code == 200, ok.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", [
+    {"kind": "pdf", "media_key": "pdf/../cover/x", "order_index": 0},
+    {"kind": "pdf", "media_key": "pdf/abc/" + "a" * 3000, "order_index": 0},
+    {"kind": "texto", "content_body": "<p></p>", "order_index": 0},
+    {"kind": "texto", "content_body": "<p><br></p>", "order_index": 0},
+])
+async def test_replace_topic_blocks_rejects_bad_keys_and_empty_text(client, db, bad):
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+    topic_id = await _make_topic_for_blocks(db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User")):
+        resp = await client.put(f"/api/v1/admin/topics/{topic_id}/blocks", json=[bad], headers=ADMIN_HEADERS)
+    assert resp.status_code == 422, resp.text
+
+
+@pytest.mark.asyncio
+async def test_replace_topic_blocks_rejects_missing_object(client, db):
+    from unittest.mock import AsyncMock
+
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+    topic_id = await _make_topic_for_blocks(db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User")), \
+         patch("app.routers.admin.topics.inspect_object", AsyncMock(return_value="no existe")):
+        resp = await client.put(f"/api/v1/admin/topics/{topic_id}/blocks",
+                                json=[{"kind": "pdf", "media_key": "pdf/abc/doc.pdf", "order_index": 0}],
+                                headers=ADMIN_HEADERS)
+    assert resp.status_code == 422
+    assert resp.json()["detail"]["code"] == "invalid_media"
+
+

@@ -209,7 +209,7 @@ async def test_upload_url_admin_success(client: AsyncClient, scaffold):
     ):
         resp = await client.post(
             "/api/v1/media/upload-url",
-            json={"filename": "lecture.mp4", "content_type": "video/mp4", "scope": "video"},
+            json={"filename": "lecture.mp4", "content_type": "video/mp4", "scope": "video", "size_bytes": 1024},
             headers=HEADERS,
         )
     assert resp.status_code == 200
@@ -236,7 +236,7 @@ async def test_upload_url_instructor_success(client: AsyncClient, scaffold):
     ):
         resp = await client.post(
             "/api/v1/media/upload-url",
-            json={"filename": "slides.pdf", "content_type": "application/pdf", "scope": "pdf"},
+            json={"filename": "slides.pdf", "content_type": "application/pdf", "scope": "pdf", "size_bytes": 1024},
             headers=HEADERS,
         )
     assert resp.status_code == 200
@@ -250,7 +250,7 @@ async def test_upload_url_student_forbidden(client: AsyncClient, scaffold):
     ):
         resp = await client.post(
             "/api/v1/media/upload-url",
-            json={"filename": "lecture.mp4", "content_type": "video/mp4", "scope": "video"},
+            json={"filename": "lecture.mp4", "content_type": "video/mp4", "scope": "video", "size_bytes": 1024},
             headers=HEADERS,
         )
     assert resp.status_code == 403
@@ -267,7 +267,7 @@ async def test_upload_url_invalid_content_type_for_scope(client: AsyncClient, sc
         # Sending a PDF content-type for a video scope
         resp = await client.post(
             "/api/v1/media/upload-url",
-            json={"filename": "lecture.pdf", "content_type": "application/pdf", "scope": "video"},
+            json={"filename": "lecture.pdf", "content_type": "application/pdf", "scope": "video", "size_bytes": 1024},
             headers=HEADERS,
         )
     assert resp.status_code == 422
@@ -284,7 +284,7 @@ async def test_upload_url_image_wrong_type_for_pdf_scope(client: AsyncClient, sc
     ):
         resp = await client.post(
             "/api/v1/media/upload-url",
-            json={"filename": "cover.jpg", "content_type": "image/jpeg", "scope": "pdf"},
+            json={"filename": "cover.jpg", "content_type": "image/jpeg", "scope": "pdf", "size_bytes": 1024},
             headers=HEADERS,
         )
     assert resp.status_code == 422
@@ -301,7 +301,7 @@ async def test_upload_url_audio_success(client: AsyncClient, scaffold):
     ):
         resp = await client.post(
             "/api/v1/media/upload-url",
-            json={"filename": "leccion.mp3", "content_type": "audio/mpeg", "scope": "audio"},
+            json={"filename": "leccion.mp3", "content_type": "audio/mpeg", "scope": "audio", "size_bytes": 1024},
             headers=HEADERS,
         )
     assert resp.status_code == 200
@@ -319,7 +319,7 @@ async def test_upload_url_audio_wrong_type_returns_422(client: AsyncClient, scaf
         # Sending a video content-type for an audio scope
         resp = await client.post(
             "/api/v1/media/upload-url",
-            json={"filename": "leccion.mp4", "content_type": "video/mp4", "scope": "audio"},
+            json={"filename": "leccion.mp4", "content_type": "video/mp4", "scope": "audio", "size_bytes": 1024},
             headers=HEADERS,
         )
     assert resp.status_code == 422
@@ -456,3 +456,25 @@ async def test_play_token_block_not_found_returns_404(client: AsyncClient, scaff
             headers=HEADERS,
         )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_upload_url_rejects_oversize_file(client: AsyncClient, scaffold):
+    with patch("app.deps.verify_stack_token", _mock_verify(sub=FAKE_SUB_ADMIN)):
+        resp = await client.post(
+            "/api/v1/media/upload-url",
+            json={"filename": "doc.pdf", "content_type": "application/pdf", "scope": "pdf",
+                  "size_bytes": 51 * 1024 * 1024},
+            headers=HEADERS,
+        )
+    assert resp.status_code == 413
+    assert resp.json()["detail"]["code"] == "file_too_large"
+
+
+def test_magic_bytes_by_scope():
+    from app.services.r2 import matches_magic
+
+    assert matches_magic("pdf", b"%PDF-1.7 ....")
+    assert not matches_magic("pdf", b"MZ\x90\x00 exe")
+    assert matches_magic("imagen", b"\x89PNG\r\n\x1a\n....")
+    assert matches_magic("video", b"\x00\x00\x00\x18ftypmp42")
