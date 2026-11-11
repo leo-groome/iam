@@ -30,9 +30,9 @@ export const stories: Story[] = [
     body: [
       "Tenía 19 años cuando hice el test. Lo recuerdo como si fuera ayer: dos líneas rojas y todo el mundo girando demasiado rápido. Estaba estudiando, vivía con una amiga, y mi novio había desaparecido del mapa hacía semanas.",
       "Mis primeras llamadas fueron a las personas equivocadas. \"No te compliques\", me decían. \"Ahora se puede, es rápido.\" Por un momento les creí. El miedo te empuja a soluciones que después no podés deshacer.",
-      "Una compañera de la facultad me habló de IAM. No prometieron nada milagroso. Solo me ofrecieron una tarde para charlar. Esa tarde se convirtió en un acompañamiento de meses: una psicóloga, una abogada, una familia que me hospedó cuando mis padres me echaron.",
+      "Una compañera de la facultad me habló de IAM de la Vida. No prometieron nada milagroso. Solo me ofrecieron una tarde para charlar. Esa tarde se convirtió en un acompañamiento de meses: una psicóloga, una abogada, una familia que me hospedó cuando mis padres me echaron.",
       "Sofía nació en abril. Hoy tiene 3 años y le encanta cantar. Cada vez que la escucho dormirse pienso en aquella tarde y agradezco que alguien me haya escuchado sin juzgar. No me dijeron qué hacer. Me ayudaron a descubrir que yo podía.",
-      "Si hoy estás leyendo esto y tenés miedo: no estás sola. Hay puertas que se abren cuando creés que todas están cerradas. La mía se llamó IAM.",
+      "Si hoy estás leyendo esto y tenés miedo: no estás sola. Hay puertas que se abren cuando creés que todas están cerradas. La mía se llamó IAM de la Vida.",
     ],
   },
   {
@@ -51,7 +51,7 @@ export const stories: Story[] = [
     body: [
       "A las 20 semanas nos dijeron que algo no estaba bien. Las palabras médicas son frías cuando lo que estás escuchando es sobre tu bebé. \"Malformación severa.\" \"Pronóstico reservado.\" \"Considere sus opciones.\"",
       "Mi esposo y yo lloramos esa noche hasta quedarnos sin lágrimas. Al día siguiente empezamos a buscar más opiniones. No por terquedad: por amor.",
-      "IAM nos conectó con médicos que tratan estos casos, con familias que habían pasado por lo mismo, con un sacerdote que escuchó nuestras dudas más oscuras sin asustarse.",
+      "IAM de la Vida nos conectó con médicos que tratan estos casos, con familias que habían pasado por lo mismo, con un sacerdote que escuchó nuestras dudas más oscuras sin asustarse.",
       "Mateo nació con desafíos, sí. También nació con una sonrisa que ilumina cualquier habitación. Tiene 4 años y nos enseña cada día qué significa la palabra dignidad.",
       "No todas las historias terminan en finales perfectos según el manual del mundo. Pero todas las vidas merecen ser recibidas con amor. La nuestra es una prueba.",
     ],
@@ -70,7 +70,7 @@ export const stories: Story[] = [
     category: "Adopción",
     body: [
       "Después de cinco años de tratamientos, mi esposo y yo decidimos que era hora de mirar hacia otro lado. La adopción siempre estuvo en nuestra mente, pero nos asustaba el proceso.",
-      "IAM tiene un programa que conecta a madres en crisis con familias dispuestas a adoptar. Nos prepararon emocional, legal y espiritualmente durante meses.",
+      "IAM de la Vida tiene un programa que conecta a madres en crisis con familias dispuestas a adoptar. Nos prepararon emocional, legal y espiritualmente durante meses.",
       "Conocimos a Daniela cuando estaba embarazada de seis meses. Ella había decidido continuar con el embarazo y dar a su bebé en adopción. Nos eligió entre varias familias.",
       "El día que nació Lucía estuvimos en el hospital. Daniela nos la puso en los brazos y dijo: \"Cuídenla como yo no puedo, pero quiéranla por las dos.\"",
       "Hoy Lucía tiene 2 años. Daniela es parte de nuestra familia extendida: la vemos en cumpleaños y navidades. Eligió la vida dos veces: la de Lucía y la nuestra como familia.",
@@ -83,14 +83,14 @@ export const stories: Story[] = [
     place: "Bogotá, Colombia",
     headline: "Empecé a los 14 años. Hoy soy misionero a tiempo completo.",
     excerpt:
-      "Mi catequista me llevó a un retiro de IAM cuando tenía 14. No imaginé que esa decisión iba a definir el resto de mi vida.",
+      "Mi catequista me llevó a un retiro de IAM de la Vida cuando tenía 14. No imaginé que esa decisión iba a definir el resto de mi vida.",
     cover: "/images/img-43.webp",
     portrait: "/images/img-43.webp",
     date: "Septiembre 2025",
     readingTime: "5 min de lectura",
     category: "Voluntarios",
     body: [
-      "A los 14 yo era un chico común. Jugaba fútbol, peleaba con mis hermanas, me iba mal en matemática. Mi catequista insistió tanto que terminé yendo a un retiro de IAM solo para que dejara de molestarme.",
+      "A los 14 yo era un chico común. Jugaba fútbol, peleaba con mis hermanas, me iba mal en matemática. Mi catequista insistió tanto que terminé yendo a un retiro de IAM de la Vida solo para que dejara de molestarme.",
       "Lo que escuché ese fin de semana me cambió. No fue un sermón. Fueron historias reales: una madre adolescente que casi aborta, un médico que dejó su clínica porque no quería seguir interrumpiendo vidas, una pareja que recibió a un bebé con síndrome de Down.",
       "Volví a casa con preguntas. Y con ganas de ser parte. Empecé acompañando en jornadas escolares, hablando con compañeros sobre el valor de la vida desde mi propia experiencia.",
       "A los 18 entré a formación más profunda. Hoy, a los 23, coordino el área de jóvenes en Colombia. Estudio Psicología en paralelo porque entiendo que esta misión necesita herramientas concretas.",
