@@ -39,7 +39,7 @@ def _extract_bearer(authorization: str) -> str:
 
 
 async def get_current_user(
-    authorization: str = Header(...),
+    authorization: str = Header(default=""),
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> User:
     """Validate Neon Auth JWT and return the corresponding DB user.

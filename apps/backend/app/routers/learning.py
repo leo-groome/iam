@@ -324,7 +324,6 @@ async def get_topic(
             ContentBlockView(
                 id=block.id,
                 kind=block.kind,
-                media_key=block.media_key,
                 content_body=block.content_body,
                 duration_seconds=block.duration_seconds,
                 order_index=block.order_index,
@@ -348,7 +347,6 @@ async def get_topic(
         duration_seconds=topic.duration_seconds,
         has_exam=topic.has_exam,
         exam_min_score=topic.exam_min_score,
-        media_key=topic.media_key,
         state=real_state,
         progress=TopicProgressDetail(
             video_last_pos_seconds=tp.video_last_pos_seconds,

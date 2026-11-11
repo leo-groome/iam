@@ -226,7 +226,7 @@ async def test_sync_idempotent_update(client: AsyncClient) -> None:
 async def test_me_no_token(client: AsyncClient) -> None:
     """Missing Authorization header -> 422 (required Header) or 401."""
     resp = await client.get("/api/v1/auth/me")
-    assert resp.status_code in (401, 422), resp.text
+    assert resp.status_code == 401, resp.text
 
 
 @pytest.mark.asyncio
@@ -323,3 +323,20 @@ async def test_sync_cannot_set_role(client: AsyncClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["role"] == "estudiante"  # must NOT be 'admin'
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_returns_error_contract(client):
+    """IAM-010: el 429 usa {"error": {"code", "message"}}."""
+    last = None
+    for _ in range(8):
+        with patch("app.routers.auth.verify_stack_token", _mock_verify()):
+            last = await client.post(
+                "/api/v1/auth/sync",
+                json={"full_name": "Test User", "birth_date": _birth_date_age(20)},
+                headers=HEADERS,
+            )
+        if last.status_code == 429:
+            break
+    assert last is not None and last.status_code == 429
+    assert last.json()["error"]["code"] == "rate_limited"

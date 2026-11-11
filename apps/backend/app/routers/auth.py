@@ -44,7 +44,7 @@ def _calculate_age(birth_date: date) -> int:
 async def auth_sync(
     request: Request,
     body: SyncRequest,
-    authorization: str = Header(...),
+    authorization: str = Header(default=""),
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> User:
     """Create or update a user row from a validated Neon Auth JWT + birth_date.
