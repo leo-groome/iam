@@ -77,6 +77,7 @@ class ContentBlockProgress(Base, TimestampMixin):
     pdf_last_page: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     pdf_total_pages: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completed_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_heartbeat_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship("User")  # type: ignore[name-defined]  # noqa: F821
     block: Mapped["ContentBlock"] = relationship("ContentBlock")  # type: ignore[name-defined]  # noqa: F821

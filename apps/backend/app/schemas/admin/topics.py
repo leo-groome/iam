@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Literal
 
@@ -16,7 +17,7 @@ class TopicCreate(BaseModel):
     content_body: str | None = Field(None, max_length=20000)
     media_key: str | None = None
     duration_seconds: int | None = None
-    has_exam: bool = True
+    has_exam: bool = False
     exam_min_score: int = Field(70, ge=50, le=100)
     max_attempts: int = Field(3, ge=1, le=10)
     order_index: int | None = Field(None, ge=0)
@@ -66,6 +67,14 @@ _KIND_TO_SCOPE_PREFIX: dict[str, str] = {
 }
 
 
+_MEDIA_KEY_RE = re.compile(r"^(video|pdf|imagen|audio)/[A-Za-z0-9-]{1,64}/[A-Za-z0-9._-]{1,120}$")
+_TAG_RE = re.compile(r"<[^>]*>")
+
+
+def _plain_text(html: str) -> str:
+    return _TAG_RE.sub("", html).replace("&nbsp;", " ").strip()
+
+
 class ContentBlockIn(BaseModel):
     id: uuid.UUID | None = None
     kind: ContentType
@@ -77,13 +86,15 @@ class ContentBlockIn(BaseModel):
     @model_validator(mode="after")
     def _validate_kind_fields(self) -> ContentBlockIn:
         if self.kind == "texto":
-            if not self.content_body or not self.content_body.strip():
+            if not self.content_body or not _plain_text(self.content_body):
                 raise ValueError("content_body is required for kind='texto'")
             if self.media_key is not None:
                 raise ValueError("media_key must be None for kind='texto'")
         else:
             if not self.media_key:
                 raise ValueError("media_key is required for media content blocks")
+            if len(self.media_key) > 255 or ".." in self.media_key or not _MEDIA_KEY_RE.match(self.media_key):
+                raise ValueError("media_key has an invalid format")
             expected_prefix = _KIND_TO_SCOPE_PREFIX[self.kind]
             if not self.media_key.startswith(expected_prefix):
                 raise ValueError(

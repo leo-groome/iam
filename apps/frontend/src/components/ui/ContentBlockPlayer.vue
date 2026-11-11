@@ -50,6 +50,8 @@ const blockCompleted = ref(!!props.block.progress?.completed);
 const pdfContainerEl = ref<HTMLDivElement | null>(null);
 const pdfPageEls = ref<(HTMLCanvasElement | null)[]>([]);
 const pdfTotalPages = ref(props.block.progress?.pdf_total_pages || 0);
+// Última página que el SERVIDOR acreditó (la UI de completado se basa en esto, no en lo visto).
+const pdfCredited = ref(props.block.progress?.pdf_last_page || 0);
 const maxPageSeen = ref(props.block.progress?.pdf_last_page || 1);
 const pdfLoading = ref(false);
 let pdfDoc: PDFDocumentProxy | null = null;
@@ -85,19 +87,36 @@ function emitPdfProgress(): void {
   emit('progress', {
     blockId: props.block.id,
     kind: 'pdf',
-    pdfLastPage: maxPageSeen.value,
+    pdfLastPage: pdfCredited.value,
     pdfTotalPages: pdfTotalPages.value,
-    completed: pdfTotalPages.value > 0 && maxPageSeen.value >= pdfTotalPages.value,
+    completed: pdfTotalPages.value > 0 && pdfCredited.value >= pdfTotalPages.value,
   });
 }
 
-async function sendHeartbeat(body: Record<string, unknown>): Promise<void> {
+async function sendHeartbeat(body: Record<string, unknown>): Promise<any> {
   try {
-    await apiPost(`/api/v1/topics/${props.temaId}/heartbeat` as any, {
+    return await apiPost(`/api/v1/topics/${props.temaId}/heartbeat` as any, {
       body: { type: props.block.kind, block_id: props.block.id, ...body },
     });
   } catch (e) {
     console.error('Block heartbeat failed', e);
+  }
+}
+
+// El servidor acredita páginas según el tiempo real (≥2 s por página): si va por detrás de
+// lo visto, reenviamos la página máxima hasta que alcance (máx. 40 reintentos de 2.5 s).
+let pdfSyncTimer: ReturnType<typeof setTimeout> | undefined;
+async function syncPdfProgress(attempt = 0): Promise<void> {
+  clearTimeout(pdfSyncTimer);
+  const resp = await sendHeartbeat({ last_page: maxPageSeen.value });
+  const credited = Number(resp?.pdf_last_page ?? 0);
+  if (resp) {
+    pdfCredited.value = Math.max(pdfCredited.value, credited);
+    if (resp.pdf_total_pages) pdfTotalPages.value = Number(resp.pdf_total_pages);
+    emitPdfProgress();
+  }
+  if (resp && credited < maxPageSeen.value && attempt < 40) {
+    pdfSyncTimer = setTimeout(() => void syncPdfProgress(attempt + 1), 2500);
   }
 }
 
@@ -169,8 +188,7 @@ async function loadPdf(data: ArrayBuffer): Promise<void> {
     setupPdfObserver();
 
     // Initial heartbeat once total_pages is known.
-    await sendHeartbeat({ last_page: maxPageSeen.value, total_pages: pdfTotalPages.value });
-    emitPdfProgress();
+    await syncPdfProgress();
   } catch (err: any) {
     console.error('Error rendering PDF:', err);
     mediaError.value = 'No se pudo cargar el documento PDF.';
@@ -195,8 +213,7 @@ function setupPdfObserver(): void {
         }
       }
       if (advanced) {
-        void sendHeartbeat({ last_page: maxPageSeen.value, total_pages: pdfTotalPages.value });
-        emitPdfProgress();
+        void syncPdfProgress();
       }
     },
     { root: pdfContainerEl.value, threshold: 0.5 },
@@ -211,6 +228,7 @@ function setPdfCanvasRef(el: unknown, i: number): void {
 }
 
 function cleanupPdf(): void {
+  clearTimeout(pdfSyncTimer);
   if (pdfObserver) {
     pdfObserver.disconnect();
     pdfObserver = null;

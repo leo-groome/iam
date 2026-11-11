@@ -146,6 +146,7 @@ export const mediaService = {
         filename: file.name,
         content_type: file.type,
         scope,
+        size_bytes: fileToUpload.size,
       },
     })) as { put_url: string; key: string };
 
