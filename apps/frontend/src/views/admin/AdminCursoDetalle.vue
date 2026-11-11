@@ -2,6 +2,7 @@
 import { useRoute, useRouter } from 'vue-router';
 import { computed, onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
+import type { components } from '@/lib/types.gen';
 import { mediaService } from '@/services/media.service';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 
@@ -9,9 +10,11 @@ const route = useRoute();
 const router = useRouter();
 const id = route.params.id as string;
 const isNew = id === 'nuevo';
-const curso = ref<any>(null);
+const curso = ref<components['schemas']['CourseAdminResponse'] | null>(null);
 const loading = ref(false);
 const saving = ref(false);
+const saveError = ref('');
+const successMessage = ref('');
 
 const isUploadingCover = ref(false);
 const deleteConfirmOpen = ref(false);
@@ -33,7 +36,7 @@ function onTitleInput() {
       .toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9\s-]/g, '')
-      .trim().replace(/\s+/g, '-');
+      .trim().replace(/[\s-]+/g, '-').replace(/^-+|-+$/g, '');
   }
 }
 
@@ -66,25 +69,17 @@ onMounted(async () => {
 });
 
 const saveCourse = async () => {
-  saving.value = true;
-  try {
-    if (isNew) {
-      const newCourse = await adminService.createCourse(formData.value);
-      if (newCourse && newCourse.id) {
-        router.push(`/admin/cursos/${newCourse.id}`);
-        return;
-      }
-    } else {
-      await adminService.updateCourse(id, formData.value);
-    }
-    if (!isNew) {
-      router.push('/admin/cursos');
-    }
-  } catch (err) {
-    console.error('Error saving course:', err);
-  } finally {
-    saving.value = false;
+  const payload = { ...formData.value, title: formData.value.title.trim(), slug: formData.value.slug.trim() };
+  if (payload.title.length < 5 || payload.title.length > 80) throw new Error('El título debe tener entre 5 y 80 caracteres.');
+  if (isNew && (payload.slug.length < 2 || payload.slug.length > 120 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(payload.slug))) {
+    throw new Error('La URL debe tener entre 2 y 120 caracteres: minúsculas, números y guiones simples.');
   }
+  const text = new DOMParser().parseFromString(payload.short_desc, 'text/html').body.textContent?.trim();
+  if (!text || payload.short_desc.length < 10 || payload.short_desc.length > 500) {
+    throw new Error('Completa la descripción corta (10–500 caracteres, incluyendo formato).');
+  }
+  if (payload.long_desc.length > 20000) throw new Error('La descripción larga excede 20 000 caracteres.');
+  return isNew ? adminService.createCourse(payload) : adminService.updateCourse(id, payload);
 };
 
 const publishCourse = async () => {
@@ -203,6 +198,7 @@ const drawerOpen = ref(false);
 const drawerSaving = ref(false);
 
 const closeDrawer = () => {
+  if (drawerSaving.value || isUploadingCover.value) return;
   drawerOpen.value = false;
   // If we closed the course drawer while creating a new course, go back
   if (isNew) {
@@ -215,12 +211,22 @@ const openCourseDrawer = () => {
 };
 
 const saveDrawer = async () => {
+  if (drawerSaving.value || isUploadingCover.value) return;
   drawerSaving.value = true;
+  saveError.value = '';
+  successMessage.value = '';
   try {
-    await saveCourse();
-    closeDrawer();
-  } catch (err) {
-    console.error('Error saving course:', err);
+    const saved = await saveCourse();
+    if (!saved?.id) throw new Error('No se recibió confirmación del guardado. Verifica el listado antes de reintentar.');
+    if (isNew) {
+      await router.push(`/admin/cursos/${saved.id}`);
+    } else {
+      await loadCourse();
+      drawerOpen.value = false;
+      successMessage.value = 'Curso guardado.';
+    }
+  } catch (err: any) {
+    saveError.value = err.message || 'No se pudo guardar el curso. Tus datos siguen en el formulario.';
   } finally {
     drawerSaving.value = false;
   }
@@ -229,6 +235,7 @@ const saveDrawer = async () => {
 
 <template>
   <div class="page-container relative min-h-screen">
+  <p v-if="successMessage" role="status" class="mb-4 text-emerald-700">{{ successMessage }}</p>
 
   <div class="mb-4 text-sm text-[var(--color-text-muted)] flex items-center gap-2">
     <router-link to="/admin/cursos" class="hover:text-[var(--color-primary)] transition-colors">Cursos</router-link>
@@ -238,9 +245,9 @@ const saveDrawer = async () => {
   <header class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">{{ isNew ? "Crear nuevo curso" : `Configuración de Curso` }}</h1>
     <div class="flex gap-2">
-      <button v-if="!isNew" class="btn border border-gray-300 text-gray-600 hover:bg-gray-50" type="button" @click="archiveCourse" :disabled="saving">Archivar</button>
-      <button v-if="!isNew" class="btn border border-red-200 text-red-600 hover:bg-red-50" type="button" @click="deleteCourseAction" :disabled="saving">Eliminar</button>
-      <button class="btn btn-primary" type="button" @click="publishCourse" :disabled="isNew || saving">{{ saving ? "Publicando..." : "Publicar" }}</button>
+      <button v-if="!isNew" class="btn border border-gray-300 text-gray-600 hover:bg-gray-50" type="button" @click="archiveCourse" :disabled="saving || drawerSaving">Archivar</button>
+      <button v-if="!isNew" class="btn border border-red-200 text-red-600 hover:bg-red-50" type="button" @click="deleteCourseAction" :disabled="saving || drawerSaving">Eliminar</button>
+      <button class="btn btn-primary" type="button" @click="publishCourse" :disabled="isNew || saving || drawerSaving">{{ saving ? "Publicando..." : "Publicar" }}</button>
     </div>
   </header>
 
@@ -280,7 +287,7 @@ const saveDrawer = async () => {
             v-model="deleteConfirmText"
             class="input"
             autocomplete="off"
-            :disabled="saving"
+            :disabled="saving || drawerSaving"
             :placeholder="requiredDeleteTitle"
           />
         </div>
@@ -288,7 +295,7 @@ const saveDrawer = async () => {
         <p v-if="deleteError" class="mt-3 text-sm text-red-600">{{ deleteError }}</p>
 
         <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button type="button" class="btn btn-secondary" :disabled="saving" @click="closeDeleteConfirm">
+          <button type="button" class="btn btn-secondary" :disabled="saving || drawerSaving" @click="closeDeleteConfirm">
             Cancelar
           </button>
           <button
@@ -306,8 +313,8 @@ const saveDrawer = async () => {
   <div v-if="!isNew && curso" class="card p-6 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between mb-8 shadow-sm">
     <div class="flex items-center gap-4">
       <div class="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0 border border-gray-300 flex items-center justify-center relative">
-        <img v-if="formData.cover_url || formData.cover_key || curso?.cover_url || curso?.cover_key" 
-             :src="formData.cover_url || formData.cover_key || curso?.cover_url || curso?.cover_key" 
+        <img v-if="formData.cover_url || formData.cover_key || curso?.cover_key"
+             :src="formData.cover_url || formData.cover_key || curso?.cover_key"
              class="absolute inset-0 w-full h-full object-cover" 
              alt="Portada del curso" />
         <svg v-else class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -394,7 +401,7 @@ const saveDrawer = async () => {
       <!-- Drawer Header -->
       <div class="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-app-bg)]">
         <h3 class="text-lg font-bold">{{ isNew ? 'Crear Nuevo Curso' : 'Ajustes del Curso' }}</h3>
-        <button type="button" @click="closeDrawer" class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+        <button type="button" :disabled="drawerSaving || isUploadingCover" aria-label="Cerrar ajustes" @click="closeDrawer" class="text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
       </div>
@@ -410,7 +417,7 @@ const saveDrawer = async () => {
           </div>
           <div>
             <label class="label">Slug (URL)</label>
-            <input class="input" minlength="2" maxlength="120" v-model="formData.slug" placeholder="ej. comunicacion-empatica" pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$" />
+            <input class="input" minlength="2" maxlength="120" v-model="formData.slug" :readonly="!isNew" placeholder="ej. comunicacion-empatica" pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$" />
             <p class="help">Solo minúsculas, números y guiones. Se auto-genera.</p>
           </div>
           <div>
@@ -444,29 +451,18 @@ const saveDrawer = async () => {
               </div>
             </div>
           </div>
-          <div class="pt-4 border-t border-[var(--color-border)]">
-            <h4 class="font-semibold mb-3">Configuración de Publicación</h4>
-            <div class="space-y-3 text-sm">
-              <label class="flex items-center justify-between">
-                <span>Estado</span>
-                <select class="input py-1 text-sm w-32 bg-[var(--color-surface)]">
-                  <option value="borrador">Borrador</option>
-                  <option value="publicado" selected>Publicado</option>
-                </select>
-              </label>
-              <label class="flex items-center justify-between">
-                <span>Genera certificado</span>
-                <input type="checkbox" checked />
-              </label>
-            </div>
+          <div class="pt-4 border-t border-[var(--color-border)] text-sm">
+            <p>Estado: {{ isNew ? 'Borrador' : curso?.status }}</p>
+            <p class="help">Guarda el curso y utiliza Publicar cuando esté listo. El certificado requiere completar sus evaluaciones.</p>
           </div>
 
       </div>
 
+      <p v-if="saveError" role="alert" class="px-6 py-3 text-sm text-red-700 bg-red-50">{{ saveError }}</p>
       <!-- Drawer Footer -->
       <div class="p-4 border-t border-[var(--color-border)] bg-[var(--color-app-bg)] flex justify-end gap-3">
         <button type="button" @click="closeDrawer" class="btn btn-secondary">Cancelar</button>
-        <button type="button" @click="saveDrawer" :disabled="drawerSaving" class="btn btn-primary min-w-24">
+        <button type="button" @click="saveDrawer" :disabled="drawerSaving || isUploadingCover" class="btn btn-primary min-w-24">
           {{ drawerSaving ? 'Guardando...' : 'Guardar' }}
         </button>
       </div>

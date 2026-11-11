@@ -275,6 +275,7 @@ async def create_question(
         option = Option(
             question_id=question.id,
             texto=str(opt["texto"]),
+            feedback=str(opt.get("feedback", "")),
             is_correct=bool(opt["is_correct"]),
             order_index=int(opt.get("order_index", idx)),  # type: ignore[call-overload]
         )

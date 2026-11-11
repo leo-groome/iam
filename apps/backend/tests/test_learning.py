@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+
+from app.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 TEST_DB_URL = "sqlite+aiosqlite:///./test_learning.db"
@@ -60,6 +62,8 @@ async def db_session(engine) -> AsyncGenerator[AsyncSession, None]:
 async def client(engine) -> AsyncGenerator[AsyncClient, None]:
     import app.db as _db_module
     from app.main import app
+    from app.routers.learning import limiter
+    limiter._storage.reset()
 
     factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -1049,3 +1053,118 @@ async def test_second_module_topic_locked_without_module_exam(
 
     assert resp.status_code == 403
     assert resp.json()["detail"]["code"] == "topic_locked"
+
+
+async def _ready_ticket_exam(db, scaffold, scope, limit):
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.models.progress import TopicProgress
+    from app.models.question import Question
+
+    target = scaffold["t2"] if scope == "topic" else scaffold["mod1"]
+    target.max_attempts = limit
+    topics = [scaffold["t2"]] if scope == "topic" else [scaffold["t1"], scaffold["t2"]]
+    for topic in topics:
+        db.add(TopicProgress(user_id=scaffold["user"].id, topic_id=topic.id,
+                             state="contenido_visto" if scope == "topic" else "aprobado",
+                             content_completed_at=datetime.now(UTC)))
+    column = Question.topic_id if scope == "topic" else Question.module_id
+    question = await db.scalar(select(Question).where(column == target.id).options(selectinload(Question.options)))
+    for option in question.options:
+        option.feedback = "Explicación correcta" if option.is_correct else "Explicación incorrecta"
+    await db.commit()
+    return target, question
+
+
+def _ticket_answers(exam, correct=False):
+    return [{"question_id": q["id"], "option_id": next(o["id"] for o in q["options"]
+             if o["texto"] == ("Correct" if correct else "Wrong"))} for q in exam["questions"]]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", ["topic", "module"])
+async def test_one_attempt_limit_blocks_start_and_preissued_delivery_and_keeps_feedback(
+    client, scaffold, db_session, scope,
+):
+    from sqlalchemy import select, func
+    from app.models.progress import ExamAttempt
+
+    target, question = await _ready_ticket_exam(db_session, scaffold, scope, 1)
+    endpoint = f"/api/v1/{scope}s/{target.id}/exam"
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        first = await client.get(endpoint, headers=HEADERS)
+        preissued = await client.get(endpoint, headers=HEADERS)
+        assert first.status_code == 200, first.text
+        assert first.json()["attempts_remaining"] == 1
+        # No correctness or explanation is exposed before delivery.
+        for q in first.json()["questions"]:
+            for option in q["options"]:
+                assert "feedback" not in option and "is_correct" not in option
+        result = await client.post(endpoint + "/submit", headers=HEADERS, json={
+            "exam_token": first.json()["exam_token"], "answers": _ticket_answers(first.json()),
+        })
+        start_again = await client.get(endpoint, headers=HEADERS)
+        stale_delivery = await client.post(endpoint + "/submit", headers=HEADERS, json={
+            "exam_token": preissued.json()["exam_token"], "answers": _ticket_answers(preissued.json(), True),
+        })
+    assert result.status_code == 200, result.text
+    assert result.json()["score"] == 0
+    assert result.json()["attempts_remaining"] == 0
+    assert result.json()["feedback"][0]["feedback"] == "Explicación incorrecta"
+    assert result.json()["feedback"][0]["is_correct"] is False
+    for response in (start_again, stale_delivery):
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"]["code"] == "attempt_limit_reached"
+    column = ExamAttempt.topic_id if scope == "topic" else ExamAttempt.module_id
+    assert await db_session.scalar(select(func.count()).select_from(ExamAttempt).where(column == target.id)) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", ["topic", "module"])
+async def test_two_attempts_allow_second_and_return_selected_correct_feedback(client, scaffold, db_session, scope):
+    target, _ = await _ready_ticket_exam(db_session, scaffold, scope, 2)
+    endpoint = f"/api/v1/{scope}s/{target.id}/exam"
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        first = await client.get(endpoint, headers=HEADERS)
+        failed = await client.post(endpoint + "/submit", headers=HEADERS, json={
+            "exam_token": first.json()["exam_token"], "answers": _ticket_answers(first.json()),
+        })
+        assert failed.status_code == 200, failed.text
+        if scope == "topic":
+            await client.post(f"/api/v1/topics/{target.id}/mark-content-done", headers=HEADERS)
+        second = await client.get(endpoint, headers=HEADERS)
+        assert second.status_code == 200, second.text
+        assert second.json()["attempts_remaining"] == 1
+        passed = await client.post(endpoint + "/submit", headers=HEADERS, json={
+            "exam_token": second.json()["exam_token"], "answers": _ticket_answers(second.json(), True),
+        })
+        third = await client.get(endpoint, headers=HEADERS)
+    assert passed.status_code == 200, passed.text
+    assert passed.json()["passed"] is True
+    assert passed.json()["feedback"][0]["feedback"] == "Explicación correcta"
+    assert passed.json()["attempts_remaining"] == 0
+    assert third.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_reducing_limit_counts_existing_history_and_does_not_delete_it(client, scaffold, db_session):
+    from sqlalchemy import select
+    from app.models.progress import ExamAttempt
+
+    target, question = await _ready_ticket_exam(db_session, scaffold, "topic", 3)
+    old = ExamAttempt(created_at=datetime.now(UTC), user_id=scaffold["user"].id, topic_id=target.id, score=50, passed=False,
+                      min_score_snapshot=70, answers={str(question.id): str(question.options[0].id)})
+    db_session.add(old)
+    await db_session.commit()
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        before = await client.get(f"/api/v1/topics/{target.id}/exam", headers=HEADERS)
+    assert before.json()["attempts_remaining"] == 2
+    target.max_attempts = 1
+    await db_session.commit()
+    with patch("app.deps.verify_stack_token", _mock_verify()):
+        after = await client.get(f"/api/v1/topics/{target.id}/exam", headers=HEADERS)
+    assert after.status_code == 403
+    preserved = await db_session.scalar(select(ExamAttempt).where(ExamAttempt.id == old.id))
+    assert preserved.score == 50 and preserved.answers == old.answers
+
+

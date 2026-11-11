@@ -1,0 +1,95 @@
+name: iam
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-backend: &backend
+  image: iam-backend:${RELEASE_TAG:-local}
+  build:
+    context: ../../apps/backend
+  env_file:
+    - ${BACKEND_ENV_FILE:-./backend.env}
+  environment:
+    ALLOW_MOCK_AUTH: "false"
+  logging: *logging
+
+services:
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  backend:
+    <<: *backend
+    # Migrations run once via the migrate service, before API startup.
+    # Caddy es el único proxy: confiar en X-Forwarded-For solo si viene de la subred interna
+    # (IAM-006). Sin esto el rate limit por IP agrupa a todos los alumnos en la IP de Caddy.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    image: iam-frontend:${RELEASE_TAG:-local}
+    build:
+      context: ../../apps/frontend
+      args:
+        PUBLIC_API_URL: https://${CAMPUS_DOMAIN:?Set CAMPUS_DOMAIN}
+        VITE_NEON_AUTH_URL: ${NEON_AUTH_URL:?Set public NEON_AUTH_URL}
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  landing:
+    image: iam-landing:${RELEASE_TAG:-local}
+    build:
+      context: ../../apps/landing
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CAMPUS_DOMAIN: ${CAMPUS_DOMAIN:?Set CAMPUS_DOMAIN}
+      LANDING_DOMAIN: ${LANDING_DOMAIN:?Set LANDING_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+      landing:
+        condition: service_healthy
+    logging: *logging
+
+
+volumes:
+  caddy_data:
+  caddy_config:

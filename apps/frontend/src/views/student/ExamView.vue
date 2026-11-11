@@ -5,21 +5,25 @@ import ExamRunner from '@/components/ui/ExamRunner.vue';
 import SkeletonCard from '@/components/ui/SkeletonCard.vue';
 import SkeletonText from '@/components/ui/SkeletonText.vue';
 import { coursesService } from '@/services/courses.service';
+import type { CourseDetail } from '@/lib/api';
 
 const route = useRoute();
 const router = useRouter();
 
 const slug = route.params.slug as string;
-const topicId = route.params.topicId as string;
+const topicId = route.params.topicId as string | undefined;
+const moduleId = route.params.moduleId as string | undefined;
 
-const curso = ref(null);
-const tema = ref(null);
+const curso = ref<CourseDetail | null>(null);
+const tema = ref<any>(null);
 const loading = ref(true);
 
 onMounted(async () => {
   try {
     curso.value = await coursesService.getBySlug(slug);
-    tema.value = curso.value?.modules.flatMap(m => m.topics).find(t => t.id === topicId);
+    tema.value = moduleId
+      ? curso.value?.modules.find((m: any) => m.id === moduleId)
+      : curso.value?.modules.flatMap((m: any) => m.topics).find((t: any) => t.id === topicId);
     if (!tema.value) {
       router.replace(`/curso/${slug}`);
     }
@@ -38,6 +42,9 @@ const allTemas = computed(() => {
 const idx = computed(() => allTemas.value.findIndex(t => t.id === topicId));
 const nextTema = computed(() => allTemas.value[idx.value + 1]);
 const nextUrl = computed(() => {
+  if (moduleId) return `/curso/${slug}`;
+  const module = curso.value?.modules.find((m: any) => m.topics.some((t: any) => t.id === topicId));
+  if (module?.has_exam && !module.exam_passed && module.topics.at(-1)?.id === topicId) return `/curso/${slug}/modulo/${module.id}/examen`;
   return nextTema.value ? `/curso/${slug}/tema/${nextTema.value.id}` : `/curso/${slug}/certificado`;
 });
 </script>
@@ -54,7 +61,8 @@ const nextUrl = computed(() => {
         <p class="text-sm text-[var(--color-primary)] font-medium">Cuestionario</p>
         <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mb-6">{{ tema.title }}</h1>
 
-        <ExamRunner :topicId="topicId" :cursoSlug="slug" :nextUrl="nextUrl" />
+        <ExamRunner :topicId="topicId"
+          :moduleId="moduleId" :cursoSlug="slug" :nextUrl="nextUrl" />
 
         <div class="h-32"></div>
       </div>

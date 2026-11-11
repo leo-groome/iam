@@ -5,6 +5,7 @@ import LearningPlayer from '@/components/ui/LearningPlayer.vue';
 import SkeletonCard from '@/components/ui/SkeletonCard.vue';
 import SkeletonText from '@/components/ui/SkeletonText.vue';
 import { coursesService } from '@/services/courses.service';
+import type { CourseDetail } from '@/lib/api';
 import { useProgressStore } from '@/stores/progress';
 
 const route = useRoute();
@@ -15,10 +16,11 @@ const slug = route.params.slug as string;
 const topicId = computed(() => route.params.topicId as string);
 const isRepaso = route.query.repaso === '1';
 
-const curso = ref(null);
-const allTemas = ref([]);
+const curso = ref<CourseDetail | null>(null);
+type LessonSummary = CourseDetail['modules'][number]['topics'][number] & { moduloTitle: string };
+const allTemas = ref<LessonSummary[]>([]);
 const loading = ref(true);
-const temaCargado = ref(null);
+const temaCargado = ref<any>(null);
 const loadingTema = ref(false);
 
 async function fetchTemaDetalle(id: string) {
@@ -80,7 +82,11 @@ const tema = computed(() => {
 
 const nextTema = computed(() => allTemas.value[idx.value + 1]);
 const examUrl = computed(() => `/curso/${slug}/tema/${topicId.value}/examen`);
-const nextUrl = computed(() => nextTema.value ? `/curso/${slug}/tema/${nextTema.value.id}` : `/curso/${slug}/certificado`);
+const nextUrl = computed(() => {
+  const module = curso.value?.modules.find((m: any) => m.topics.some((t: any) => t.id === topicId.value));
+  if (module?.has_exam && !module.exam_passed && module.topics.at(-1)?.id === topicId.value) return `/curso/${slug}/modulo/${module.id}/examen`;
+  return nextTema.value ? `/curso/${slug}/tema/${nextTema.value.id}` : `/curso/${slug}/certificado`;
+});
 
 // Called by LearningPlayer after mark-content-done succeeds.
 // Estimates new course_pct from allTemas (server-confirmed, no rollback needed).

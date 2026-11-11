@@ -51,6 +51,7 @@ class Option(Base):
         UUID(as_uuid=True), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False
     )
     texto: Mapped[str] = mapped_column(Text, nullable=False)
+    feedback: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 

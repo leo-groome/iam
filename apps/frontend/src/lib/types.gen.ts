@@ -15,7 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Auth Sync
-         * @description Create or update a user row from a validated Stack Auth JWT + birth_date.
+         * @description Create or update a user row from a validated Neon Auth JWT + birth_date.
          *
          *     Steps:
          *     1. Validate JWT -> extract sub, email, name.
@@ -61,7 +61,7 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description Stateless logout — Stack Auth manages the session client-side.
+         * @description Stateless logout — Neon Auth manages the session client-side.
          */
         post: operations["logout_api_v1_auth_me_logout_post"];
         delete?: never;
@@ -257,6 +257,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/diagnostic/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Active Diagnostic
+         * @description Return the active general diagnostic, or `active=null` when none exists.
+         *
+         *     Placeholder until the admin-authored diagnostic model lands. The contract
+         *     (`{"active": <diagnostic | null>}`) is stable so the frontend redirect logic
+         *     does not change when the real diagnostic is wired in.
+         */
+        get: operations["get_active_diagnostic_api_v1_diagnostic_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -438,7 +462,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Topic Detail */
+        get: operations["get_topic_detail_api_v1_admin_topics__topic_id__get"];
         put?: never;
         post?: never;
         /**
@@ -450,6 +475,23 @@ export interface paths {
         head?: never;
         /** Patch Topic */
         patch: operations["patch_topic_api_v1_admin_topics__topic_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/admin/topics/{topic_id}/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace Topic Blocks Endpoint */
+        put: operations["replace_topic_blocks_endpoint_api_v1_admin_topics__topic_id__blocks_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/admin/topics/reorder": {
@@ -486,7 +528,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/modules/{module_id}/questions": {
+    "/api/v1/admin/topics/{topic_id}/questions/bulk": {
         parameters: {
             query?: never;
             header?: never;
@@ -494,6 +536,24 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /** Replace Questions For Topic */
+        post: operations["replace_questions_for_topic_api_v1_admin_topics__topic_id__questions_bulk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/modules/{module_id}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Module Questions */
+        get: operations["list_module_questions_api_v1_admin_modules__module_id__questions_get"];
         put?: never;
         /** Create Question For Module */
         post: operations["create_question_for_module_api_v1_admin_modules__module_id__questions_post"];
@@ -510,7 +570,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Question Detail */
+        get: operations["get_question_detail_api_v1_admin_questions__question_id__get"];
         put?: never;
         post?: never;
         /**
@@ -712,7 +773,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Issue a short-lived JWT to stream a topic's media via the CF Worker */
+        /** Issue a short-lived JWT to stream a content block's media via the CF Worker */
         post: operations["get_play_token_api_v1_media_play_token_post"];
         delete?: never;
         options?: never;
@@ -758,6 +819,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnswerFeedback */
+        AnswerFeedback: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /**
+             * Option Id
+             * Format: uuid
+             */
+            option_id: string;
+            /** Enunciado */
+            enunciado: string;
+            /** Texto */
+            texto: string;
+            /** Is Correct */
+            is_correct: boolean;
+            /** Feedback */
+            feedback: string;
+        };
         /** AnswerItem */
         AnswerItem: {
             /**
@@ -786,6 +868,72 @@ export interface components {
             issued_at: string;
             /** Verify Url */
             verify_url: string;
+        };
+        /** ContentBlockIn */
+        ContentBlockIn: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "video" | "pdf" | "imagen" | "texto" | "audio";
+            /** Media Key */
+            media_key?: string | null;
+            /** Content Body */
+            content_body?: string | null;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /** Order Index */
+            order_index: number;
+        };
+        /** ContentBlockOut */
+        ContentBlockOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Media Key */
+            media_key: string | null;
+            /** Content Body */
+            content_body: string | null;
+            /** Duration Seconds */
+            duration_seconds: number | null;
+            /** Order Index */
+            order_index: number;
+        };
+        /** ContentBlockProgressView */
+        ContentBlockProgressView: {
+            /** Video Last Pos Seconds */
+            video_last_pos_seconds: number;
+            /** Video Max Seen Pct */
+            video_max_seen_pct: number;
+            /** Pdf Last Page */
+            pdf_last_page: number;
+            /** Pdf Total Pages */
+            pdf_total_pages: number | null;
+            /** Completed */
+            completed: boolean;
+        };
+        /** ContentBlockView */
+        ContentBlockView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Media Key */
+            media_key: string | null;
+            /** Content Body */
+            content_body: string | null;
+            /** Duration Seconds */
+            duration_seconds: number | null;
+            /** Order Index */
+            order_index: number;
+            progress: components["schemas"]["ContentBlockProgressView"];
         };
         /** CourseAdminListItem */
         CourseAdminListItem: {
@@ -863,6 +1011,11 @@ export interface components {
             order_index: number;
             /** Status */
             status: string;
+            /**
+             * Progress Pct
+             * @default 0
+             */
+            progress_pct: number;
         };
         /** CourseCardListResponse */
         CourseCardListResponse: {
@@ -896,16 +1049,10 @@ export interface components {
             long_desc: string;
             /** Cover Key */
             cover_key?: string | null;
-            /**
-             * Age Min
-             * @default 13
-             */
-            age_min: number;
-            /**
-             * Age Max
-             * @default 99
-             */
-            age_max: number;
+            /** Age Min */
+            age_min?: number | null;
+            /** Age Max */
+            age_max?: number | null;
             /** Slug */
             slug: string;
             /**
@@ -993,6 +1140,29 @@ export interface components {
             /** Completions Per Course */
             completions_per_course: components["schemas"]["CourseCompletions"][];
         };
+        /**
+         * DiagnosticActiveOut
+         * @description Response for GET /diagnostic/active.
+         *
+         *     `active` is null when no general diagnostic has been configured from the
+         *     admin panel — the client then skips straight to the catalog.
+         */
+        DiagnosticActiveOut: {
+            active?: components["schemas"]["DiagnosticSummary"] | null;
+        };
+        /**
+         * DiagnosticSummary
+         * @description Minimal identity of an active general diagnostic.
+         */
+        DiagnosticSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
         /** EnrollResponse */
         EnrollResponse: {
             /**
@@ -1034,6 +1204,14 @@ export interface components {
             completed_at: string | null;
             /** Progress Cached */
             progress_cached: number;
+            /** Progress Percentage */
+            progress_percentage: number;
+            /** Status */
+            status: string;
+            /** Course Title */
+            course_title?: string | null;
+            /** Course Slug */
+            course_slug?: string | null;
         };
         /** ExamAttemptSummary */
         ExamAttemptSummary: {
@@ -1046,6 +1224,10 @@ export interface components {
             topic_id: string | null;
             /** Module Id */
             module_id: string | null;
+            /** Topic Title */
+            topic_title?: string | null;
+            /** Module Title */
+            module_title?: string | null;
             /** Score */
             score: number;
             /** Passed */
@@ -1066,6 +1248,11 @@ export interface components {
             questions: components["schemas"]["QuestionOut"][];
             /** Min Score */
             min_score: number;
+            /**
+             * Attempts Remaining
+             * @default 3
+             */
+            attempts_remaining: number;
         };
         /** ExamResult */
         ExamResult: {
@@ -1077,6 +1264,13 @@ export interface components {
             min_score: number;
             /** Message */
             message: string;
+            /**
+             * Attempts Remaining
+             * @default 0
+             */
+            attempts_remaining: number;
+            /** Feedback */
+            feedback?: components["schemas"]["AnswerFeedback"][];
         };
         /** ExamSubmitRequest */
         ExamSubmitRequest: {
@@ -1094,8 +1288,12 @@ export interface components {
         HeartbeatRequest: {
             /** Type */
             type: string;
+            /** Block Id */
+            block_id?: string | null;
             /** Pos Seconds */
             pos_seconds?: number | null;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
             /** Max Seen Pct */
             max_seen_pct?: number | null;
             /** Last Page */
@@ -1136,6 +1334,10 @@ export interface components {
             order_index: number;
             /** Archived At */
             archived_at?: string | null;
+            /** Description */
+            description: string;
+            /** Max Attempts */
+            max_attempts: number;
             /**
              * Topics
              * @default []
@@ -1151,6 +1353,11 @@ export interface components {
              * @default
              */
             description: string;
+            /**
+             * Max Attempts
+             * @default 3
+             */
+            max_attempts: number;
             /** Order Index */
             order_index?: number | null;
         };
@@ -1167,6 +1374,16 @@ export interface components {
             order_index: number;
             /** Topics */
             topics: components["schemas"]["ModuleTopicItem"][];
+            /**
+             * Has Exam
+             * @default false
+             */
+            has_exam: boolean;
+            /**
+             * Exam Passed
+             * @default false
+             */
+            exam_passed: boolean;
         };
         /** ModuleProgressItem */
         ModuleProgressItem: {
@@ -1196,6 +1413,8 @@ export interface components {
             title: string;
             /** Description */
             description: string;
+            /** Max Attempts */
+            max_attempts: number;
             /** Order Index */
             order_index: number;
             /** Archived At */
@@ -1218,6 +1437,13 @@ export interface components {
             has_exam: boolean;
             /** Order Index */
             order_index: number;
+            /** Media Key */
+            media_key?: string | null;
+            /**
+             * State
+             * @default bloqueado
+             */
+            state: string;
         };
         /** ModuleUpdate */
         ModuleUpdate: {
@@ -1225,13 +1451,60 @@ export interface components {
             title?: string | null;
             /** Description */
             description?: string | null;
+            /** Max Attempts */
+            max_attempts?: number | null;
             /** Order Index */
             order_index?: number | null;
+        };
+        /**
+         * OnboardingIn
+         * @description Demographic onboarding answers, bundled into POST /auth/sync.
+         *
+         *     `nombre` is intentionally absent — it duplicates `full_name` and is only used
+         *     to pre-fill the signup form on the client, never persisted here. Enums are
+         *     enforced with `Literal` (422 on unknown values) and mirrored by DB CHECKs.
+         */
+        OnboardingIn: {
+            /**
+             * Edad
+             * @enum {string}
+             */
+            edad: "<18" | "18-25" | "26-35" | "36-50" | ">50";
+            /**
+             * Sexo
+             * @enum {string}
+             */
+            sexo: "Hombre" | "Mujer";
+            /** Diocesis */
+            diocesis: string;
+            /** Ciudad */
+            ciudad: string;
+            /** Parroquia */
+            parroquia: string;
+            /**
+             * Entorno
+             * @enum {string}
+             */
+            entorno: "Rural" | "Urbana";
+            /**
+             * Pastoral
+             * @enum {string}
+             */
+            pastoral: "IAM" | "Catequesis" | "Juvenil" | "Familiar" | "Otra";
+            /** Extra */
+            extra?: {
+                [key: string]: unknown;
+            };
         };
         /** OptionCreate */
         OptionCreate: {
             /** Texto */
             texto: string;
+            /**
+             * Feedback
+             * @default
+             */
+            feedback: string;
             /**
              * Is Correct
              * @default false
@@ -1242,6 +1515,28 @@ export interface components {
              * @default 0
              */
             order_index: number;
+        };
+        /** OptionEdit */
+        OptionEdit: {
+            /** Texto */
+            texto: string;
+            /**
+             * Feedback
+             * @default
+             */
+            feedback: string;
+            /**
+             * Is Correct
+             * @default false
+             */
+            is_correct: boolean;
+            /**
+             * Order Index
+             * @default 0
+             */
+            order_index: number;
+            /** Id */
+            id?: string | null;
         };
         /** OptionOut */
         OptionOut: {
@@ -1267,6 +1562,8 @@ export interface components {
             question_id: string;
             /** Texto */
             texto: string;
+            /** Feedback */
+            feedback: string;
             /** Is Correct */
             is_correct: boolean;
             /** Order Index */
@@ -1276,6 +1573,8 @@ export interface components {
         OptionUpdate: {
             /** Texto */
             texto?: string | null;
+            /** Feedback */
+            feedback?: string | null;
             /** Is Correct */
             is_correct?: boolean | null;
             /** Order Index */
@@ -1284,10 +1583,10 @@ export interface components {
         /** PlayTokenRequest */
         PlayTokenRequest: {
             /**
-             * Topic Id
+             * Block Id
              * Format: uuid
              */
-            topic_id: string;
+            block_id: string;
         };
         /** PlayTokenResponse */
         PlayTokenResponse: {
@@ -1304,6 +1603,11 @@ export interface components {
             enunciado: string;
             /** Options */
             options: components["schemas"]["OptionCreate"][];
+            /**
+             * Order Index
+             * @default 0
+             */
+            order_index: number;
         };
         /** QuestionOut */
         QuestionOut: {
@@ -1330,6 +1634,8 @@ export interface components {
             module_id: string | null;
             /** Enunciado */
             enunciado: string;
+            /** Order Index */
+            order_index: number;
             /** Archived At */
             archived_at?: string | null;
             /**
@@ -1342,6 +1648,8 @@ export interface components {
         QuestionUpdate: {
             /** Enunciado */
             enunciado?: string | null;
+            /** Options */
+            options?: components["schemas"]["OptionEdit"][] | null;
         };
         /** ReorderBody */
         ReorderBody: {
@@ -1440,6 +1748,7 @@ export interface components {
              * Format: date
              */
             birth_date: string;
+            onboarding?: components["schemas"]["OnboardingIn"] | null;
         };
         /** TopicAdminItem */
         TopicAdminItem: {
@@ -1452,10 +1761,14 @@ export interface components {
             title: string;
             /** Content Type */
             content_type: string;
+            /** Duration Seconds */
+            duration_seconds: number | null;
             /** Has Exam */
             has_exam: boolean;
             /** Exam Min Score */
             exam_min_score: number;
+            /** Max Attempts */
+            max_attempts: number;
             /** Order Index */
             order_index: number;
             /** Archived At */
@@ -1486,6 +1799,11 @@ export interface components {
              * @default 70
              */
             exam_min_score: number;
+            /**
+             * Max Attempts
+             * @default 3
+             */
+            max_attempts: number;
             /** Order Index */
             order_index?: number | null;
         };
@@ -1550,6 +1868,8 @@ export interface components {
             has_exam: boolean;
             /** Exam Min Score */
             exam_min_score: number;
+            /** Max Attempts */
+            max_attempts: number;
             /** Order Index */
             order_index: number;
             /** Archived At */
@@ -1581,6 +1901,8 @@ export interface components {
             has_exam?: boolean | null;
             /** Exam Min Score */
             exam_min_score?: number | null;
+            /** Max Attempts */
+            max_attempts?: number | null;
             /** Order Index */
             order_index?: number | null;
         };
@@ -1603,9 +1925,59 @@ export interface components {
             has_exam: boolean;
             /** Exam Min Score */
             exam_min_score: number;
+            /** Media Key */
+            media_key: string | null;
             /** State */
             state: string;
             progress: components["schemas"]["TopicProgressDetail"];
+            /**
+             * Blocks
+             * @default []
+             */
+            blocks: components["schemas"]["ContentBlockView"][];
+        };
+        /** TopicWithQuestionsResponse */
+        TopicWithQuestionsResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Module Id
+             * Format: uuid
+             */
+            module_id: string;
+            /** Title */
+            title: string;
+            /** Content Type */
+            content_type: string;
+            /** Content Body */
+            content_body: string | null;
+            /** Media Key */
+            media_key: string | null;
+            /** Duration Seconds */
+            duration_seconds: number | null;
+            /** Has Exam */
+            has_exam: boolean;
+            /** Exam Min Score */
+            exam_min_score: number;
+            /** Max Attempts */
+            max_attempts: number;
+            /** Order Index */
+            order_index: number;
+            /** Archived At */
+            archived_at?: string | null;
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["QuestionResponse"][];
+            /**
+             * Blocks
+             * @default []
+             */
+            blocks: components["schemas"]["ContentBlockOut"][];
         };
         /** UploadUrlRequest */
         UploadUrlRequest: {
@@ -2152,6 +2524,37 @@ export interface operations {
             };
         };
     };
+    get_active_diagnostic_api_v1_diagnostic_active_get: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagnosticActiveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     me_alias_api_v1_me_get: {
         parameters: {
             query?: never;
@@ -2313,7 +2716,9 @@ export interface operations {
     };
     delete_course_api_v1_admin_courses__course_id__delete: {
         parameters: {
-            query?: never;
+            query: {
+                confirmation_title: string;
+            };
             header: {
                 authorization: string;
             };
@@ -2622,6 +3027,39 @@ export interface operations {
             };
         };
     };
+    get_topic_detail_api_v1_admin_topics__topic_id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicWithQuestionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_topic_api_v1_admin_topics__topic_id__delete: {
         parameters: {
             query?: never;
@@ -2677,6 +3115,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TopicResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_topic_blocks_endpoint_api_v1_admin_topics__topic_id__blocks_put: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContentBlockIn"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicWithQuestionsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2762,6 +3237,76 @@ export interface operations {
             };
         };
     };
+    replace_questions_for_topic_api_v1_admin_topics__topic_id__questions_bulk_post: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path: {
+                topic_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionCreate"][];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_module_questions_api_v1_admin_modules__module_id__questions_get: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path: {
+                module_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_question_for_module_api_v1_admin_modules__module_id__questions_post: {
         parameters: {
             query?: never;
@@ -2781,6 +3326,39 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_question_detail_api_v1_admin_questions__question_id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                authorization: string;
+            };
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

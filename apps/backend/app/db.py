@@ -6,7 +6,7 @@ from app.config import settings
 
 engine = create_async_engine(
     settings.database_url,
-    connect_args={"ssl": "require"},
+    connect_args={"ssl": settings.db_ssl} if settings.db_ssl != "disable" else {},
     pool_pre_ping=True,
     pool_recycle=300,
     pool_size=5,

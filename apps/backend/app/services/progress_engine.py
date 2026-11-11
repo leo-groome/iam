@@ -49,7 +49,7 @@ async def _module_exam_passed(
             ExamAttempt.user_id == user_id,
             ExamAttempt.module_id == module_id,
             ExamAttempt.passed.is_(True),
-        )
+        ).limit(1)
     )
     return result.scalar_one_or_none() is not None
 
@@ -185,9 +185,7 @@ async def recompute_course_progress(
             total += 1
             tp = await _get_topic_progress(db, user.id, t.id)
             if tp is not None:
-                if t.has_exam and tp.state == "aprobado":
-                    approved += 1
-                elif not t.has_exam and tp.state in ("contenido_visto", "aprobado", "en_repaso"):
+                if t.has_exam and tp.state == "aprobado" or not t.has_exam and tp.state in ("contenido_visto", "aprobado", "en_repaso"):
                     approved += 1
 
     pct = int((approved / total) * 100) if total > 0 else 0

@@ -8,14 +8,17 @@ Registration line for routers/__init__.py:
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud import admin as crud
 from app.db import get_db
 from app.deps import require_role
+from app.models.course import Course
 from app.models.user import User
 from app.schemas.admin.courses import (
     CourseAdminListItem,
@@ -50,7 +53,19 @@ async def create_course(
     if current_user.role == "instructor" or data.get("instructor_id") is None:
         data["instructor_id"] = current_user.id
 
-    course = await crud.create_course(db, data)
+    if await db.scalar(select(Course.id).where(Course.slug == body.slug)) is not None:
+        raise HTTPException(status_code=409, detail={
+            "code": "slug_exists", "message": "Ya existe un curso con esa URL. Cambia el slug.",
+        })
+    try:
+        course = await crud.create_course(db, data)
+    except IntegrityError:
+        await db.rollback()
+        if await db.scalar(select(Course.id).where(Course.slug == body.slug)) is not None:
+            raise HTTPException(status_code=409, detail={
+                "code": "slug_exists", "message": "Ya existe un curso con esa URL. Cambia el slug.",
+            }) from None
+        raise
     await log_admin_action(
         db,
         actor_id=current_user.id,

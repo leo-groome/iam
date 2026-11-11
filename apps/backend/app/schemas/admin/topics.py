@@ -18,6 +18,7 @@ class TopicCreate(BaseModel):
     duration_seconds: int | None = None
     has_exam: bool = True
     exam_min_score: int = Field(70, ge=50, le=100)
+    max_attempts: int = Field(3, ge=1, le=10)
     order_index: int | None = Field(None, ge=0)
 
 
@@ -29,6 +30,7 @@ class TopicUpdate(BaseModel):
     duration_seconds: int | None = None
     has_exam: bool | None = None
     exam_min_score: int | None = Field(None, ge=50, le=100)
+    max_attempts: int | None = Field(None, ge=1, le=10)
     order_index: int | None = Field(None, ge=0)
 
 
@@ -44,12 +46,12 @@ class TopicResponse(BaseModel):
     duration_seconds: int | None
     has_exam: bool
     exam_min_score: int
+    max_attempts: int
     order_index: int
     archived_at: str | None = None
 
 
 from app.schemas.admin.questions import QuestionResponse  # noqa: E402
-
 
 # Maps a content block's kind to the R2 upload scope prefix that app.services.r2.build_key
 # generates for it ("{scope}/{uuid}/{slug}"). A media_key must live under its own kind's
