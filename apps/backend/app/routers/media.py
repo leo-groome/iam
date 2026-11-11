@@ -4,7 +4,7 @@ import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -19,7 +19,7 @@ from app.models.progress import Enrollment
 from app.models.user import User
 from app.security.media_jwt import sign_play_token
 from app.services.progress_engine import compute_topic_state
-from app.services.r2 import build_key, generate_upload_url
+from app.services.r2 import MAX_UPLOAD_BYTES, build_key, generate_upload_url
 
 router = APIRouter(prefix="/api/v1/media", tags=["media"])
 
@@ -44,6 +44,7 @@ class UploadUrlRequest(BaseModel):
     filename: str
     content_type: str
     scope: Literal["video", "pdf", "imagen", "cover", "audio"]
+    size_bytes: int = Field(..., ge=1)
 
 
 class UploadUrlResponse(BaseModel):
@@ -90,8 +91,19 @@ async def get_upload_url(
             },
         )
 
+    if body.size_bytes > MAX_UPLOAD_BYTES[body.scope]:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={
+                "code": "file_too_large",
+                "message": f"Máximo {MAX_UPLOAD_BYTES[body.scope] // (1024 * 1024)} MB para {body.scope}.",
+            },
+        )
+
     key = await build_key(body.scope, body.filename)
-    put_url = await generate_upload_url(key, body.content_type, expires_in=600)
+    put_url = await generate_upload_url(
+        key, body.content_type, expires_in=600, content_length=body.size_bytes
+    )
     return UploadUrlResponse(put_url=put_url, key=key, expires_in=600)
 
 

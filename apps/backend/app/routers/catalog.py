@@ -25,7 +25,7 @@ from app.schemas.course import (
     ModuleTopicItem,
 )
 from app.schemas.topic import CourseProgressResponse, ModuleProgressItem, TopicStateItem
-from app.services.progress_engine import compute_topic_state
+from app.services.progress_engine import _module_exam_passed, _module_has_exam_questions, compute_topic_state
 
 router = APIRouter(prefix="/courses", tags=["catalog"])
 
@@ -62,6 +62,8 @@ async def _build_module_item(db: AsyncSession, current_user: User, m: Module) ->
         title=m.title,
         order_index=m.order_index,
         topics=topic_items,
+        has_exam=await _module_has_exam_questions(db, m.id),
+        exam_passed=await _module_exam_passed(db, current_user.id, m.id),
     )
 
 

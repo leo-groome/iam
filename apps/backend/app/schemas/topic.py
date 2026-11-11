@@ -25,7 +25,6 @@ class ContentBlockView(BaseModel):
 
     id: uuid.UUID
     kind: str
-    media_key: str | None
     content_body: str | None
     duration_seconds: int | None
     order_index: int
@@ -42,7 +41,6 @@ class TopicView(BaseModel):
     duration_seconds: int | None
     has_exam: bool
     exam_min_score: int
-    media_key: str | None
     state: str
     progress: TopicProgressDetail
     blocks: list[ContentBlockView] = []

@@ -27,6 +27,7 @@ from app.schemas.admin.topics import (
     TopicWithQuestionsResponse,
 )
 from app.services.audit import log_admin_action
+from app.services.r2 import inspect_object
 
 router = APIRouter(tags=["admin-topics"])
 
@@ -59,6 +60,7 @@ async def create_topic(
         "duration_seconds": body.duration_seconds,
         "has_exam": body.has_exam,
         "exam_min_score": body.exam_min_score,
+        "max_attempts": body.max_attempts,
         "order_index": order_index,
     }
     topic = await crud.create_topic(db, data)
@@ -171,6 +173,17 @@ async def replace_topic_blocks_endpoint(
     topic = await crud.get_topic_with_questions(db, topic_id)
     if topic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+
+    # Solo se inspecciona en R2 lo que cambió: llaves nuevas (no las ya guardadas en este tema).
+    known_keys = {b.media_key for b in topic.blocks if b.media_key}
+    for block in body:
+        if block.media_key and block.media_key not in known_keys:
+            problem = await inspect_object(block.media_key, block.kind)
+            if problem is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={"code": "invalid_media", "message": problem},
+                )
 
     await replace_topic_blocks(db, topic, body)
 

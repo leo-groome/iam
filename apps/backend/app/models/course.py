@@ -47,7 +47,10 @@ class Course(Base, TimestampMixin):
 
 class Module(Base, TimestampMixin):
     __tablename__ = "modules"
-    __table_args__ = (Index("ix_modules_course_order", "course_id", "order_index"),)
+    __table_args__ = (
+        Index("ix_modules_course_order", "course_id", "order_index"),
+        CheckConstraint("max_attempts BETWEEN 1 AND 10", name="ck_modules_max_attempts"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
     course_id: Mapped[uuid.UUID] = mapped_column(
@@ -55,6 +58,7 @@ class Module(Base, TimestampMixin):
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default="3")
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     archived_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -81,6 +85,7 @@ class Topic(Base, TimestampMixin):
         ),
         CheckConstraint("exam_min_score >= 50 AND exam_min_score <= 100", name="ck_topics_min_score"),
         Index("ix_topics_module_order", "module_id", "order_index"),
+        CheckConstraint("max_attempts BETWEEN 1 AND 10", name="ck_topics_max_attempts"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
@@ -94,6 +99,7 @@ class Topic(Base, TimestampMixin):
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     has_exam: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     exam_min_score: Mapped[int] = mapped_column(Integer, nullable=False, default=70)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default="3")
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     archived_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -134,6 +140,8 @@ class ContentBlock(Base, TimestampMixin):
     media_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Páginas reales del PDF, contadas en el servidor (autoritativo; el cliente no decide).
+    pdf_total_pages: Mapped[int | None] = mapped_column(Integer, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     topic: Mapped["Topic"] = relationship("Topic", back_populates="blocks")

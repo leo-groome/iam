@@ -8,7 +8,7 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,6 +30,7 @@ from app.models.progress import Enrollment, ExamAttempt, TopicProgress
 from app.models.question import Question
 from app.models.user import User
 from app.schemas.exam import (
+    AnswerFeedback,
     ExamResponse,
     ExamResult,
     ExamSubmitRequest,
@@ -45,6 +46,7 @@ from app.schemas.topic import (
     TopicProgressDetail,
     TopicView,
 )
+from app.services.heartbeat_guard import credited_pdf_page, credited_video_pct
 from app.services.progress_engine import (
     _complete_content,
     check_user_status,
@@ -55,6 +57,7 @@ from app.services.progress_engine import (
     recompute_content_completion,
     recompute_course_progress,
 )
+from app.services.r2 import count_pdf_pages
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -202,6 +205,14 @@ def _grade_signed_answers(
     return correct, len(signed_question_ids), answers_payload
 
 
+def _seconds_since(moment: datetime | None, now: datetime) -> float | None:
+    if moment is None:
+        return None
+    if moment.tzinfo is None:  # SQLite devuelve datetimes naive
+        moment = moment.replace(tzinfo=UTC)
+    return max(0.0, (now - moment).total_seconds())
+
+
 def _video_pct_from_position(pos_seconds: int, duration_seconds: int | None) -> int:
     if duration_seconds is None or duration_seconds <= 0:
         return 0
@@ -229,20 +240,53 @@ def _video_duration_for_progress(
 
 
 async def _require_enrollment(
-    db: AsyncSession, user: User, course_id: uuid.UUID
+    db: AsyncSession, user: User, course_id: uuid.UUID, *, lock: bool = False
 ) -> Enrollment:
-    result = await db.execute(
-        select(Enrollment).where(
-            Enrollment.user_id == user.id,
-            Enrollment.course_id == course_id,
-        )
+    stmt = select(Enrollment).where(
+        Enrollment.user_id == user.id, Enrollment.course_id == course_id,
     )
+    # Serialize deliveries for one enrollment so parallel tokens cannot bypass
+    # the attempt limit (PostgreSQL row lock held until commit/rollback).
+    if lock:
+        stmt = stmt.with_for_update()
+    result = await db.execute(stmt)
     enrollment = result.scalar_one_or_none()
     if enrollment is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not enrolled in this course"
         )
     return enrollment
+
+
+async def _exam_attempts_remaining(
+    db: AsyncSession, user_id: uuid.UUID, scope: str, scope_id: uuid.UUID, limit: int,
+) -> int:
+    column = ExamAttempt.topic_id if scope == "topic" else ExamAttempt.module_id
+    count = await db.scalar(
+        select(func.count()).select_from(ExamAttempt)
+        .where(ExamAttempt.user_id == user_id, column == scope_id)
+    )
+    remaining = max(0, limit - (count or 0))
+    if remaining == 0:
+        raise HTTPException(status_code=403, detail={
+            "code": "attempt_limit_reached",
+            "message": "Alcanzaste el límite de intentos. Contacta al administrador si necesitas otro intento.",
+        })
+    return remaining
+
+
+def _answer_feedback(questions: list[Question], answers: dict[str, str]) -> list[AnswerFeedback]:
+    feedback = []
+    for question in questions:
+        selected_id = answers.get(str(question.id))
+        selected = next((o for o in question.options if str(o.id) == selected_id), None)
+        if selected is not None:
+            feedback.append(AnswerFeedback(
+                question_id=question.id, option_id=selected.id,
+                enunciado=question.enunciado, texto=selected.texto,
+                is_correct=selected.is_correct, feedback=selected.feedback,
+            ))
+    return feedback
 
 
 async def _get_topic_or_404(db: AsyncSession, topic_id: uuid.UUID) -> Topic:
@@ -280,7 +324,6 @@ async def get_topic(
             ContentBlockView(
                 id=block.id,
                 kind=block.kind,
-                media_key=block.media_key,
                 content_body=block.content_body,
                 duration_seconds=block.duration_seconds,
                 order_index=block.order_index,
@@ -304,7 +347,6 @@ async def get_topic(
         duration_seconds=topic.duration_seconds,
         has_exam=topic.has_exam,
         exam_min_score=topic.exam_min_score,
-        media_key=topic.media_key,
         state=real_state,
         progress=TopicProgressDetail(
             video_last_pos_seconds=tp.video_last_pos_seconds,
@@ -344,6 +386,9 @@ async def topic_heartbeat(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "block_not_found"})
 
     bp = await get_or_create_block_progress(db, current_user, block)
+    now = datetime.now(UTC)
+    elapsed = _seconds_since(bp.last_heartbeat_at, now)
+    bp.last_heartbeat_at = now
 
     if block.kind in ("video", "audio"):
         if body.max_seen_pct is not None and body.pos_seconds is None:
@@ -354,13 +399,32 @@ async def topic_heartbeat(
         if body.pos_seconds is not None:
             bp.video_last_pos_seconds = body.pos_seconds
             duration_seconds = _video_duration_for_progress(block.duration_seconds, body.duration_seconds)
-            server_pct = _video_pct_from_position(body.pos_seconds, duration_seconds)
-            bp.video_max_seen_pct = max(bp.video_max_seen_pct, server_pct)
+            if settings.enforce_realtime_heartbeat:
+                bp.video_max_seen_pct = credited_video_pct(
+                    bp.video_max_seen_pct, duration_seconds, body.pos_seconds, elapsed
+                )
+            else:
+                server_pct = _video_pct_from_position(body.pos_seconds, duration_seconds)
+                bp.video_max_seen_pct = max(bp.video_max_seen_pct, server_pct)
     elif block.kind == "pdf":
-        if body.last_page is not None:
-            bp.pdf_last_page = max(bp.pdf_last_page, body.last_page)
-        if body.total_pages is not None:
-            bp.pdf_total_pages = body.total_pages
+        # El total de páginas lo decide el servidor (cuenta del PDF real en R2), nunca el cliente.
+        if block.pdf_total_pages is None and settings.verify_pdf_pages_server_side and block.media_key:
+            try:
+                block.pdf_total_pages = await count_pdf_pages(block.media_key)
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail={"code": "pdf_unavailable"},
+                ) from exc
+        total = block.pdf_total_pages or body.total_pages
+        if total:
+            bp.pdf_total_pages = total
+            if body.last_page is not None:
+                if settings.enforce_realtime_heartbeat:
+                    page = credited_pdf_page(bp.pdf_last_page, total, body.last_page, elapsed)
+                else:
+                    page = min(body.last_page, total)
+                bp.pdf_last_page = max(bp.pdf_last_page, page)
     # imagen/texto: no gating progress to track — pure display blocks.
 
     await db.flush()
@@ -444,6 +508,7 @@ async def get_topic_exam(
 ) -> ExamResponse:
     topic = await _get_topic_or_404(db, topic_id)
     await _require_enrollment(db, current_user, topic.module.course_id)
+    remaining = await _exam_attempts_remaining(db, current_user.id, "topic", topic_id, topic.max_attempts)
 
     tp = await get_or_create_progress(db, current_user, topic)
     real_state = tp.state
@@ -489,6 +554,7 @@ async def get_topic_exam(
 
     return ExamResponse(
         exam_token=exam_token,
+        attempts_remaining=remaining,
         questions=question_out,
         min_score=topic.exam_min_score,
     )
@@ -504,7 +570,8 @@ async def submit_topic_exam(
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> ExamResult:
     topic = await _get_topic_or_404(db, topic_id)
-    await _require_enrollment(db, current_user, topic.module.course_id)
+    await _require_enrollment(db, current_user, topic.module.course_id, lock=True)
+    remaining = await _exam_attempts_remaining(db, current_user.id, "topic", topic_id, topic.max_attempts)
 
     tp = await get_or_create_progress(db, current_user, topic)
 
@@ -563,9 +630,15 @@ async def submit_topic_exam(
         await check_user_status(db, current_user, topic_id)
         message = "No aprobado. Revisa el contenido e intenta de nuevo."
 
+    feedback = _answer_feedback(questions, answers_payload)
+    if not passed and remaining == 1:
+        message = "Alcanzaste el límite de intentos. Contacta al administrador si necesitas otro intento."
     await db.commit()
 
-    return ExamResult(score=score, passed=passed, min_score=min_score, message=message)
+    return ExamResult(
+        score=score, passed=passed, min_score=min_score, message=message,
+        attempts_remaining=remaining - 1, feedback=feedback,
+    )
 
 
 @router.get("/modules/{module_id}/exam", response_model=ExamResponse)
@@ -584,6 +657,7 @@ async def get_module_exam(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found")
 
     await _require_enrollment(db, current_user, module.course_id)
+    remaining = await _exam_attempts_remaining(db, current_user.id, "module", module_id, module.max_attempts)
 
     active_topics = [t for t in module.topics if t.archived_at is None]
     for t in active_topics:
@@ -628,6 +702,7 @@ async def get_module_exam(
 
     return ExamResponse(
         exam_token=exam_token,
+        attempts_remaining=remaining,
         questions=question_out,
         min_score=70,
     )
@@ -651,7 +726,8 @@ async def submit_module_exam(
     if module is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found")
 
-    await _require_enrollment(db, current_user, module.course_id)
+    await _require_enrollment(db, current_user, module.course_id, lock=True)
+    remaining = await _exam_attempts_remaining(db, current_user.id, "module", module_id, module.max_attempts)
 
     active_topics = [t for t in module.topics if t.archived_at is None]
     for t in active_topics:
@@ -709,6 +785,12 @@ async def submit_module_exam(
     else:
         message = "No aprobado. Revisa el contenido del módulo."
 
+    feedback = _answer_feedback(questions, answers_payload)
+    if not passed and remaining == 1:
+        message = "Alcanzaste el límite de intentos. Contacta al administrador si necesitas otro intento."
     await db.commit()
 
-    return ExamResult(score=score, passed=passed, min_score=min_score, message=message)
+    return ExamResult(
+        score=score, passed=passed, min_score=min_score, message=message,
+        attempts_remaining=remaining - 1, feedback=feedback,
+    )

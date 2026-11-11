@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.course import Course, Module, Topic
-from app.models.question import Option, Question
+from app.models.question import Question
 from app.models.user import User
 
 
@@ -90,15 +90,3 @@ async def assert_can_manage_question(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
     _assert_owner_or_admin(user, row.instructor_id)
-
-
-async def assert_can_manage_option(
-    db: AsyncSession,
-    user: User,
-    option_id: uuid.UUID,
-) -> None:
-    result = await db.execute(select(Option.question_id).where(Option.id == option_id))
-    question_id = result.scalar_one_or_none()
-    if question_id is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Option not found")
-    await assert_can_manage_question(db, user, question_id)

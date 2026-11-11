@@ -67,55 +67,78 @@ async def get_or_create_block_progress(
     return bp
 
 
+_REQUIRED_KINDS = ("video", "pdf")
+
+
 async def replace_topic_blocks(
     db: AsyncSession, topic: Topic, blocks_in: list[ContentBlockIn]
 ) -> None:
-    """Replace all content blocks of a topic with a new ordered set.
+    """Sincroniza los bloques del tema con la lista recibida (upsert por `id`).
 
-    Deletes existing blocks (and their per-user progress rows — done explicitly
-    rather than relying on DB-level ON DELETE CASCADE, since SQLite in tests
-    does not enforce FK actions by default) and creates the new ones with
-    sequential order_index. Syncs topic.content_type to the first block's kind.
-    Caller is responsible for ensuring blocks_in is non-empty.
+    - Bloque con `id` existente: se actualiza en sitio y conserva su progreso
+      (`ContentBlockProgress`), salvo que cambie `kind` o `media_key` (contenido
+      distinto: el progreso ya no aplica y se borra).
+    - Bloque sin `id` (o con `id` ajeno): se crea nuevo.
+    - Bloque existente omitido: se borra junto con su progreso (borrado explícito,
+      SQLite en tests no aplica ON DELETE CASCADE).
 
-    Also re-gates in-progress students: since ContentBlockProgress for the old
-    blocks is wiped, a student who was 'contenido_visto' or 'en_repaso' would
-    otherwise keep their exam unlocked over content they never saw (the new
-    blocks). All TopicProgress rows for this topic in those two states are
-    reset to 'disponible' with content_completed_at=None, forcing them back
-    through the (new) content before the exam re-unlocks. 'aprobado' rows are
-    left untouched — the exam was already passed and that history is respected.
-    'bloqueado' rows are left as-is (still locked, nothing to re-gate). All of
-    this runs in the same transaction as the block replacement — caller commits.
+    Re-gating: si se creó o reemplazó un bloque requerido (video/pdf), los
+    alumnos en `contenido_visto`/`en_repaso` vuelven a `disponible` para ver el
+    contenido nuevo. `aprobado` y `bloqueado` no se tocan. Editar texto, orden o
+    metadatos NO resetea a nadie. Todo en la transacción del caller (él hace commit).
+    Sincroniza `topic.content_type` con el kind del primer bloque.
+    Caller garantiza `blocks_in` no vacío.
     """
-    old_block_ids = [b.id for b in topic.blocks]
-    if old_block_ids:
-        await db.execute(
-            delete(ContentBlockProgress).where(ContentBlockProgress.block_id.in_(old_block_ids))
-        )
-        await db.execute(delete(ContentBlock).where(ContentBlock.id.in_(old_block_ids)))
+    existing = {b.id: b for b in topic.blocks}
+    kept: set[uuid.UUID] = set()
+    regate = False
+    drop_progress: list[uuid.UUID] = []
 
     for idx, block_in in enumerate(blocks_in):
-        db.add(
-            ContentBlock(
-                topic_id=topic.id,
-                kind=block_in.kind,
-                media_key=block_in.media_key,
-                content_body=block_in.content_body,
-                duration_seconds=block_in.duration_seconds,
-                order_index=idx,
+        block = existing.get(block_in.id) if block_in.id is not None else None
+        if block is None or block.id in kept:
+            db.add(
+                ContentBlock(
+                    topic_id=topic.id,
+                    kind=block_in.kind,
+                    media_key=block_in.media_key,
+                    content_body=block_in.content_body,
+                    duration_seconds=block_in.duration_seconds,
+                    order_index=idx,
+                )
             )
+            regate = regate or block_in.kind in _REQUIRED_KINDS
+            continue
+        kept.add(block.id)
+        content_changed = block.kind != block_in.kind or block.media_key != block_in.media_key
+        if content_changed:
+            block.pdf_total_pages = None  # se recuenta en el servidor con el archivo nuevo
+            drop_progress.append(block.id)
+            regate = regate or block_in.kind in _REQUIRED_KINDS
+        block.kind = block_in.kind
+        block.media_key = block_in.media_key
+        block.content_body = block_in.content_body
+        block.duration_seconds = block_in.duration_seconds
+        block.order_index = idx
+
+    removed = [bid for bid in existing if bid not in kept]
+    drop_progress.extend(removed)
+    if drop_progress:
+        await db.execute(
+            delete(ContentBlockProgress).where(ContentBlockProgress.block_id.in_(drop_progress))
         )
+    if removed:
+        await db.execute(delete(ContentBlock).where(ContentBlock.id.in_(removed)))
 
     topic.content_type = blocks_in[0].kind
 
-    await db.execute(
-        update(TopicProgress)
-        .where(
-            TopicProgress.topic_id == topic.id,
-            TopicProgress.state.in_(("contenido_visto", "en_repaso")),
+    if regate:
+        await db.execute(
+            update(TopicProgress)
+            .where(
+                TopicProgress.topic_id == topic.id,
+                TopicProgress.state.in_(("contenido_visto", "en_repaso")),
+            )
+            .values(state="disponible", content_completed_at=None)
         )
-        .values(state="disponible", content_completed_at=None)
-    )
-
     await db.flush()

@@ -14,7 +14,6 @@ export interface ContentBlockProgress {
 export interface ContentBlockView {
   id: string;
   kind: ContentBlockKind;
-  media_key: string | null;
   content_body: string | null;
   duration_seconds: number | null;
   order_index: number;

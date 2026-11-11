@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { onMounted, ref, computed } from 'vue';
 import { adminService } from '@/services/admin.service';
 import { apiGet } from '@/lib/api';
+import { plainText } from '@/lib/sanitize';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 
 const route = useRoute();
@@ -16,10 +17,14 @@ const qId = route.params.qId as string;
 const isModuleScope = computed(() => !!modId && !temaId);
 
 const isNew = qId === 'nueva';
-const pregunta = ref(null);
+const pregunta = ref<any>(null);
+const saving = ref(false);
+const errorMessage = ref('');
 const loading = ref(false);
 const enunciado = ref('');
-const opts = ref<string[]>(['', '', '']);
+type EditableOption = { id?: string; key: string; texto: string; feedback: string };
+const emptyOption = (): EditableOption => ({ key: crypto.randomUUID(), texto: '', feedback: '' });
+const opts = ref<EditableOption[]>([emptyOption(), emptyOption(), emptyOption()]);
 const correctIdx = ref(0);
 
 onMounted(async () => {
@@ -29,7 +34,7 @@ onMounted(async () => {
       const q = await (apiGet as any)('/api/v1/admin/questions/' + qId);
       pregunta.value = q;
       enunciado.value = q.enunciado;
-      opts.value = q.options.map((o: any) => o.texto);
+      opts.value = q.options.map((o: any) => ({ id: o.id, key: o.id, texto: o.texto, feedback: o.feedback ?? '' }));
       correctIdx.value = q.options.findIndex((o: any) => o.is_correct);
     } catch (err) {
       console.error('Error loading question:', err);
@@ -41,54 +46,50 @@ onMounted(async () => {
 
 const addOption = () => {
   if (opts.value.length < 5) {
-    opts.value.push('');
+    opts.value.push(emptyOption());
   }
 };
 
 const removeOption = (i: number) => {
   if (opts.value.length > 3) {
     opts.value.splice(i, 1);
-    if (correctIdx.value >= opts.value.length) {
-      correctIdx.value = opts.value.length - 1;
-    }
+    if (i < correctIdx.value) correctIdx.value--;
+    else if (i === correctIdx.value) correctIdx.value = 0;
   }
 };
 
 const handleSave = async () => {
+  if (saving.value || loading.value) return;
+  errorMessage.value = '';
+  const text = plainText(enunciado.value);
+  if (text.length < 5 || enunciado.value.length > 5000) {
+    errorMessage.value = 'El enunciado necesita al menos 5 caracteres de texto (máx. 5000 con formato).';
+    return;
+  }
+  if (opts.value.some(o => !o.texto.trim() || o.texto.length > 150 || o.feedback.length > 5000) || correctIdx.value < 0) {
+    errorMessage.value = 'Completa las opciones, marca una correcta y limita cada explicación a 5000 caracteres.';
+    return;
+  }
+  saving.value = true;
   try {
+    const payload = {
+      enunciado: enunciado.value,
+      options: opts.value.map((o, i) => ({
+        ...(o.id ? { id: o.id } : {}), texto: o.texto.trim(), feedback: o.feedback,
+        is_correct: i === correctIdx.value, order_index: i,
+      })),
+    };
     if (isNew) {
-      if (isModuleScope.value) {
-        await adminService.createModuleQuestion(modId, {
-          enunciado: enunciado.value,
-          options: opts.value.map((t, i) => ({
-            texto: t,
-            is_correct: i === correctIdx.value
-          }))
-        });
-      } else {
-        await adminService.createQuestion(temaId, {
-          enunciado: enunciado.value,
-          options: opts.value.map((t, i) => ({
-            texto: t,
-            is_correct: i === correctIdx.value
-          }))
-        });
-      }
+      if (isModuleScope.value) await adminService.createModuleQuestion(modId, payload);
+      else await adminService.createQuestion(temaId, payload);
     } else {
-      await adminService.updateQuestion(qId, enunciado.value);
-      for (let i = 0; i < opts.value.length; i++) {
-        const option = (pregunta.value as any)?.options[i];
-        if (option) {
-          await adminService.updateOption(option.id, {
-            texto: opts.value[i],
-            is_correct: i === correctIdx.value
-          });
-        }
-      }
+      await adminService.updateQuestionWithOptions(qId, payload);
     }
-    router.push(backUrl.value);
-  } catch (err) {
-    console.error('Error saving question:', err);
+    await router.push(backUrl.value);
+  } catch (err: any) {
+    errorMessage.value = err.message || 'No se pudo guardar la pregunta. Tus datos se conservan.';
+  } finally {
+    saving.value = false;
   }
 };
 
@@ -115,27 +116,32 @@ const pageTitle = computed(() => {
     <h1 class="text-2xl font-bold">{{ pageTitle }}</h1>
     <div class="flex gap-2">
       <router-link :to="backUrl" class="btn btn-secondary">Cancelar</router-link>
-      <button @click="handleSave" class="btn btn-primary">Guardar</button>
+      <button @click="handleSave" :disabled="saving || loading" class="btn btn-primary">{{ saving ? 'Guardando...' : 'Guardar' }}</button>
     </div>
   </header>
 
+  <p v-if="errorMessage" role="alert" class="mb-4 text-red-700">{{ errorMessage }}</p>
   <div class="card p-6 space-y-5 max-w-2xl">
     <div>
       <label class="label">Enunciado</label>
       <RichTextEditor v-model="enunciado" placeholder="Escribe la pregunta" />
-      <p class="help">5–300 caracteres.</p>
+      <p class="help">Mínimo 5 caracteres de texto; máximo 5000 incluyendo formato.</p>
     </div>
     <div>
       <label class="label">Opciones de respuesta</label>
       <p class="help mb-3">Marca cuál es la correcta (3 a 5 opciones).</p>
       <div class="space-y-2">
-        <div v-for="(opt, i) in opts" :key="i" class="flex items-center gap-3">
+        <div v-for="(opt, i) in opts" :key="opt.key" class="space-y-2">
+          <div class="flex items-center gap-3">
           <input type="radio" name="correcta" :checked="i === correctIdx" @change="correctIdx = i" class="w-5 h-5 accent-[var(--color-primary)]" />
-          <input class="input flex-1" maxlength="150" v-model="opts[i]" :placeholder="`Opción ${i + 1}`" />
-          <button type="button" @click="removeOption(i)" class="text-[var(--color-text-muted)] hover:text-[var(--color-error)]" aria-label="Eliminar">✕</button>
+          <input class="input flex-1" maxlength="150" v-model="opt.texto" :placeholder="`Opción ${i + 1}`" />
+          <button type="button" @click="removeOption(i)" :disabled="opts.length <= 3" class="text-[var(--color-text-muted)] hover:text-[var(--color-error)]" aria-label="Eliminar">✕</button>
+          </div>
+          <label :for="`feedback-${opt.key}`" class="label">Retroalimentación de la opción {{ i + 1 }} (opcional)</label>
+          <textarea :id="`feedback-${opt.key}`" v-model="opt.feedback" maxlength="5000" class="input" rows="3" placeholder="Explica por qué esta respuesta es correcta o incorrecta"></textarea>
         </div>
       </div>
-      <button type="button" @click="addOption" class="btn btn-ghost mt-3 text-sm">+ Agregar opción</button>
+      <button type="button" @click="addOption" :disabled="opts.length >= 5" class="btn btn-ghost mt-3 text-sm">+ Agregar opción</button>
     </div>
   </div>
 

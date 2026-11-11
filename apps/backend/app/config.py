@@ -8,16 +8,23 @@ class Settings(BaseSettings):
     database_url: str
     neon_auth_url: str = Field(validation_alias="NEON_AUTH_URL")
     neon_auth_jwks_url: str = Field(default="", validation_alias="NEON_AUTH_JWKS_URL")
+    # "require" for Neon; "disable" only for the local Docker Postgres.
+    db_ssl: str = Field(default="require", validation_alias="DB_SSL")
     allow_mock_auth: bool = Field(default=False, validation_alias="ALLOW_MOCK_AUTH")
     r2_account_id: str = Field(validation_alias="R2_ACCOUNT_ID")
     r2_access_key_id: str = Field(validation_alias="R2_ACCESS_KEY_ID")
     r2_secret_access_key: str = Field(validation_alias="R2_SECRET_ACCESS_KEY")
+    # Empty = real Cloudflare R2. Set only for the local MinIO QA stack.
+    r2_endpoint_url: str = Field(default="", validation_alias="R2_ENDPOINT_URL")
     r2_bucket: str = Field(default="iam-media", validation_alias="R2_BUCKET")
     r2_public_base: str = Field(validation_alias="R2_PUBLIC_BASE")
     media_jwt_secret: str = Field(validation_alias="MEDIA_JWT_SECRET")
     frontend_url: str
     resend_api_key: str = Field(default="", validation_alias="RESEND_API_KEY")
     certificate_verify_base_url: str = "http://localhost:8000"
+    # Anti-trampa del gating de contenido (IAM-005). Solo se apagan en tests.
+    enforce_realtime_heartbeat: bool = Field(default=True, validation_alias="ENFORCE_REALTIME_HEARTBEAT")
+    verify_pdf_pages_server_side: bool = Field(default=True, validation_alias="VERIFY_PDF_PAGES_SERVER_SIDE")
 
     @model_validator(mode="after")
     def set_neon_auth_jwks_url(self) -> "Settings":

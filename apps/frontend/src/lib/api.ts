@@ -70,9 +70,15 @@ async function throwApiError(res: Response): Promise<never> {
     if (body && typeof body === 'object' && 'detail' in body) {
       const detail = (body as { detail: unknown }).detail
       if (typeof detail === 'string') message = detail
+      else if (detail && typeof detail === 'object' && 'message' in detail) {
+        message = String((detail as { message: unknown }).message)
+      }
       else if (Array.isArray(detail) && detail.length > 0) {
         // Pydantic validation errors: [{loc, msg, type}]
-        message = detail.map((e: { msg?: string }) => e.msg ?? JSON.stringify(e)).join('; ')
+        message = detail.map((e: { msg?: string; loc?: (string | number)[] }) => {
+          const field = e.loc?.filter(part => part !== 'body').join('.')
+          return `${field ? field + ': ' : ''}${e.msg ?? 'Valor inválido'}`
+        }).join('; ')
       }
     }
   } catch {

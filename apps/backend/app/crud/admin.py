@@ -47,6 +47,28 @@ async def get_course_admin(db: AsyncSession, course_id: uuid.UUID) -> Course | N
     return result.scalar_one_or_none()
 
 
+async def topics_with_exam_but_no_questions(db: AsyncSession, course_id: uuid.UUID) -> list[Topic]:
+    """Temas activos con `has_exam` y 0 preguntas activas (callejón sin salida para el alumno)."""
+    active_questions = (
+        select(func.count(Question.id))
+        .where(Question.topic_id == Topic.id, Question.archived_at.is_(None))
+        .correlate(Topic)
+        .scalar_subquery()
+    )
+    stmt = (
+        select(Topic)
+        .join(Module, Module.id == Topic.module_id)
+        .where(
+            Module.course_id == course_id,
+            Topic.has_exam.is_(True),
+            Topic.archived_at.is_(None),
+            active_questions == 0,
+        )
+        .order_by(Module.order_index, Topic.order_index)
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
 async def create_course(db: AsyncSession, data: dict[str, object]) -> Course:
     course = Course(**data)
     db.add(course)
@@ -206,6 +228,7 @@ async def get_topic_with_questions(db: AsyncSession, topic_id: uuid.UUID) -> Top
             with_loader_criteria(Question, Question.archived_at.is_(None)),
             selectinload(Topic.blocks),
         )
+        .execution_options(populate_existing=True)
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
@@ -275,6 +298,7 @@ async def create_question(
         option = Option(
             question_id=question.id,
             texto=str(opt["texto"]),
+            feedback=str(opt.get("feedback", "")),
             is_correct=bool(opt["is_correct"]),
             order_index=int(opt.get("order_index", idx)),  # type: ignore[call-overload]
         )
@@ -305,13 +329,45 @@ async def get_option(db: AsyncSession, option_id: uuid.UUID) -> Option | None:
     return result.scalar_one_or_none()
 
 
-async def update_option(
-    db: AsyncSession, option: Option, updates: dict[str, object]
-) -> Option:
-    for field, value in updates.items():
-        setattr(option, field, value)
-    await db.flush()
-    return option
+async def next_question_order(
+    db: AsyncSession, *, topic_id: uuid.UUID | None, module_id: uuid.UUID | None
+) -> int:
+    """Siguiente order_index libre entre las preguntas activas del tema o módulo."""
+    scope = Question.topic_id == topic_id if topic_id is not None else Question.module_id == module_id
+    max_idx = await db.scalar(
+        select(func.max(Question.order_index)).where(scope, Question.archived_at.is_(None))
+    )
+    return 0 if max_idx is None else max_idx + 1
+
+
+def apply_question_edit(
+    question: Question,
+    *,
+    enunciado: str | None,
+    options: list | None,
+    order_index: int | None = None,
+) -> None:
+    """Aplica edición sobre una pregunta ya cargada con `options` (upsert de opciones por id).
+
+    Lanza ValueError si una opción referenciada no pertenece a la pregunta.
+    """
+    if options is not None:
+        existing = {o.id: o for o in question.options}
+        if any(o.id is not None and o.id not in existing for o in options):
+            raise ValueError("Una opción no pertenece a esta pregunta")
+        updated = []
+        for idx, item in enumerate(options):
+            option = existing[item.id] if item.id is not None else Option(question_id=question.id)
+            option.texto = item.texto
+            option.feedback = item.feedback
+            option.is_correct = item.is_correct
+            option.order_index = idx
+            updated.append(option)
+        question.options = updated
+    if enunciado is not None:
+        question.enunciado = enunciado
+    if order_index is not None:
+        question.order_index = order_index
 
 
 # ---------------------------------------------------------------------------
@@ -568,7 +624,14 @@ async def get_dashboard_kpis(db: AsyncSession) -> dict[str, object]:
             {"course_id": course_id_val, "title": title, "completions": cnt}
         )
 
+    from app.models.certificate import Certificate
+
+    certificates_issued = (
+        await db.execute(select(func.count()).select_from(Certificate))
+    ).scalar() or 0
+
     return {
+        "certificates_issued": certificates_issued,
         "total_students": total_students,
         "new_students_last_7d": new_students,
         "active_courses": active_courses,

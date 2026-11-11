@@ -3,6 +3,7 @@ import { useRoute } from 'vue-router';
 import { onMounted, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
 import { apiGet } from '@/lib/api';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 const route = useRoute();
 const courseId = route.params.id as string;
@@ -66,7 +67,7 @@ const handleDeleteQuestion = async (qId: string) => {
       <div class="flex items-start justify-between gap-3">
         <div class="flex-1">
           <p class="text-xs text-[var(--color-text-muted)] mb-1">Pregunta {{ i + 1 }}</p>
-          <p class="font-semibold">{{ p.enunciado }}</p>
+          <div class="font-semibold prose-sm" v-html="sanitizeHtml(p.enunciado)"></div>
           <ul class="mt-3 space-y-1 text-sm">
             <li v-for="(opt, oi) in p.options" :key="opt.id" :class="['flex items-center gap-2', opt.is_correct ? 'text-emerald-700 font-medium' : 'text-[var(--color-text-muted)]']">
               <span>{{ opt.is_correct ? '✓' : '○' }}</span>
