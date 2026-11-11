@@ -242,7 +242,15 @@ const handleSave = async () => {
         content_type: blocks.value[0].kind,
       });
       topicId = created.id;
-      await adminService.replaceTopicBlocks(topicId, buildBlockPayload());
+      try {
+        await adminService.replaceTopicBlocks(topicId, buildBlockPayload());
+      } catch (blocksErr) {
+        // La creación es POST + PUT: si los bloques fallan, no dejar una clase huérfana sin contenido.
+        await adminService.deleteTopic(topicId).catch((rollbackErr: unknown) => {
+          console.error('Rollback de clase huérfana falló:', rollbackErr);
+        });
+        throw blocksErr;
+      }
       router.replace(`/admin/cursos/${courseId}/modulos/${modId}/temas/${topicId}`);
       return;
     }

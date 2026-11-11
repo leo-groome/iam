@@ -5,6 +5,7 @@ import { adminService } from '@/services/admin.service';
 import type { components } from '@/lib/types.gen';
 import { mediaService } from '@/services/media.service';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
+import { plainText } from '@/lib/sanitize';
 
 const route = useRoute();
 const router = useRouter();
@@ -321,7 +322,7 @@ const saveDrawer = async () => {
       </div>
       <div>
         <h2 class="text-xl font-bold">{{ formData.title }}</h2>
-        <p class="text-sm text-[var(--color-text-muted)] mt-1 max-w-2xl">{{ formData.short_desc || 'Sin descripción' }}</p>
+        <p class="text-sm text-[var(--color-text-muted)] mt-1 max-w-2xl">{{ plainText(formData.short_desc) || 'Sin descripción' }}</p>
       </div>
     </div>
     <button type="button" @click="openCourseDrawer" class="btn btn-secondary whitespace-nowrap">

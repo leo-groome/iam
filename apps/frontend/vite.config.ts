@@ -8,7 +8,8 @@ export default defineConfig({
   envPrefix: ['VITE_', 'PUBLIC_'],
   plugins: [
     vue(),
-    VueDevTools(),
+    // Overlay de Vue DevTools tapa botones (y rompe clics en QA/E2E): solo con VITE_DEVTOOLS=true.
+    ...(process.env.VITE_DEVTOOLS === 'true' ? [VueDevTools()] : []),
     tailwindcss(),
   ],
   resolve: {
