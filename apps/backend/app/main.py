@@ -1,13 +1,12 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.config import settings
 from app.routers import api_router
 from app.routers.admin import admin_router
 from app.routers.auth import limiter, me_router
@@ -31,7 +30,18 @@ app = FastAPI(
 
 # Rate limiter state attached to app
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+
+async def _rate_limited(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """429 con el contrato de errores uniforme {"error": {"code", "message"}} (IAM-010)."""
+    response = JSONResponse(
+        status_code=429,
+        content={"error": {"code": "rate_limited", "message": "Demasiadas solicitudes. Intenta más tarde."}},
+    )
+    return request.app.state.limiter._inject_headers(response, request.state.view_rate_limit)
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limited)  # type: ignore[arg-type]
 app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(

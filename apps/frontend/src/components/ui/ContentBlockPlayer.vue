@@ -121,7 +121,7 @@ async function syncPdfProgress(attempt = 0): Promise<void> {
 }
 
 async function loadMedia(): Promise<void> {
-  if (kind.value === 'texto' || !props.block.media_key) return;
+  if (kind.value === 'texto') return;
   loadingToken.value = true;
   try {
     const tokenResp = (await apiPost('/api/v1/media/play-token' as any, {

@@ -7,7 +7,7 @@ from sqlalchemy import select
 # Set default test database url for local use
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_e2e.db")
 
-from app.models.course import Course, Module, Topic
+from app.models.course import ContentBlock, Course, Module, Topic
 from app.models.user import User
 from app.models.base import Base
 
@@ -26,7 +26,10 @@ async def seed():
         
     engine = create_async_engine(database_url, **kwargs)
     
-    # Create tables if they don't exist
+    # create_all solo para la DB SQLite descartable de e2e. Nunca contra Postgres real:
+    # ahí el esquema lo manda Alembic.
+    if not database_url.startswith("sqlite"):
+        raise SystemExit("seed_e2e.py solo corre sobre SQLite; en Postgres usa `alembic upgrade head`.")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
@@ -102,13 +105,20 @@ async def seed():
         topic = Topic(
             module_id=module.id,
             title="Video de Introducción",
-            content_type="video",
-            content_body="Este es el cuerpo del video introductorio.",
-            duration_seconds=120,
+            content_type="texto",
+            content_body="<p>Este es el cuerpo de la clase introductoria.</p>",
             has_exam=False,
             order_index=1
         )
         db.add(topic)
+        await db.flush()
+        # Invariante: toda clase tiene ≥1 bloque de contenido.
+        db.add(ContentBlock(
+            topic_id=topic.id,
+            kind="texto",
+            content_body="<p>Este es el cuerpo de la clase introductoria.</p>",
+            order_index=0,
+        ))
         
         await db.commit()
         print("Successfully seeded test_e2e.db with mock users, course, module, and topic!")
