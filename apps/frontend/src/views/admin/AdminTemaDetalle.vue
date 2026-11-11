@@ -8,7 +8,9 @@ import type { Block } from '@/components/ui/AdminContentBlocks.vue';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 
 type ExamOption = {
+  id?: string;
   texto: string;
+  feedback: string;
   is_correct: boolean;
 };
 
@@ -52,20 +54,19 @@ const blocks = ref<Block[]>([makeEmptyBlock()]);
 const makeEmptyQuestion = (): ExamQuestion => ({
   enunciado: '',
   options: [
-    { texto: '', is_correct: true },
-    { texto: '', is_correct: false },
-    { texto: '', is_correct: false },
+    { texto: '', feedback: '', is_correct: true },
+    { texto: '', feedback: '', is_correct: false },
+    { texto: '', feedback: '', is_correct: false },
   ],
 });
 
 const normalizeQuestion = (q: any): ExamQuestion => {
   const options = (q.options ?? []).map((o: any) => ({
+    id: o.id,
     texto: o.texto ?? '',
+    feedback: o.feedback ?? '',
     is_correct: Boolean(o.is_correct),
   }));
-  if (!options.some((o: ExamOption) => o.is_correct) && options[0]) {
-    options[0].is_correct = true;
-  }
   return {
     id: q.id,
     enunciado: q.enunciado ?? '',
@@ -103,6 +104,7 @@ onMounted(async () => {
               .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
               .map((b, i) => normalizeBlock(b, i))
           : [makeEmptyBlock()];
+        blocksSignature.value = JSON.stringify(buildBlockPayload());
       }
     }
   } catch (err) {
@@ -138,7 +140,7 @@ const moveQuestion = (index: number, direction: -1 | 1) => {
 const addOption = (questionIndex: number) => {
   const question = questions.value[questionIndex];
   if (question.options.length >= 5) return;
-  question.options.push({ texto: '', is_correct: false });
+  question.options.push({ texto: '', feedback: '', is_correct: false });
 };
 
 const removeOption = (questionIndex: number, optionIndex: number) => {
@@ -153,20 +155,25 @@ const removeOption = (questionIndex: number, optionIndex: number) => {
 
 const validateQuestions = (): string | null => {
   if (!hasExam.value) return null;
+  if (!isNew && questions.value.length === 0) return 'Agrega al menos una pregunta o desmarca "Requiere cuestionario".';
   for (const [qIndex, question] of questions.value.entries()) {
     if (question.enunciado.trim().length < 5) return `La pregunta ${qIndex + 1} necesita al menos 5 caracteres.`;
     if (question.options.length < 3 || question.options.length > 5) return `La pregunta ${qIndex + 1} debe tener entre 3 y 5 opciones.`;
     if (question.options.some((option) => option.texto.trim().length < 1)) return `Todas las opciones de la pregunta ${qIndex + 1} deben tener texto.`;
+    if (question.options.some(option => option.feedback.length > 5000)) return 'La retroalimentación admite hasta 5000 caracteres.';
     if (question.options.filter((option) => option.is_correct).length !== 1) return `La pregunta ${qIndex + 1} debe tener una respuesta correcta.`;
   }
   return null;
 };
 
 const buildQuestionPayload = () => questions.value.map((question, questionIndex) => ({
+  id: question.id,
   enunciado: question.enunciado.trim(),
   order_index: questionIndex,
   options: question.options.map((option, optionIndex) => ({
+    id: option.id,
     texto: option.texto.trim(),
+    feedback: option.feedback,
     is_correct: option.is_correct,
     order_index: optionIndex,
   })),
@@ -188,6 +195,7 @@ const validateBlocks = (): string | null => {
 
 const buildBlockPayload = (): ContentBlockIn[] =>
   blocks.value.map((block, index) => ({
+    id: block.id,
     kind: block.kind,
     media_key: block.kind === 'texto' ? null : block.media_key,
     content_body: block.kind === 'texto' ? block.content_body : null,
@@ -195,7 +203,11 @@ const buildBlockPayload = (): ContentBlockIn[] =>
     order_index: index,
   }));
 
+// Firma de los bloques cargados/guardados: si no cambian, no se reenvía el PUT.
+const blocksSignature = ref('');
+
 const handleSave = async () => {
+  if (saving.value || loading.value) return;
   errorMessage.value = '';
   successMessage.value = '';
   const validationError = validateQuestions();
@@ -234,11 +246,23 @@ const handleSave = async () => {
       return;
     }
     await adminService.updateTopic(topicId, formData);
-    await adminService.replaceTopicBlocks(topicId, buildBlockPayload());
-    await adminService.replaceTopicQuestions(topicId, hasExam.value ? buildQuestionPayload() : []);
+    // Con examen desactivado se conserva el banco (no se archiva nada).
+    if (hasExam.value) {
+      const saved = await adminService.replaceTopicQuestions(topicId, buildQuestionPayload());
+      questions.value = (saved ?? []).map(normalizeQuestion);
+    }
+    // Bloques al final y solo si cambiaron: reenviarlos sin cambios no debe tocar el progreso.
+    const payload = buildBlockPayload();
+    if (JSON.stringify(payload) !== blocksSignature.value) {
+      const updated = await adminService.replaceTopicBlocks(topicId, payload);
+      blocks.value = [...(updated?.blocks ?? [])]
+        .sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0))
+        .map((b: any, i: number) => normalizeBlock(b, i));
+      blocksSignature.value = JSON.stringify(buildBlockPayload());
+    }
     successMessage.value = 'Tema y examen guardados.';
-  } catch (err) {
-    errorMessage.value = 'No se pudo guardar el tema.';
+  } catch (err: any) {
+    errorMessage.value = err.message || 'No se pudo guardar el tema.';
     console.error('Error saving topic:', err);
   } finally {
     saving.value = false;
@@ -351,7 +375,8 @@ const handleDeleteTopic = async () => {
         <div>
           <label class="label">Opciones de respuesta</label>
           <div class="space-y-2">
-            <div v-for="(option, optionIndex) in question.options" :key="optionIndex" class="flex items-center gap-3">
+            <div v-for="(option, optionIndex) in question.options" :key="optionIndex" class="space-y-2">
+              <div class="flex items-center gap-3">
               <input
                 type="radio"
                 :name="`correct-${questionIndex}`"
@@ -360,7 +385,10 @@ const handleDeleteTopic = async () => {
                 class="w-5 h-5 accent-[var(--color-primary)]"
               />
               <input class="input flex-1" maxlength="150" v-model="option.texto" :placeholder="`Opción ${optionIndex + 1}`" />
-              <button type="button" @click="removeOption(questionIndex, optionIndex)" :disabled="question.options.length <= 3" class="text-[var(--color-text-muted)] hover:text-[var(--color-error)] disabled:opacity-40">x</button>
+              <button type="button" @click="removeOption(questionIndex, optionIndex)" :disabled="question.options.length <= 3" class="text-[var(--color-text-muted)] hover:text-[var(--color-error)] disabled:opacity-40" aria-label="Eliminar opción">x</button>
+              </div>
+              <label :for="`feedback-${questionIndex}-${optionIndex}`" class="label">Retroalimentación (opcional)</label>
+              <textarea :id="`feedback-${questionIndex}-${optionIndex}`" v-model="option.feedback" maxlength="5000" class="input" rows="3"></textarea>
             </div>
           </div>
           <button type="button" @click="addOption(questionIndex)" :disabled="question.options.length >= 5" class="btn btn-ghost mt-3 text-sm">+ Agregar opción</button>

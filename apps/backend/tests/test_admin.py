@@ -861,7 +861,6 @@ async def test_instructor_cannot_manage_nested_resources_from_other_course(
             headers=INSTRUCTOR_HEADERS,
         )
         question_id = question_resp.json()["id"]
-        option_id = question_resp.json()["options"][0]["id"]
 
     with patch(
         "app.deps.verify_stack_token",
@@ -914,11 +913,6 @@ async def test_instructor_cannot_manage_nested_resources_from_other_course(
             await client.patch(
                 f"/api/v1/admin/questions/{question_id}",
                 json={"enunciado": "Pregunta secuestrada?"},
-                headers=INSTRUCTOR2_HEADERS,
-            ),
-            await client.patch(
-                f"/api/v1/admin/options/{option_id}",
-                json={"texto": "Opción secuestrada"},
                 headers=INSTRUCTOR2_HEADERS,
             ),
         ]
@@ -1156,6 +1150,8 @@ async def test_replace_topic_blocks_resets_in_progress_topic_progress(
 
     assert tp_approved.state == "aprobado"
     assert tp_approved.content_completed_at is not None
+
+
 async def _ticket_course(client, db):
     await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin", ADMIN_HEADERS)
     await _promote(db, FAKE_ADMIN_SUB, "admin")
@@ -1213,5 +1209,203 @@ async def test_invalid_attempt_limit_does_not_update_module(client, db, limit):
         loaded = await client.get(f"/api/v1/admin/courses/{course['id']}", headers=ADMIN_HEADERS)
     assert failed.status_code == 422
     assert loaded.json()["modules"][0]["max_attempts"] == 1
+
+
+@pytest.mark.asyncio
+async def test_question_options_saved_atomically_by_id_with_feedback_and_history(client, db):
+    from app.models.progress import ExamAttempt
+    from app.models.question import Option
+    from sqlalchemy import select
+
+    course = await _ticket_course(client, db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
+                                   json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
+        module_id = module.json()["id"]
+        question = await client.post(f"/api/v1/admin/modules/{module_id}/questions", json={
+            "enunciado": "Selecciona la respuesta correcta", "options": [
+                {"texto": "Eliminar", "is_correct": False},
+                {"texto": "Conservar correcta", "is_correct": True, "feedback": "Explicación original"},
+                {"texto": "Conservar incorrecta", "is_correct": False},
+            ],
+        }, headers=ADMIN_HEADERS)
+        assert question.status_code == 201, question.text
+        original = question.json()
+        admin = await _get_user(db, FAKE_ADMIN_SUB)
+        history = ExamAttempt(created_at=datetime.now(UTC), user_id=admin.id, module_id=uuid.UUID(module_id), score=100, passed=True,
+                              min_score_snapshot=70, answers={original["id"]: original["options"][1]["id"]})
+        db.add(history)
+        await db.commit()
+        payload = {"enunciado": "Enunciado actualizado", "options": [
+            {**original["options"][1], "feedback": "Explicación actualizada"},
+            original["options"][2],
+            {"texto": "Nueva opción", "is_correct": False, "feedback": "Es incorrecta"},
+        ]}
+        updated = await client.patch(f"/api/v1/admin/questions/{original['id']}", json=payload,
+                                     headers=ADMIN_HEADERS)
+        loaded = await client.get(f"/api/v1/admin/questions/{original['id']}", headers=ADMIN_HEADERS)
+        # A foreign option ID must reject the whole edit without changing the question.
+        payload["enunciado"] = "No debe persistir"
+        payload["options"][0]["id"] = str(uuid.uuid4())
+        failed = await client.patch(f"/api/v1/admin/questions/{original['id']}", json=payload,
+                                    headers=ADMIN_HEADERS)
+        after_failure = await client.get(f"/api/v1/admin/questions/{original['id']}", headers=ADMIN_HEADERS)
+    assert updated.status_code == 200, updated.text
+    options = loaded.json()["options"]
+    assert len(options) == 3
+    assert options[0]["id"] == original["options"][1]["id"]
+    assert options[0]["is_correct"] is True
+    assert options[0]["feedback"] == "Explicación actualizada"
+    assert options[2]["id"] not in [o["id"] for o in original["options"]]
+    assert await db.scalar(select(Option).where(Option.id == uuid.UUID(original["options"][0]["id"]))) is None
+    assert failed.status_code == 422
+    assert after_failure.json()["enunciado"] == "Enunciado actualizado"
+    await db.refresh(history)
+    assert history.score == 100 and history.passed
+    assert history.answers == {original["id"]: original["options"][1]["id"]}
+
+
+@pytest.mark.asyncio
+async def test_topic_feedback_bulk_save_and_limit_survive_reload(client, db):
+    course = await _ticket_course(client, db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
+                                   json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
+        topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={
+            "title": "Clase de prueba", "content_type": "texto", "max_attempts": 1,
+        }, headers=ADMIN_HEADERS)
+        assert topic.status_code == 201, topic.text
+        topic_id = topic.json()["id"]
+        saved = await client.post(f"/api/v1/admin/topics/{topic_id}/questions/bulk", json=[{
+            "enunciado": "Una pregunta de prueba", "options": [
+                {"texto": "Correcta", "is_correct": True, "feedback": "Muy bien"},
+                {"texto": "Incorrecta", "is_correct": False, "feedback": "Revisa el contenido"},
+                {"texto": "Sin explicación", "is_correct": False},
+            ],
+        }], headers=ADMIN_HEADERS)
+        loaded = await client.get(f"/api/v1/admin/topics/{topic_id}", headers=ADMIN_HEADERS)
+    assert saved.status_code == 200, saved.text
+    assert loaded.json()["max_attempts"] == 1
+    assert [o["feedback"] for o in loaded.json()["questions"][0]["options"]] == ["Muy bien", "Revisa el contenido", ""]
+
+
+def _bulk_q(text: str, **extra):
+    return {
+        "enunciado": text,
+        "options": [
+            {"texto": "A", "is_correct": True},
+            {"texto": "B", "is_correct": False},
+            {"texto": "C", "is_correct": False},
+        ],
+        **extra,
+    }
+
+
+@pytest.mark.asyncio
+async def test_bulk_questions_keeps_ids_and_rejects_empty_when_exam(client, db):
+    course = await _ticket_course(client, db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
+                                   json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
+        topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={
+            "title": "Clase de prueba", "content_type": "texto", "has_exam": True,
+        }, headers=ADMIN_HEADERS)
+        url = f"/api/v1/admin/topics/{topic.json()['id']}/questions/bulk"
+        first = (await client.post(url, json=[_bulk_q("Pregunta uno"), _bulk_q("Pregunta dos")],
+                                   headers=ADMIN_HEADERS)).json()
+        edited = first[0] | {"enunciado": "Pregunta uno editada"}
+        second = await client.post(url, json=[edited, _bulk_q("Pregunta tres")], headers=ADMIN_HEADERS)
+        empty = await client.post(url, json=[], headers=ADMIN_HEADERS)
+        foreign = await client.post(url, json=[_bulk_q("X pregunta", id=str(uuid.uuid4()))],
+                                    headers=ADMIN_HEADERS)
+    assert second.status_code == 200, second.text
+    assert second.json()[0]["id"] == first[0]["id"]
+    assert second.json()[0]["enunciado"] == "Pregunta uno editada"
+    assert second.json()[1]["id"] != first[1]["id"]
+    assert [q["order_index"] for q in second.json()] == [0, 1]
+    assert empty.status_code == 422
+    assert foreign.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_options_endpoint_removed_and_question_order_increments(client, db):
+    course = await _ticket_course(client, db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
+                                   json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
+        topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={
+            "title": "Clase de prueba", "content_type": "texto",
+        }, headers=ADMIN_HEADERS)
+        url = f"/api/v1/admin/topics/{topic.json()['id']}/questions"
+        q1 = await client.post(url, json=_bulk_q("Pregunta uno"), headers=ADMIN_HEADERS)
+        q2 = await client.post(url, json=_bulk_q("Pregunta dos"), headers=ADMIN_HEADERS)
+        patched = await client.patch(
+            f"/api/v1/admin/options/{q1.json()['options'][0]['id']}",
+            json={"is_correct": False}, headers=ADMIN_HEADERS)
+    assert [q1.json()["order_index"], q2.json()["order_index"]] == [0, 1]
+    assert patched.status_code in (404, 405)
+
+
+@pytest.mark.asyncio
+async def test_replace_topic_blocks_same_ids_keeps_progress(client: AsyncClient, db: AsyncSession) -> None:
+    from datetime import UTC, datetime
+
+    from app.models.base import new_uuid
+    from sqlalchemy import select
+
+    from app.models.progress import ContentBlockProgress, TopicProgress
+    from app.models.user import User
+
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin User", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+    topic_id = await _make_topic_for_blocks(db)
+    student = User(
+        id=new_uuid(), neon_user_id="keep_progress", email="keep@test.com", full_name="Keep",
+        birth_date=datetime(1995, 1, 1).date(), role="estudiante", status="activo",
+    )
+    db.add(student)
+    await db.flush()
+    db.add(TopicProgress(id=new_uuid(), user_id=student.id, topic_id=topic_id,
+                         state="contenido_visto", content_completed_at=datetime.now(UTC)))
+    await db.commit()
+
+    pdf = {"kind": "pdf", "media_key": "pdf/abc/doc.pdf", "order_index": 0}
+    with patch("app.deps.verify_stack_token",
+               _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin User")):
+        first = await client.put(f"/api/v1/admin/topics/{topic_id}/blocks",
+                                 json=[pdf, {"kind": "texto", "content_body": "<p>Hola</p>", "order_index": 1}],
+                                 headers=ADMIN_HEADERS)
+        assert first.status_code == 200, first.text
+        blocks = first.json()["blocks"]
+        db.add(ContentBlockProgress(id=new_uuid(), user_id=student.id, block_id=uuid.UUID(blocks[0]["id"]),
+                                    pdf_last_page=3, pdf_total_pages=3))
+        seen = (await db.execute(select(TopicProgress).where(TopicProgress.topic_id == topic_id))).scalar_one()
+        seen.state = "contenido_visto"  # la primera PUT creó el PDF y re-gateó; restauramos
+        await db.commit()
+        same = await client.put(
+            f"/api/v1/admin/topics/{topic_id}/blocks",
+            json=[{**pdf, "id": blocks[0]["id"]},
+                  {"kind": "texto", "content_body": "<p>Hola editado</p>", "order_index": 1, "id": blocks[1]["id"]}],
+            headers=ADMIN_HEADERS)
+        assert same.status_code == 200, same.text
+        kept = (await db.execute(select(ContentBlockProgress))).scalars().all()
+        assert [k.pdf_last_page for k in kept] == [3]
+        tp0 = (await db.execute(select(TopicProgress).where(TopicProgress.topic_id == topic_id))).scalar_one()
+        await db.refresh(tp0)
+        assert tp0.state == "contenido_visto"
+        swapped = await client.put(
+            f"/api/v1/admin/topics/{topic_id}/blocks",
+            json=[{**pdf, "id": blocks[0]["id"], "media_key": "pdf/otro/nuevo.pdf"}],
+            headers=ADMIN_HEADERS)
+
+    assert same.status_code == 200, same.text
+    assert [b["id"] for b in same.json()["blocks"]] == [b["id"] for b in blocks]
+    tp = (await db.execute(select(TopicProgress).where(TopicProgress.topic_id == topic_id))).scalar_one()
+    await db.refresh(tp)
+    # tras `same`: progreso intacto; tras `swapped`: pdf cambió → re-gating
+    assert swapped.status_code == 200
+    assert tp.state == "disponible"
+    left = (await db.execute(select(ContentBlockProgress))).scalars().all()
+    assert left == []
 
 

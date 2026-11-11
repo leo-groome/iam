@@ -67,6 +67,7 @@ _KIND_TO_SCOPE_PREFIX: dict[str, str] = {
 
 
 class ContentBlockIn(BaseModel):
+    id: uuid.UUID | None = None
     kind: ContentType
     media_key: str | None = None
     content_body: str | None = Field(None, max_length=20000)

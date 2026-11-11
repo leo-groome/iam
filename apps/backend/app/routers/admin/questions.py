@@ -10,21 +10,22 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud import admin as crud
 from app.db import get_db
 from app.deps import require_role
+from app.models.question import Question
 from app.models.user import User
 from app.routers.admin.permissions import (
     assert_can_manage_module,
-    assert_can_manage_option,
     assert_can_manage_question,
     assert_can_manage_topic,
 )
 from app.schemas.admin.questions import (
-    OptionResponse,
-    OptionUpdate,
+    QuestionBulkItem,
     QuestionCreate,
     QuestionResponse,
     QuestionUpdate,
@@ -56,7 +57,7 @@ async def create_question_for_topic(
         topic_id=topic_id,
         module_id=None,
         options_data=options_data,
-        order_index=body.order_index,
+        order_index=await crud.next_question_order(db, topic_id=topic_id, module_id=None),
     )
     await log_admin_action(
         db,
@@ -77,27 +78,56 @@ async def create_question_for_topic(
 )
 async def replace_questions_for_topic(
     topic_id: uuid.UUID,
-    body: list[QuestionCreate],
+    body: list[QuestionBulkItem],
     current_user: User = Depends(_guard),  # noqa: B008
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> list[QuestionResponse]:
+    """Sincroniza el banco del tema: upsert por `id`, archiva solo las preguntas omitidas."""
     await assert_can_manage_topic(db, current_user, topic_id)
-
-    existing = await crud.list_topic_questions(db, topic_id)
-    for question in existing:
-        await crud.archive_question(db, question)
-
-    created = []
-    for idx, question_body in enumerate(body):
-        question = await crud.create_question(
-            db,
-            enunciado=question_body.enunciado,
-            topic_id=topic_id,
-            module_id=None,
-            options_data=[o.model_dump() for o in question_body.options],
-            order_index=idx,
+    topic = await crud.get_topic(db, topic_id)
+    if topic is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+    if not body and topic.has_exam:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "questions_required",
+                "message": "Un tema con examen necesita al menos 1 pregunta.",
+            },
         )
-        created.append(question)
+
+    existing = {q.id: q for q in await crud.list_topic_questions(db, topic_id)}
+    kept: set[uuid.UUID] = set()
+    ids = [i.id for i in body if i.id is not None]
+    if len(ids) != len(set(ids)) or any(i not in existing for i in ids):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Una pregunta no pertenece a este tema",
+        )
+
+    for idx, item in enumerate(body):
+        if item.id is None:
+            await crud.create_question(
+                db,
+                enunciado=item.enunciado,
+                topic_id=topic_id,
+                module_id=None,
+                options_data=[o.model_dump() for o in item.options],
+                order_index=idx,
+            )
+            continue
+        kept.add(item.id)
+        try:
+            crud.apply_question_edit(
+                existing[item.id], enunciado=item.enunciado, options=item.options, order_index=idx
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    for question_id, question in existing.items():
+        if question_id not in kept:
+            await crud.archive_question(db, question)
+    await db.flush()
 
     await log_admin_action(
         db,
@@ -105,7 +135,7 @@ async def replace_questions_for_topic(
         action="replace_bulk",
         entity="topic_questions",
         entity_id=topic_id,
-        payload={"topic_id": str(topic_id), "question_count": len(created)},
+        payload={"topic_id": str(topic_id), "question_count": len(body)},
     )
     await db.commit()
 
@@ -133,7 +163,7 @@ async def create_question_for_module(
         topic_id=None,
         module_id=module_id,
         options_data=options_data,
-        order_index=body.order_index,
+        order_index=await crud.next_question_order(db, topic_id=None, module_id=module_id),
     )
     await log_admin_action(
         db,
@@ -180,22 +210,28 @@ async def patch_question(
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> QuestionResponse:
     """R-ADM-04: Editing enunciado does not affect historical exam_attempts scores."""
-    question = await crud.get_question(db, question_id)
-    if question is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
     await assert_can_manage_question(db, current_user, question_id)
+    result = await db.execute(
+        select(Question).where(Question.id == question_id)
+        .options(selectinload(Question.options)).with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    question = result.scalar_one_or_none()
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    if body.enunciado is None and body.options is None:
+        raise HTTPException(status_code=422, detail="Enunciado u opciones requeridos")
 
-    if body.enunciado is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="enunciado required")
-
-    updated = await crud.update_question(db, question, body.enunciado)
+    try:
+        crud.apply_question_edit(question, enunciado=body.enunciado, options=body.options)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await db.flush()
+    updated = question
     await log_admin_action(
-        db,
-        actor_id=current_user.id,
-        action="update",
-        entity="question",
+        db, actor_id=current_user.id, action="update", entity="question",
         entity_id=question_id,
-        payload={"enunciado": body.enunciado[:80]},
+        payload={"enunciado": question.enunciado[:80], "options_updated": body.options is not None},
     )
     await db.commit()
     await db.refresh(updated, ["options"])
@@ -224,30 +260,3 @@ async def archive_question(
         payload={"enunciado": question.enunciado[:80]},
     )
     await db.commit()
-
-
-@router.patch("/api/v1/admin/options/{option_id}", response_model=OptionResponse)
-async def patch_option(
-    option_id: uuid.UUID,
-    body: OptionUpdate,
-    current_user: User = Depends(_guard),  # noqa: B008
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> OptionResponse:
-    option = await crud.get_option(db, option_id)
-    if option is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Option not found")
-    await assert_can_manage_option(db, current_user, option_id)
-
-    updates = body.model_dump(exclude_none=True)
-    updated = await crud.update_option(db, option, updates)
-    await log_admin_action(
-        db,
-        actor_id=current_user.id,
-        action="update",
-        entity="option",
-        entity_id=option_id,
-        payload=updates,
-    )
-    await db.commit()
-    await db.refresh(updated)
-    return OptionResponse.model_validate(updated)
