@@ -14,6 +14,7 @@ export interface ContentBlockOut {
 
 /** Content block payload sent to PUT /admin/topics/{id}/blocks. */
 export interface ContentBlockIn {
+  id?: string;
   kind: BlockKind;
   media_key: string | null;
   content_body: string | null;
@@ -128,6 +129,10 @@ export const adminService = {
     }) as Promise<any>;
   },
 
+  async updateQuestionWithOptions(id: string, data: any): Promise<any> {
+    return apiPatch('/api/v1/admin/questions/{question_id}' as any, { params: { question_id: id }, body: data }) as Promise<any>;
+  },
+
   async updateQuestion(id: string, enunciado: string): Promise<any> {
     return apiPatch('/api/v1/admin/questions/{id}' as any, {
       params: { id },
@@ -151,11 +156,6 @@ export const adminService = {
       params: { topic_id: topicId },
       body: blocks,
     }) as Promise<any>;
-  },
-
-  // Options
-  async updateOption(id: string, data: any): Promise<any> {
-    return apiPatch('/api/v1/admin/options/{id}' as any, { params: { id }, body: data }) as Promise<any>;
   },
 
   // Students
