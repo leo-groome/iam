@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router';
 import { onMounted, ref } from 'vue';
+import { sanitizeHtml } from '@/lib/sanitize';
 import type { components } from '@/lib/types.gen';
 import { adminService } from '@/services/admin.service';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
@@ -225,7 +226,7 @@ const getContentTypeBadgeColor = (contentType: string): string => {
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1">
             <p class="text-xs text-[var(--color-text-muted)] mb-1">Pregunta {{ i + 1 }}</p>
-            <p class="font-semibold">{{ p.enunciado }}</p>
+            <div class="font-semibold prose-sm" v-html="sanitizeHtml(p.enunciado)"></div>
             <p class="text-sm text-[var(--color-text-muted)] mt-1">{{ p.options?.length ?? 0 }} opciones</p>
           </div>
           <div class="flex gap-2">

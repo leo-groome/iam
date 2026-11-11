@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import StatCard from "@/components/ui/StatCard.vue";
 import SkeletonStats from "@/components/ui/SkeletonStats.vue";
 import Banner from "@/components/ui/Banner.vue";
@@ -7,6 +7,8 @@ import { adminService } from '@/services/admin.service';
 
 const kpis = ref<any>(null);
 const loading = ref(true);
+const maxWeekly = computed(() => Math.max(1, ...(kpis.value?.enrollments_per_week ?? []).map((w: any) => w.count)));
+const maxCompletions = computed(() => Math.max(1, ...(kpis.value?.completions_per_course ?? []).map((c: any) => c.completions)));
 
 onMounted(async () => {
   try {
@@ -49,90 +51,44 @@ onMounted(async () => {
       
       <transition name="fade" mode="out-in">
         <div v-if="!loading" class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard label="Estudiantes Totales" :value="String(kpis?.total_students ?? '-')" delta="+12 este mes" trend="up" class="hover:shadow-md transition-shadow" />
-          <StatCard label="Cursos Activos" :value="String(kpis?.active_courses ?? '-')" delta="+5 vs ayer" trend="up" class="hover:shadow-md transition-shadow" />
-          <StatCard label="Tasa de Finalización" :value="`${kpis?.completion_rate ?? '-'}%`" delta="+3% esta semana" trend="up" class="hover:shadow-md transition-shadow" />
-          <StatCard label="Promedio Global" :value="`${kpis?.avg_exam_score ?? '-'}/100`" delta="Estable" trend="up" class="hover:shadow-md transition-shadow" />
-          <StatCard label="Certificados Emitidos" value="142" delta="+28 este mes" trend="up" class="hover:shadow-md transition-shadow" />
+          <StatCard label="Estudiantes Totales" :value="String(kpis?.total_students ?? '-')" :delta="`${kpis?.new_students_last_7d ?? 0} nuevos (7 días)`" trend="up" class="hover:shadow-md transition-shadow" />
+          <StatCard label="Cursos Activos" :value="String(kpis?.active_courses ?? '-')" class="hover:shadow-md transition-shadow" />
+          <StatCard label="Tasa de Finalización" :value="`${kpis?.completion_rate ?? '-'}%`" class="hover:shadow-md transition-shadow" />
+          <StatCard label="Promedio Global" :value="`${kpis?.avg_exam_score ?? '-'}/100`" class="hover:shadow-md transition-shadow" />
+          <StatCard label="Certificados Emitidos" :value="String(kpis?.certificates_issued ?? '-')" class="hover:shadow-md transition-shadow" />
         </div>
       </transition>
     </section>
 
+    <!-- DATOS REALES: inscripciones por semana y finalizaciones por curso -->
     <transition name="fade" mode="out-in">
-      <div v-if="!loading" class="grid lg:grid-cols-3 gap-6">
-      <!-- ACTIVIDAD RECIENTE (Takes 1 column) -->
-      <div class="card flex flex-col hover:shadow-md transition-shadow">
-        <div class="p-6 border-b border-[var(--color-border)] flex items-center justify-between">
-          <h2 class="font-bold text-[var(--color-text)]">Actividad Reciente</h2>
-          <button class="text-xs font-medium text-[var(--color-primary)] hover:underline">Ver todo</button>
-        </div>
-        <div class="p-6 space-y-6 flex-1 overflow-y-auto max-h-[400px] scrollbar-thin">
-          <div v-for="(act, index) in [
-            { user: 'María González', action: 'obtuvo su certificado en', target: 'Módulo: Educar', time: 'hace 2 horas', icon: '🏆', color: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400' },
-            { user: 'Juan Pérez', action: 'se registró en la plataforma', target: '', time: 'hace 5 horas', icon: '👤', color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' },
-            { user: 'Ana López', action: 'completó su examen con', target: '95/100', time: 'ayer', icon: '📝', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' },
-            { user: 'Carlos M.', action: 'comenzó el curso', target: 'Acompañamiento Social', time: 'ayer', icon: '▶️', color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' },
-          ]" :key="index" class="flex gap-4 items-start">
-            <div :class="['w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg shadow-sm', act.color]">
-              {{ act.icon }}
-            </div>
-            <div class="pt-0.5">
-              <p class="text-sm leading-snug">
-                <span class="font-bold text-[var(--color-text)]">{{ act.user }}</span> 
-                <span class="text-[var(--color-text-muted)]"> {{ act.action }} </span> 
-                <span class="font-semibold text-[var(--color-primary)]">{{ act.target }}</span>
-              </p>
-              <p class="text-xs text-[var(--color-text-muted)] mt-1 font-medium uppercase tracking-wide">{{ act.time }}</p>
+      <div v-if="!loading && kpis" class="grid lg:grid-cols-2 gap-6">
+        <div class="card p-6">
+          <h2 class="font-bold text-[var(--color-text)] mb-6">Inscripciones por semana</h2>
+          <div class="flex items-end gap-1.5 h-40">
+            <div v-for="w in kpis.enrollments_per_week" :key="w.week_start" class="flex-1 flex flex-col items-center justify-end gap-1 h-full" :title="`${w.week_start}: ${w.count}`">
+              <span class="text-[10px] text-[var(--color-text-muted)]">{{ w.count || '' }}</span>
+              <div class="w-full rounded-t bg-[var(--color-primary)]" :style="`height: ${Math.max(2, (w.count / maxWeekly) * 100)}%`"></div>
             </div>
           </div>
+          <p class="text-xs text-[var(--color-text-muted)] mt-3">Últimas 12 semanas.</p>
         </div>
-      </div>
 
-      <!-- INSIGHTS (Takes 2 columns) -->
-      <div class="lg:col-span-2 space-y-6 flex flex-col">
-        <!-- MODULOS ACTIVOS -->
-        <div class="card p-6 flex-1 hover:shadow-md transition-shadow">
-          <h2 class="font-bold text-[var(--color-text)] mb-6">Rendimiento de Módulos</h2>
-          <div class="space-y-6">
-            <div v-for="c in [
-              { name: '1. Educar en la fe', active: 120, pct: 85, color: 'bg-indigo-500' },
-              { name: '2. Acompañamiento social', active: 85, pct: 60, color: 'bg-emerald-500' },
-              { name: '3. Proteger la vida', active: 43, pct: 30, color: 'bg-rose-500' },
-            ]" :key="c.name" class="group">
+        <div class="card p-6">
+          <h2 class="font-bold text-[var(--color-text)] mb-6">Finalizaciones por curso</h2>
+          <p v-if="!kpis.completions_per_course?.length" class="text-sm text-[var(--color-text-muted)]">Aún nadie ha completado un curso.</p>
+          <div v-else class="space-y-5">
+            <div v-for="c in kpis.completions_per_course" :key="c.course_id">
               <div class="flex justify-between text-sm mb-2">
-                <span class="font-semibold text-[var(--color-text)]">{{ c.name }}</span>
-                <span class="text-[var(--color-text-muted)] font-medium">{{ c.active }} activos</span>
+                <span class="font-semibold text-[var(--color-text)]">{{ c.title }}</span>
+                <span class="text-[var(--color-text-muted)] font-medium">{{ c.completions }}</span>
               </div>
-              <div class="h-2.5 bg-[var(--color-bg-hover)] rounded-full overflow-hidden shadow-inner">
-                <div class="h-full rounded-full transition-all duration-500 ease-out group-hover:brightness-110" :class="c.color" :style="`width: ${c.pct}%`"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ALERTAS CUELLOS DE BOTELLA -->
-        <div class="card p-6 hover:shadow-md transition-shadow">
-          <div class="flex items-center gap-2 mb-6">
-            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-            <h2 class="font-bold text-[var(--color-text)]">Cuellos de Botella Académicos</h2>
-          </div>
-          <div class="grid md:grid-cols-3 gap-4">
-            <div v-for="b in [
-              { name: 'Examen Final - Módulo 2', metric: '65% reprueban (1er intento)', severity: 'high', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', class: 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-900/50', iconColor: 'text-red-600 dark:text-red-400', metricColor: 'text-red-700 dark:text-red-300' },
-              { name: 'Lectura: Documentos del concilio', metric: '40% de abandono aquí', severity: 'medium', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', class: 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/50', iconColor: 'text-amber-600 dark:text-amber-400', metricColor: 'text-amber-700 dark:text-amber-300' },
-              { name: 'Quiz: Introducción', metric: '25% reprueban (1er intento)', severity: 'low', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', class: 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-900/50', iconColor: 'text-blue-600 dark:text-blue-400', metricColor: 'text-blue-700 dark:text-blue-300' },
-            ]" :key="b.name" :class="['p-4 rounded-xl border flex flex-col justify-between gap-3 transition-colors', b.class]">
-              <div class="flex items-start justify-between">
-                <svg class="w-6 h-6" :class="b.iconColor" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="b.icon"></path></svg>
-              </div>
-              <div>
-                <h3 class="font-bold text-sm mb-1 leading-tight text-[var(--color-text)]">{{ b.name }}</h3>
-                <p class="text-xs font-bold" :class="b.metricColor">{{ b.metric }}</p>
+              <div class="h-2.5 bg-[var(--color-bg-hover)] rounded-full overflow-hidden">
+                <div class="h-full rounded-full bg-emerald-500" :style="`width: ${(c.completions / maxCompletions) * 100}%`"></div>
               </div>
             </div>
           </div>
         </div>
-      </div>
       </div>
     </transition>
   </div>

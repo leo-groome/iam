@@ -204,6 +204,12 @@ function setupPdfObserver(): void {
       let advanced = false;
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
+        // Página alta en contenedor bajo: el máximo visible es rootH/pageH, así que exigimos
+        // solo el 80% de eso cuando es menor al 50% (IAM-007).
+        const rootH = entry.rootBounds?.height ?? 0;
+        const pageH = entry.boundingClientRect.height || 1;
+        const needed = Math.min(0.5, (rootH / pageH) * 0.8);
+        if (entry.intersectionRatio < needed) continue;
         const pageNum = Number((entry.target as HTMLElement).dataset.pageNum);
         if (!pageNum || seenPages.has(pageNum)) continue;
         seenPages.add(pageNum);
@@ -216,7 +222,7 @@ function setupPdfObserver(): void {
         void syncPdfProgress();
       }
     },
-    { root: pdfContainerEl.value, threshold: 0.5 },
+    { root: pdfContainerEl.value, threshold: Array.from({ length: 21 }, (_, i) => i / 20) },
   );
   for (const canvas of pdfPageEls.value) {
     if (canvas) pdfObserver.observe(canvas);

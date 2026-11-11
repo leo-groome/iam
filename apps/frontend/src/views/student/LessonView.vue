@@ -90,7 +90,7 @@ const nextUrl = computed(() => {
 
 // Called by LearningPlayer after mark-content-done succeeds.
 // Estimates new course_pct from allTemas (server-confirmed, no rollback needed).
-function handleContentDone() {
+function handleContentDone(newState?: string) {
   const total = allTemas.value.length;
   if (total === 0) return;
   const isDone = (t: any) => t.has_exam ? t.state === 'aprobado' : ['contenido_visto', 'aprobado', 'en_repaso'].includes(t.state);
@@ -98,6 +98,8 @@ function handleContentDone() {
   const currentWasAlreadyDone = isDone(tema.value);
   const newDone = currentWasAlreadyDone ? alreadyDone : alreadyDone + 1;
   progressStore.updateProgress(slug, Math.min(100, Math.round((newDone / total) * 100)));
+  // Refleja el estado confirmado por el servidor (habilita "Ir al Examen" sin recargar).
+  if (newState && temaCargado.value) temaCargado.value = { ...temaCargado.value, state: newState };
 }
 </script>
 
@@ -128,7 +130,7 @@ function handleContentDone() {
           <div v-else key="real-header" class="mb-6">
             <p class="text-sm text-[var(--color-primary)] font-medium">{{ tema.moduloTitle }}</p>
             <h1 class="text-2xl sm:text-3xl font-bold tracking-tight mt-1 mb-2">{{ tema.title }}</h1>
-            <p class="text-[var(--color-text-muted)]">{{ tema.duration_seconds }}s · {{ tema.has_exam ? 'Con examen' : 'Sin examen' }}</p>
+            <p class="text-[var(--color-text-muted)]">{{ [tema.duration_seconds ? `${tema.duration_seconds}s` : null, tema.has_exam ? 'Con examen' : 'Sin examen'].filter(Boolean).join(' · ') }}</p>
           </div>
         </transition>
 

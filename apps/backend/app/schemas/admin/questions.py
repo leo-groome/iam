@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+_TAG_RE = re.compile(r"<[^>]*>")
 
 
-
+def _check_enunciado_text(value: str | None) -> str | None:
+    """El mínimo de 5 caracteres cuenta texto visible, no etiquetas HTML (`<p>a</p>` no pasa)."""
+    if value is not None and len(_TAG_RE.sub("", value).replace("&nbsp;", " ").strip()) < 5:
+        raise ValueError("El enunciado necesita al menos 5 caracteres de texto")
+    return value
 
 
 class OptionCreate(BaseModel):
@@ -33,6 +40,7 @@ class QuestionCreate(BaseModel):
     options: list[OptionCreate] = Field(..., min_length=3, max_length=5)
     order_index: int = Field(0, ge=0)
 
+    _enunciado_text = field_validator("enunciado")(_check_enunciado_text)
 
     @model_validator(mode="after")
     def exactly_one_correct(self) -> QuestionCreate:
@@ -54,6 +62,7 @@ class QuestionBulkItem(BaseModel):
     options: list[OptionEdit] = Field(..., min_length=3, max_length=5)
     order_index: int = Field(0, ge=0)
 
+    _enunciado_text = field_validator("enunciado")(_check_enunciado_text)
 
     @model_validator(mode="after")
     def valid_options(self) -> QuestionBulkItem:
@@ -69,6 +78,7 @@ class QuestionUpdate(BaseModel):
     enunciado: str | None = Field(None, min_length=5, max_length=5000)
     options: list[OptionEdit] | None = Field(None, min_length=3, max_length=5)
 
+    _enunciado_text = field_validator("enunciado")(_check_enunciado_text)
 
     @model_validator(mode="after")
     def valid_options(self) -> QuestionUpdate:

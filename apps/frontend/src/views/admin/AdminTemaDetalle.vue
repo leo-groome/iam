@@ -157,7 +157,7 @@ const validateQuestions = (): string | null => {
   if (!hasExam.value) return null;
   if (!isNew && questions.value.length === 0) return 'Agrega al menos una pregunta o desmarca "Requiere cuestionario".';
   for (const [qIndex, question] of questions.value.entries()) {
-    if (question.enunciado.trim().length < 5) return `La pregunta ${qIndex + 1} necesita al menos 5 caracteres.`;
+    if (!new DOMParser().parseFromString(question.enunciado, 'text/html').body.textContent?.trim() || question.enunciado.trim().length < 5) return `La pregunta ${qIndex + 1} necesita al menos 5 caracteres.`;
     if (question.options.length < 3 || question.options.length > 5) return `La pregunta ${qIndex + 1} debe tener entre 3 y 5 opciones.`;
     if (question.options.some((option) => option.texto.trim().length < 1)) return `Todas las opciones de la pregunta ${qIndex + 1} deben tener texto.`;
     if (question.options.some(option => option.feedback.length > 5000)) return 'La retroalimentación admite hasta 5000 caracteres.';
@@ -183,7 +183,8 @@ const validateBlocks = (): string | null => {
   if (blocks.value.length === 0) return 'Agrega al menos un bloque de contenido.';
   for (const [index, block] of blocks.value.entries()) {
     if (block.kind === 'texto') {
-      if (!block.content_body || !block.content_body.trim()) {
+      const plain = (block.content_body ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+      if (!plain) {
         return `El bloque ${index + 1} (texto) necesita contenido.`;
       }
     } else if (!block.media_key) {

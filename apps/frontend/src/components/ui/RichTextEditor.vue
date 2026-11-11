@@ -35,7 +35,18 @@ const showBlockTools = computed(() => props.variant !== 'inline');
 const editor = useEditor({
   content: sanitize(props.modelValue || ''),
   extensions: [
-    StarterKit,
+    // Solo el formato que sanitizeHtml conserva (p, br, strong, em, h2, h3, ul, ol, li, a):
+    // lo demás se vería en el editor pero se perdería al guardar/mostrar (IAM-019).
+    StarterKit.configure({
+      blockquote: false,
+      code: false,
+      codeBlock: false,
+      strike: false,
+      underline: false,
+      link: false, // se configura aparte abajo
+      horizontalRule: false,
+      heading: { levels: [2, 3] },
+    }),
     Link.configure({
       openOnClick: false,
       autolink: true,

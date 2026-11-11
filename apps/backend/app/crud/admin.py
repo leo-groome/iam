@@ -624,7 +624,14 @@ async def get_dashboard_kpis(db: AsyncSession) -> dict[str, object]:
             {"course_id": course_id_val, "title": title, "completions": cnt}
         )
 
+    from app.models.certificate import Certificate
+
+    certificates_issued = (
+        await db.execute(select(func.count()).select_from(Certificate))
+    ).scalar() or 0
+
     return {
+        "certificates_issued": certificates_issued,
         "total_students": total_students,
         "new_students_last_7d": new_students,
         "active_courses": active_courses,
