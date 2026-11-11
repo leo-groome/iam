@@ -36,6 +36,7 @@ const successMessage = ref('');
 const title = ref('');
 const hasExam = ref(false);
 const examMinScore = ref(70);
+const maxAttempts = ref(3);
 const questions = ref<ExamQuestion[]>([]);
 
 const makeEmptyBlock = (): Block => ({
@@ -93,6 +94,7 @@ onMounted(async () => {
       if (tema.value) {
         title.value = tema.value.title;
         hasExam.value = tema.value.has_exam;
+        maxAttempts.value = tema.value.max_attempts ?? 3;
         examMinScore.value = tema.value.exam_min_score || 70;
         questions.value = (tema.value.questions ?? []).map(normalizeQuestion);
         const loadedBlocks: any[] = tema.value.blocks ?? [];
@@ -209,11 +211,13 @@ const handleSave = async () => {
 
   saving.value = true;
   try {
+    if (!Number.isInteger(maxAttempts.value) || maxAttempts.value < 1 || maxAttempts.value > 10) throw new Error('El límite de intentos debe estar entre 1 y 10.');
     const score = Number(examMinScore.value) || 70;
     const formData: any = {
       title: title.value,
       has_exam: hasExam.value,
       exam_min_score: score,
+      max_attempts: maxAttempts.value,
     };
     let topicId = temaId;
     if (isNew) {
@@ -298,6 +302,9 @@ const handleDeleteTopic = async () => {
           </label>
 
           <div v-if="hasExam" class="mt-4 space-y-4">
+            <label class="label" for="topic-max-attempts">Intentos máximos</label>
+            <input id="topic-max-attempts" type="number" min="1" max="10" v-model.number="maxAttempts" class="input" />
+            <p class="help">Los intentos previos cuentan para este límite.</p>
             <div>
               <label class="label">Puntaje mínimo para aprobar: {{ examMinScore }}%</label>
               <input type="range" class="w-full" v-model.number="examMinScore" min="50" max="100" />

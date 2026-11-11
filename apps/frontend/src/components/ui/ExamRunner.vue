@@ -5,7 +5,8 @@ import { sanitizeHtml } from '@/lib/sanitize'
 import type { ExamResponse, QuestionOut } from '@/lib/api'
 
 const props = defineProps<{
-  topicId: string
+  topicId?: string
+  moduleId?: string
   cursoSlug: string
   nextUrl?: string
 }>()
@@ -19,12 +20,16 @@ const submitting = ref(false)
 const examToken = ref<string>('')
 const questions = ref<QuestionOut[]>([])
 const minScore = ref<number>(70)
+const attemptsRemaining = ref<number | null>(null)
+const limitReached = ref(false)
+const examPath = computed(() => props.moduleId ? `/api/v1/modules/${props.moduleId}/exam` : `/api/v1/topics/${props.topicId}/exam`)
 
 const idx = ref(0)
 const answers = ref<Map<string, string>>(new Map())
 const selectedOption = ref<string | null>(null)
 
-const result = ref<{ score: number; passed: boolean; min_score: number; message: string } | null>(null)
+type Result = { score: number; passed: boolean; min_score: number; message: string; attempts_remaining: number; feedback: { question_id: string; option_id: string; enunciado: string; texto: string; is_correct: boolean; feedback: string }[] }
+const result = ref<Result | null>(null)
 
 function getApiDetailCode(err: ApiError): string | null {
   const detail = (err.body as { detail?: unknown } | undefined)?.detail
@@ -37,13 +42,12 @@ function getApiDetailCode(err: ApiError): string | null {
 // Fetch exam on mount
 onMounted(async () => {
   try {
-    const data = (await apiGet('/api/v1/topics/{topic_id}/exam', {
-      params: { topic_id: props.topicId },
-    })) as ExamResponse
+    const data = (await apiGet(examPath.value as any)) as ExamResponse & { attempts_remaining: number }
 
     examToken.value = data.exam_token
     questions.value = data.questions
     minScore.value = data.min_score
+    attemptsRemaining.value = data.attempts_remaining
   } catch (err) {
     if (err instanceof ApiError) {
       if (err.status === 401) {
@@ -51,7 +55,12 @@ onMounted(async () => {
         return
       }
       const detailCode = getApiDetailCode(err)
-      if (err.status === 403 && (detailCode === 'topic_locked' || detailCode === 'repaso_required')) {
+      if (detailCode === 'attempt_limit_reached') {
+        limitReached.value = true
+        fetchError.value = err.message
+      } else if (detailCode === 'module_topics_incomplete') {
+        fetchError.value = 'Completa todas las clases del módulo antes de abrir su diagnóstico.'
+      } else if (err.status === 403 && (detailCode === 'topic_locked' || detailCode === 'repaso_required')) {
         fetchError.value = 'Termina el contenido de la leccion antes de abrir el examen.'
       } else if (err.status === 404) {
         fetchError.value = 'Este tema no tiene preguntas configuradas.'
@@ -94,13 +103,9 @@ async function submitExam() {
   }))
 
   try {
-    const res = (await apiPost('/api/v1/topics/{topic_id}/exam/submit', {
-      params: { topic_id: props.topicId },
-      body: {
-        exam_token: examToken.value,
-        answers: answerPayload,
-      },
-    })) as { score: number; passed: boolean; min_score: number; message: string }
+    const res = (await apiPost(`${examPath.value}/submit` as any, {
+      body: { exam_token: examToken.value, answers: answerPayload },
+    })) as Result
 
     result.value = res
   } catch (err) {
@@ -109,7 +114,10 @@ async function submitExam() {
         window.location.href = '/login'
         return
       }
-      if (err.status === 429) {
+      if (getApiDetailCode(err) === 'attempt_limit_reached') {
+        limitReached.value = true
+        submitError.value = err.message
+      } else if (err.status === 429) {
         submitError.value = 'Demasiados intentos, espera unos minutos.'
       } else if (err.status === 422) {
         submitError.value = 'Error de validacion. Vuelve a intentarlo.'
@@ -128,9 +136,10 @@ async function submitExam() {
 
 // CTAs
 const repasoHref = computed(
-  () => `/curso/${props.cursoSlug}/tema/${props.topicId}?repaso=1`,
+  () => props.moduleId ? `/curso/${props.cursoSlug}` : `/curso/${props.cursoSlug}/tema/${props.topicId}?repaso=1`,
 )
 const resultadoHref = computed(() => {
+  if (props.moduleId) return `/curso/${props.cursoSlug}`
   const s = result.value?.score ?? 0
   return `/curso/${props.cursoSlug}/tema/${props.topicId}/resultado?score=${s}&pass=1`
 })
@@ -171,7 +180,7 @@ function reloadPage() {
       <router-link :to="repasoHref" class="btn btn-primary">
         Volver a la leccion
       </router-link>
-      <button @click="reloadPage" class="btn btn-secondary">
+      <button v-if="!limitReached" @click="reloadPage" class="btn btn-secondary">
         Reintentar
       </button>
     </div>
@@ -179,6 +188,7 @@ function reloadPage() {
 
   <!-- Active exam -->
   <div v-else-if="!result">
+    <p v-if="attemptsRemaining !== null" class="mb-3 text-sm">Intentos disponibles: {{ attemptsRemaining }}</p>
     <!-- Submit error banner -->
     <div
       v-if="submitError"
@@ -248,7 +258,7 @@ function reloadPage() {
       <div class="max-w-3xl mx-auto">
         <button
           @click="next"
-          :disabled="!selectedOption || submitting"
+          :disabled="!selectedOption || submitting || limitReached"
           class="btn btn-primary btn-block"
         >
           <span v-if="submitting">Enviando...</span>
@@ -272,7 +282,7 @@ function reloadPage() {
       <p class="text-5xl font-extrabold text-[var(--color-primary)] mt-4">{{ result.score }}%</p>
       <p class="text-[var(--color-text-muted)] mt-2">Calificación mínima: {{ minScore }}%</p>
       <router-link :to="nextUrl || resultadoHref" class="btn btn-primary btn-block mt-6">
-        Continuar al siguiente tema
+        Continuar
       </router-link>
     </div>
 
@@ -288,9 +298,21 @@ function reloadPage() {
       <p class="text-[var(--color-text-muted)] mt-1">Vamos a repasar juntos.</p>
       <p class="text-5xl font-extrabold text-[var(--color-text-muted)] mt-4">{{ result.score }}%</p>
       <p class="text-[var(--color-text-muted)] mt-2">Necesitas al menos {{ minScore }}% para aprobar.</p>
+      <p class="mt-4 text-sm" role="status">{{ result.message }}</p>
       <a :href="repasoHref" class="btn btn-primary btn-block mt-6">
-        Volver a ver el video
+        Volver al contenido
       </a>
     </div>
+    <section v-if="result.feedback?.length" class="mt-8 space-y-5 text-left" aria-label="Retroalimentación de tus respuestas">
+      <h3 class="font-semibold text-lg">Tus respuestas</h3>
+      <div v-for="answer in result.feedback" :key="answer.question_id" class="border-t pt-4">
+        <div class="rich-text" v-html="sanitizeHtml(answer.enunciado)"></div>
+        <p class="mt-2 break-words">{{ answer.texto }}</p>
+        <p :class="answer.is_correct ? 'text-emerald-700' : 'text-red-700'" class="font-semibold">
+          {{ answer.is_correct ? 'Correcta' : 'Incorrecta' }}
+        </p>
+        <p v-if="answer.feedback" class="mt-2 whitespace-pre-wrap break-words">{{ answer.feedback }}</p>
+      </div>
+    </section>
   </div>
 </template>

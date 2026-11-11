@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router';
 import { onMounted, ref } from 'vue';
+import type { components } from '@/lib/types.gen';
 import { adminService } from '@/services/admin.service';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 
@@ -10,10 +11,12 @@ const courseId = route.params.id as string;
 const modId = route.params.modId as string;
 
 const isNew = modId === 'nuevo';
-const curso = ref(null);
-const mod = ref(null);
+const curso = ref<components['schemas']['CourseAdminResponse'] | null>(null);
+const mod = ref<components['schemas']['ModuleAdminItem'] | null>(null);
 const loading = ref(false);
 const saving = ref(false);
+const saveError = ref('');
+const successMessage = ref('');
 
 // Form state
 const formData = ref<any>({
@@ -57,23 +60,26 @@ onMounted(async () => {
 });
 
 const handleSave = async () => {
+  if (saving.value || loading.value) return;
+  saveError.value = '';
+  successMessage.value = '';
+  if (!Number.isInteger(formData.value.max_attempts) || formData.value.max_attempts < 1 || formData.value.max_attempts > 10) {
+    saveError.value = 'El límite debe ser un número entero entre 1 y 10.';
+    return;
+  }
   saving.value = true;
   try {
+    const payload = { ...formData.value, title: formData.value.title.trim() };
     if (isNew) {
-      await adminService.createModule(courseId, {
-        title: formData.value.title,
-        description: formData.value.description,
-        max_attempts: formData.value.max_attempts,
-      });
+      const created = await adminService.createModule(courseId, payload);
+      await router.replace(`/admin/cursos/${courseId}/modulos/${created.id}`);
     } else {
-      await adminService.updateModule(modId, {
-        title: formData.value.title,
-        description: formData.value.description,
-        max_attempts: formData.value.max_attempts,
-      });
+      const saved = await adminService.updateModule(modId, payload);
+      if (mod.value) Object.assign(mod.value, saved);
+      successMessage.value = 'Módulo guardado.';
     }
-  } catch (err) {
-    console.error('Error saving module:', err);
+  } catch (err: any) {
+    saveError.value = err.message || 'No se pudo guardar el módulo. Tus datos se conservan.';
   } finally {
     saving.value = false;
   }
@@ -131,10 +137,12 @@ const getContentTypeBadgeColor = (contentType: string): string => {
     <h1 class="text-2xl font-bold">{{ isNew ? "Nuevo módulo" : `Editar: ${mod?.title}` }}</h1>
     <div class="flex gap-2">
       <button v-if="!isNew" @click="handleDeleteModule" class="btn border border-red-200 text-red-600 hover:bg-red-50">Eliminar módulo</button>
-      <button @click="handleSave" :disabled="saving" class="btn btn-primary">{{ saving ? "Guardando..." : "Guardar" }}</button>
+      <button @click="handleSave" :disabled="saving || loading" class="btn btn-primary">{{ saving ? "Guardando..." : "Guardar" }}</button>
     </div>
   </header>
 
+  <p v-if="saveError" role="alert" class="mb-4 text-red-700">{{ saveError }}</p>
+  <p v-if="successMessage" role="status" class="mb-4 text-emerald-700">{{ successMessage }}</p>
   <div class="card p-6 mb-6 space-y-4">
     <div>
       <label class="label">Título</label>
@@ -152,7 +160,7 @@ const getContentTypeBadgeColor = (contentType: string): string => {
         <div class="flex items-center gap-4">
           <input type="number" class="input max-w-24" min="1" max="10" v-model.number="formData.max_attempts" />
           <p class="text-sm text-[var(--color-text-muted)]">
-            Si el estudiante agota los intentos, se mostrarán las respuestas correctas y avanzará al siguiente módulo sin importar su calificación final.
+            Los intentos registrados cuentan para este límite. Si se agotan sin aprobar, el estudiante debe contactar al administrador.
           </p>
         </div>
       </div>

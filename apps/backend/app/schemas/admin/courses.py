@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class TopicAdminItem(BaseModel):
@@ -14,8 +14,10 @@ class TopicAdminItem(BaseModel):
     id: uuid.UUID
     title: str
     content_type: str
+    duration_seconds: int | None
     has_exam: bool
     exam_min_score: int
+    max_attempts: int
     order_index: int
     archived_at: str | None = None
 
@@ -27,6 +29,8 @@ class ModuleAdminItem(BaseModel):
     title: str
     order_index: int
     archived_at: str | None = None
+    description: str
+    max_attempts: int
     topics: list[TopicAdminItem] = []
 
 

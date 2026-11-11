@@ -59,6 +59,7 @@ async def create_topic(
         "duration_seconds": body.duration_seconds,
         "has_exam": body.has_exam,
         "exam_min_score": body.exam_min_score,
+        "max_attempts": body.max_attempts,
         "order_index": order_index,
     }
     topic = await crud.create_topic(db, data)

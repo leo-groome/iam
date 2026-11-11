@@ -53,6 +53,8 @@ class ModuleItem(BaseModel):
     title: str
     order_index: int
     topics: list[ModuleTopicItem]
+    has_exam: bool = False
+    exam_passed: bool = False
 
 
 class CourseDetail(BaseModel):

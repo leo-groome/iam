@@ -104,6 +104,12 @@ const routes: Array<RouteRecordRaw> = [
     meta: { layout: 'StudentLayout', requiresAuth: true }
   },
   {
+    path: '/curso/:slug/modulo/:moduleId/examen',
+    name: 'ModuleExamView',
+    component: () => import('@/views/student/ExamView.vue'),
+    meta: { layout: 'StudentLayout', requiresAuth: true }
+  },
+  {
     path: '/curso/:slug/tema/:topicId/resultado',
     name: 'ExamResult',
     component: () => import('@/views/student/ExamResult.vue'),

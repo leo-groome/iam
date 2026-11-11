@@ -10,12 +10,14 @@ from pydantic import BaseModel, ConfigDict, Field
 class ModuleCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=60)
     description: str = Field("", max_length=20000)
+    max_attempts: int = Field(3, ge=1, le=10)
     order_index: int | None = Field(None, ge=0)
 
 
 class ModuleUpdate(BaseModel):
     title: str | None = Field(None, min_length=3, max_length=60)
     description: str | None = Field(None, max_length=20000)
+    max_attempts: int | None = Field(None, ge=1, le=10)
     order_index: int | None = Field(None, ge=0)
 
 
@@ -26,6 +28,7 @@ class ModuleResponse(BaseModel):
     course_id: uuid.UUID
     title: str
     description: str
+    max_attempts: int
     order_index: int
     archived_at: str | None = None
 

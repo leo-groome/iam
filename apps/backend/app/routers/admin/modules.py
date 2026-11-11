@@ -46,6 +46,7 @@ async def create_module(
         "course_id": course_id,
         "title": body.title,
         "description": body.description,
+        "max_attempts": body.max_attempts,
         "order_index": order_index,
     }
     mod = await crud.create_module(db, data)

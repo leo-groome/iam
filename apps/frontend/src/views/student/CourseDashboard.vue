@@ -5,6 +5,7 @@ import ProgressBar from '@/components/ui/ProgressBar.vue';
 import SkeletonCard from '@/components/ui/SkeletonCard.vue';
 import SkeletonText from '@/components/ui/SkeletonText.vue';
 import { coursesService } from '@/services/courses.service';
+import type { CourseDetail } from '@/lib/api';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useProgressStore } from '@/stores/progress';
 
@@ -13,7 +14,7 @@ const router = useRouter();
 const slug = route.params.slug as string;
 const progressStore = useProgressStore();
 
-const curso = ref(null);
+const curso = ref<CourseDetail | null>(null);
 const loading = ref(true);
 
 onMounted(async () => {
@@ -47,6 +48,7 @@ const coverLoaded = ref(false);
 
 const isCompleted = computed(() => {
   if (!curso.value) return false;
+  if (curso.value.modules.some((m: any) => m.has_exam && !m.exam_passed)) return false;
   return curso.value.enrollment_status === 'completado' || progressStore.coursePercentage(slug) === 100;
 });
 
@@ -57,8 +59,13 @@ const primerTemaPendiente = computed(() => {
   return all.find(t => !isDone(t)) ?? (curso.value.modules[0]?.topics[0] ?? null);
 });
 
+const pendingModuleExam = computed(() => curso.value?.modules.find((m: any) =>
+  m.has_exam && !m.exam_passed && m.topics.every((t: any) => t.state === 'aprobado'),
+));
+
 const ctaHref = computed(() => {
   if (!curso.value) return '';
+  if (pendingModuleExam.value) return `/curso/${curso.value.slug}/modulo/${pendingModuleExam.value.id}/examen`;
   if (isCompleted.value) return `/curso/${curso.value.slug}/certificado`;
   if (!primerTemaPendiente.value) return `/curso/${curso.value.slug}/certificado`;
   return `/curso/${curso.value.slug}/tema/${primerTemaPendiente.value.id}`;
@@ -69,12 +76,13 @@ const ctaLabel = computed(() => {
   if (curso.value.enrollment_status === 'no_iniciado') {
     return 'Inscribirse al curso';
   }
+  if (pendingModuleExam.value) return 'Presentar diagnóstico del módulo';
   if (isCompleted.value) return 'Ver Certificado';
   return progressStore.coursePercentage(slug) > 0 ? 'Continuar' : 'Empezar curso';
 });
 
 async function handleCtaClick() {
-  if (!curso.value || !primerTemaPendiente.value || joining.value) return;
+  if (!curso.value || (!primerTemaPendiente.value && !pendingModuleExam.value) || joining.value) return;
   joining.value = true;
 
   if (curso.value.enrollment_status === 'no_iniciado') {
@@ -151,6 +159,11 @@ async function handleCtaClick() {
                 <span class="ml-auto text-xs text-[var(--color-text-muted)]">{{ tema.duration_seconds }}s</span>
               </li>
             </ul>
+            <div v-if="mod.has_exam" class="mt-3 text-sm">
+              <span v-if="mod.exam_passed" class="text-emerald-700">Diagnóstico aprobado</span>
+              <router-link v-else-if="mod.topics.every((t: any) => t.state === 'aprobado')" :to="`/curso/${slug}/modulo/${mod.id}/examen`" class="btn btn-secondary">Presentar diagnóstico</router-link>
+              <p v-else class="text-[var(--color-text-muted)]">El diagnóstico se habilita al completar las clases.</p>
+            </div>
           </details>
         </div>
 

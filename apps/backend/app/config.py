@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     database_url: str
     neon_auth_url: str = Field(validation_alias="NEON_AUTH_URL")
     neon_auth_jwks_url: str = Field(default="", validation_alias="NEON_AUTH_JWKS_URL")
+    # "require" for Neon; "disable" only for the local Docker Postgres.
+    db_ssl: str = Field(default="require", validation_alias="DB_SSL")
     allow_mock_auth: bool = Field(default=False, validation_alias="ALLOW_MOCK_AUTH")
     r2_account_id: str = Field(validation_alias="R2_ACCOUNT_ID")
     r2_access_key_id: str = Field(validation_alias="R2_ACCESS_KEY_ID")

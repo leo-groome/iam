@@ -1156,3 +1156,62 @@ async def test_replace_topic_blocks_resets_in_progress_topic_progress(
 
     assert tp_approved.state == "aprobado"
     assert tp_approved.content_completed_at is not None
+async def _ticket_course(client, db):
+    await _sync_user(client, FAKE_ADMIN_SUB, "admin@test.com", "Admin", ADMIN_HEADERS)
+    await _promote(db, FAKE_ADMIN_SUB, "admin")
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        response = await client.post("/api/v1/admin/courses", json={
+            "title": "Curso de prueba", "slug": "curso-ticket", "short_desc": "Descripción de prueba",
+        }, headers=ADMIN_HEADERS)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+@pytest.mark.asyncio
+async def test_course_duplicate_slug_returns_clear_conflict_and_original_persists(client, db):
+    course = await _ticket_course(client, db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        duplicate = await client.post("/api/v1/admin/courses", json={
+            "title": "Otro curso", "slug": course["slug"], "short_desc": "Descripción de otro curso",
+        }, headers=ADMIN_HEADERS)
+        loaded = await client.get(f"/api/v1/admin/courses/{course['id']}", headers=ADMIN_HEADERS)
+        listing = await client.get("/api/v1/admin/courses", headers=ADMIN_HEADERS)
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"]["code"] == "slug_exists"
+    assert loaded.json()["title"] == course["title"]
+    assert len(listing.json()) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [1, 2])
+async def test_module_attempt_limit_and_description_survive_course_reload(client, db, limit):
+    course = await _ticket_course(client, db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        created = await client.post(f"/api/v1/admin/courses/{course['id']}/modules", json={
+            "title": "Módulo de prueba", "description": "Descripción que no debe perderse", "max_attempts": 3,
+        }, headers=ADMIN_HEADERS)
+        assert created.status_code == 201, created.text
+        changed = await client.patch(f"/api/v1/admin/modules/{created.json()['id']}",
+                                     json={"max_attempts": limit}, headers=ADMIN_HEADERS)
+        loaded = await client.get(f"/api/v1/admin/courses/{course['id']}", headers=ADMIN_HEADERS)
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["max_attempts"] == limit
+    module = loaded.json()["modules"][0]
+    assert module["max_attempts"] == limit
+    assert module["description"] == "Descripción que no debe perderse"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [0, 11, 1.5])
+async def test_invalid_attempt_limit_does_not_update_module(client, db, limit):
+    course = await _ticket_course(client, db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
+                                   json={"title": "Módulo de prueba", "max_attempts": 1}, headers=ADMIN_HEADERS)
+        failed = await client.patch(f"/api/v1/admin/modules/{module.json()['id']}",
+                                    json={"max_attempts": limit}, headers=ADMIN_HEADERS)
+        loaded = await client.get(f"/api/v1/admin/courses/{course['id']}", headers=ADMIN_HEADERS)
+    assert failed.status_code == 422
+    assert loaded.json()["modules"][0]["max_attempts"] == 1
+
+

@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class OptionCreate(BaseModel):
     texto: str = Field(..., min_length=1, max_length=150)
+    feedback: str = Field("", max_length=5000)
     is_correct: bool = False
     order_index: int = Field(0, ge=0)
 
@@ -25,6 +26,7 @@ class OptionResponse(BaseModel):
     id: uuid.UUID
     question_id: uuid.UUID
     texto: str
+    feedback: str
     is_correct: bool
     order_index: int
 
