@@ -25,7 +25,7 @@ from app.deps import get_current_user
 from app.models.onboarding import OnboardingResponse
 from app.models.user import User
 from app.schemas.user import SyncRequest, UserPublic
-from app.security.neon_auth import verify_stack_token
+from app.security.auth_jwt import verify_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ async def auth_sync(
     authorization: str = Header(default=""),
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> User:
-    """Create or update a user row from a validated Neon Auth JWT + birth_date.
+    """Create or update a user row from a validated Better Auth JWT + birth_date.
 
     Steps:
     1. Validate JWT -> extract sub, email, name.
@@ -61,7 +61,7 @@ async def auth_sync(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
 
     try:
-        claims = await verify_stack_token(token)
+        claims = await verify_access_token(token)
     except jwt.ExpiredSignatureError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from exc
     except jwt.InvalidTokenError as exc:
@@ -85,22 +85,22 @@ async def auth_sync(
 
     # --- 3. Upsert ---
     email = claims.email.lower()
-    result = await db.execute(select(User).where(User.neon_user_id == claims.sub))
+    result = await db.execute(select(User).where(User.auth_user_id == claims.sub))
     user = result.scalar_one_or_none()
 
-    # Fallback: row may exist under the same email but a different neon_user_id
-    # (user re-registered in Neon Auth after a prior signup). Email ownership is
-    # guaranteed by Neon Auth's OTP verification before this endpoint runs, so
-    # rebinding neon_user_id to the new sub is safe and correct.
+    # Fallback: row may exist under the same email but a different auth_user_id
+    # (user re-registered in the auth service after a prior signup). Email ownership is
+    # guaranteed by Better Auth's OTP verification before this endpoint runs, so
+    # rebinding auth_user_id to the new sub is safe and correct.
     if user is None:
         result = await db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
-        if user is not None and user.neon_user_id != claims.sub:
+        if user is not None and user.auth_user_id != claims.sub:
             logger.info(
-                "Rebinding existing user to new Neon sub",
-                extra={"neon_user_id_prefix": claims.sub[:8]},
+                "Rebinding existing user to new auth sub",
+                extra={"auth_user_id_prefix": claims.sub[:8]},
             )
-            user.neon_user_id = claims.sub
+            user.auth_user_id = claims.sub
 
     if user is None:
         role = "estudiante"
@@ -114,7 +114,7 @@ async def auth_sync(
                     role = fe_role
         # CREATE: role and status are hard-coded; NEVER from client.
         user = User(
-            neon_user_id=claims.sub,
+            auth_user_id=claims.sub,
             email=email,  # from JWT only, normalized for case-insensitive uniqueness
             full_name=body.full_name,
             birth_date=body.birth_date,
@@ -122,7 +122,7 @@ async def auth_sync(
             status="nuevo",
         )
         db.add(user)
-        logger.info("Created new user", extra={"neon_user_id_prefix": claims.sub[:8], "role": role})
+        logger.info("Created new user", extra={"auth_user_id_prefix": claims.sub[:8], "role": role})
     else:
         # UPDATE: only refresh mutable fields; role stays unchanged.
         changed = False
@@ -133,7 +133,7 @@ async def auth_sync(
             user.full_name = body.full_name
             changed = True
         if changed:
-            logger.info("Updated user profile", extra={"neon_user_id_prefix": claims.sub[:8]})
+            logger.info("Updated user profile", extra={"auth_user_id_prefix": claims.sub[:8]})
 
     # --- 4. Onboarding upsert (optional; bundled from the signup cache) ---
     # Atomic with the user upsert above — a single commit persists both. If the
@@ -148,11 +148,11 @@ async def auth_sync(
         data = body.onboarding.model_dump()
         if onboarding is None:
             db.add(OnboardingResponse(user_id=user.id, **data))
-            logger.info("Stored onboarding response", extra={"neon_user_id_prefix": claims.sub[:8]})
+            logger.info("Stored onboarding response", extra={"auth_user_id_prefix": claims.sub[:8]})
         else:
             for field, value in data.items():
                 setattr(onboarding, field, value)
-            logger.info("Updated onboarding response", extra={"neon_user_id_prefix": claims.sub[:8]})
+            logger.info("Updated onboarding response", extra={"auth_user_id_prefix": claims.sub[:8]})
 
     await db.commit()
     await db.refresh(user)
@@ -167,7 +167,7 @@ async def me(current_user: User = Depends(get_current_user)) -> User:  # noqa: B
 
 @router.post("/me/logout", status_code=204)
 async def logout(_user: User = Depends(get_current_user)) -> None:  # noqa: B008
-    """Stateless logout — Neon Auth manages the session client-side."""
+    """Stateless logout — Better Auth manages the session client-side."""
     # No server-side session to invalidate; 204 signals success to client.
     return None
 

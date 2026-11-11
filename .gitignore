@@ -36,3 +36,7 @@ build/
 *.njsproj
 *.sln
 *.swp
+
+# Local tooling
+.pnpm-store/
+.herdr-web-ui/

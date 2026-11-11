@@ -25,10 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 TEST_DB_URL = "sqlite+aiosqlite:///./test_certificates.db"
 
-FAKE_SUB = "neon_cert_user_001"
+FAKE_SUB = "auth_cert_user_001"
 FAKE_EMAIL = "cert@example.com"
 FAKE_NAME = "Cert Student"
-OTHER_SUB = "neon_cert_other_002"
+OTHER_SUB = "auth_cert_other_002"
 OTHER_EMAIL = "other@example.com"
 OTHER_NAME = "Other User"
 HEADERS = {"Authorization": "Bearer fake-token"}
@@ -36,8 +36,8 @@ OTHER_HEADERS = {"Authorization": "Bearer fake-other-token"}
 
 
 def _make_claims(sub: str = FAKE_SUB, email: str = FAKE_EMAIL, name: str = FAKE_NAME):
-    from app.security.neon_auth import StackAuthClaims
-    return StackAuthClaims(sub=sub, email=email, name=name)
+    from app.security.auth_jwt import AuthClaims
+    return AuthClaims(sub=sub, email=email, name=name)
 
 
 def _mock_verify(sub: str = FAKE_SUB, email: str = FAKE_EMAIL, name: str = FAKE_NAME):
@@ -107,7 +107,7 @@ async def scaffold(db_session: AsyncSession):
 
     user = User(
         id=new_uuid(),
-        neon_user_id=FAKE_SUB,
+        auth_user_id=FAKE_SUB,
         email=FAKE_EMAIL,
         full_name=FAKE_NAME,
         birth_date=_birth_date_age(25),
@@ -116,7 +116,7 @@ async def scaffold(db_session: AsyncSession):
     )
     other_user = User(
         id=new_uuid(),
-        neon_user_id=OTHER_SUB,
+        auth_user_id=OTHER_SUB,
         email=OTHER_EMAIL,
         full_name=OTHER_NAME,
         birth_date=_birth_date_age(22),
@@ -195,7 +195,7 @@ async def scaffold_incomplete(db_session: AsyncSession):
 
     user = User(
         id=new_uuid(),
-        neon_user_id=FAKE_SUB,
+        auth_user_id=FAKE_SUB,
         email=FAKE_EMAIL,
         full_name=FAKE_NAME,
         birth_date=_birth_date_age(25),
@@ -251,7 +251,7 @@ async def scaffold_incomplete(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_issue_incomplete_course_returns_422(client: AsyncClient, scaffold_incomplete):
     course = scaffold_incomplete["course"]
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/certificates/issue/{course.id}",
             headers=HEADERS,
@@ -263,7 +263,7 @@ async def test_issue_incomplete_course_returns_422(client: AsyncClient, scaffold
 @pytest.mark.asyncio
 async def test_issue_complete_course_returns_201(client: AsyncClient, scaffold):
     course = scaffold["course"]
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/certificates/issue/{course.id}",
             headers=HEADERS,
@@ -280,7 +280,7 @@ async def test_issue_complete_course_returns_201(client: AsyncClient, scaffold):
 async def test_issue_idempotent_returns_same_certificate(client: AsyncClient, scaffold):
     """Two POST calls must return the same public_uuid (UNIQUE constraint on user+course)."""
     course = scaffold["course"]
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         r1 = await client.post(f"/api/v1/certificates/issue/{course.id}", headers=HEADERS)
         r2 = await client.post(f"/api/v1/certificates/issue/{course.id}", headers=HEADERS)
 
@@ -295,7 +295,7 @@ async def test_get_certificate_no_auth_returns_200(client: AsyncClient, scaffold
     """GET /api/v1/certificates/{uuid} is auth-optional — must work without a token."""
     course = scaffold["course"]
     # First issue the cert
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         issue_resp = await client.post(f"/api/v1/certificates/issue/{course.id}", headers=HEADERS)
     assert issue_resp.status_code == 201
     public_uuid = issue_resp.json()["public_uuid"]
@@ -319,7 +319,7 @@ async def test_get_certificate_unknown_uuid_returns_404(client: AsyncClient):
 async def test_verify_page_renders_html(client: AsyncClient, scaffold):
     """GET /verify/{uuid} must return HTML 200 with correct content."""
     course = scaffold["course"]
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         issue_resp = await client.post(f"/api/v1/certificates/issue/{course.id}", headers=HEADERS)
     assert issue_resp.status_code == 201
     public_uuid = issue_resp.json()["public_uuid"]
@@ -340,7 +340,7 @@ async def test_verify_page_renders_html(client: AsyncClient, scaffold):
 async def test_verify_page_contains_qr_data_uri(client: AsyncClient, scaffold):
     """HTML verify page must embed QR as a data URI <img>."""
     course = scaffold["course"]
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         issue_resp = await client.post(f"/api/v1/certificates/issue/{course.id}", headers=HEADERS)
     public_uuid = issue_resp.json()["public_uuid"]
 
@@ -364,7 +364,7 @@ async def test_refresh_name_owner_succeeds(client: AsyncClient, scaffold, db_ses
     from app.models.certificate import Certificate as CertModel
 
     course = scaffold["course"]
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         issue_resp = await client.post(f"/api/v1/certificates/issue/{course.id}", headers=HEADERS)
     assert issue_resp.status_code == 201
     public_uuid = issue_resp.json()["public_uuid"]
@@ -374,7 +374,7 @@ async def test_refresh_name_owner_succeeds(client: AsyncClient, scaffold, db_ses
     user.full_name = "Cert Student Updated"
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify(name="Cert Student Updated")):
+    with patch("app.deps.verify_access_token", _mock_verify(name="Cert Student Updated")):
         resp = await client.patch(
             f"/api/v1/certificates/{public_uuid}/refresh-name",
             headers=HEADERS,
@@ -396,14 +396,14 @@ async def test_refresh_name_non_owner_returns_403(client: AsyncClient, scaffold)
     """A different authenticated user cannot refresh the name on someone else's cert."""
     course = scaffold["course"]
     # Issue cert as main user
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         issue_resp = await client.post(f"/api/v1/certificates/issue/{course.id}", headers=HEADERS)
     assert issue_resp.status_code == 201
     public_uuid = issue_resp.json()["public_uuid"]
 
     # Try to refresh as other_user
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify(sub=OTHER_SUB, email=OTHER_EMAIL, name=OTHER_NAME),
     ):
         resp = await client.patch(
@@ -458,7 +458,7 @@ async def test_issue_certificate_requires_module_exam_if_exists(
     await db_session.commit()
 
     # Attempt to issue. Since there's no approved module attempt, it must fail 422
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/certificates/issue/{course.id}",
             headers=HEADERS,
@@ -481,7 +481,7 @@ async def test_issue_certificate_requires_module_exam_if_exists(
     await db_session.commit()
 
     # Attempt again. It should now succeed (201)
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.post(
             f"/api/v1/certificates/issue/{course.id}",
             headers=HEADERS,

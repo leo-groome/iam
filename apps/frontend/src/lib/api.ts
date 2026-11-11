@@ -4,7 +4,7 @@
  * Usage (Vue component):
  *   const courses = await apiGet('/api/v1/courses')
  *
- * Token resolution: asks Neon Auth for a fresh JWT via getAuthToken().
+ * Token resolution: asks the auth service for a fresh JWT via getAuthToken().
  *
  * All 4xx/5xx responses throw ApiError with a typed `code` field.
  * Worker R2 media streams use `mediaFetch(url, token)` — token in Bearer header only.

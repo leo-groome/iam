@@ -1,4 +1,4 @@
-"""Neon Auth JWT validation via JWKS.
+"""Better Auth JWT validation via JWKS (servicio apps/auth).
 
 Security invariants:
 - JWKS is cached with 1h TTL; on signature failure we refetch ONCE (key rotation).
@@ -13,7 +13,6 @@ import hashlib
 import logging
 import time
 from typing import Any
-from urllib.parse import urlsplit
 
 import jwt
 from jwt import PyJWKClient, PyJWKClientError
@@ -43,9 +42,9 @@ def _get_jwks_client(*, force_refresh: bool = False) -> PyJWKClient:
     ttl_expired = (now - _jwks_loaded_at) > _JWKS_TTL_SECONDS
 
     if _jwks_client is None or ttl_expired or force_refresh:
-        logger.info("Fetching JWKS from Neon Auth", extra={"url": settings.neon_auth_jwks_url})
+        logger.info("Fetching JWKS from auth service", extra={"url": settings.auth_jwks_url})
         _jwks_client = PyJWKClient(
-            settings.neon_auth_jwks_url,
+            settings.auth_jwks_url,
             lifespan=_JWKS_TTL_SECONDS,
             headers={"User-Agent": "iam-backend/1.0"},
         )
@@ -59,10 +58,10 @@ def _get_jwks_client(*, force_refresh: bool = False) -> PyJWKClient:
 # ---------------------------------------------------------------------------
 
 
-class StackAuthClaims(BaseModel):
-    """Validated, trusted claims extracted from a Neon Auth JWT."""
+class AuthClaims(BaseModel):
+    """Validated, trusted claims extracted from a Better Auth JWT."""
 
-    sub: str  # neon_user_id — primary identifier
+    sub: str  # Better Auth user.id — primary identifier
     email: str
     name: str | None = None  # optional; may be absent in some providers
 
@@ -74,9 +73,9 @@ class StackAuthClaims(BaseModel):
 _ALLOWED_ALGORITHMS = ["EdDSA"]
 
 
-def _auth_origin() -> str:
-    parsed = urlsplit(settings.neon_auth_url)
-    return f"{parsed.scheme}://{parsed.netloc}"
+def _auth_issuer() -> str:
+    """`iss` y `aud` que emite Better Auth: su baseURL sin slash final."""
+    return settings.auth_base_url.rstrip("/")
 
 
 def _log_sub(sub: str) -> str:
@@ -84,8 +83,8 @@ def _log_sub(sub: str) -> str:
     return hashlib.sha256(sub.encode()).hexdigest()[:12]
 
 
-async def verify_stack_token(token: str) -> StackAuthClaims:
-    """Decode and validate a Neon Auth JWT.
+async def verify_access_token(token: str) -> AuthClaims:
+    """Decode and validate a Better Auth JWT.
 
     Raises:
         jwt.exceptions.PyJWTError subclasses → caller converts to HTTP 401.
@@ -95,7 +94,7 @@ async def verify_stack_token(token: str) -> StackAuthClaims:
         sub = parts[1] if len(parts) > 1 else "mock_sub"
         email = parts[2] if len(parts) > 2 else "mock@example.com"
         name = parts[3] if len(parts) > 3 else "Mock User"
-        return StackAuthClaims(sub=sub, email=email, name=name)
+        return AuthClaims(sub=sub, email=email, name=name)
 
     # Fetch signing key — attempt once with cached client, retry on key mismatch.
     for attempt in range(2):
@@ -116,8 +115,8 @@ async def verify_stack_token(token: str) -> StackAuthClaims:
             token,
             signing_key.key,
             algorithms=_ALLOWED_ALGORITHMS,
-            audience=_auth_origin(),
-            issuer=_auth_origin(),
+            audience=_auth_issuer(),
+            issuer=_auth_issuer(),
             options={
                 "require": ["sub", "exp", "iat", "aud", "iss"],
                 "verify_exp": True,
@@ -141,13 +140,13 @@ async def verify_stack_token(token: str) -> StackAuthClaims:
 
     email = payload.get("email", "")
     if not email:
-        # Neon Auth JWTs include email; missing = malformed token.
+        # Better Auth JWTs include email; missing = malformed token.
         logger.warning("JWT missing email claim", extra={"sub_hash": _log_sub(sub)})
         raise jwt.InvalidTokenError("Missing email claim")
 
     logger.debug("Token validated", extra={"sub_hash": _log_sub(sub)})
 
-    return StackAuthClaims(
+    return AuthClaims(
         sub=sub,
         email=email,
         name=payload.get("name"),

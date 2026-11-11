@@ -11,16 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 TEST_DB_URL = "sqlite+aiosqlite:///./test_catalog.db"
 
-FAKE_SUB = "neon_catalog_user_001"
+FAKE_SUB = "auth_catalog_user_001"
 FAKE_EMAIL = "catalog@example.com"
 FAKE_NAME = "Catalog User"
 HEADERS = {"Authorization": "Bearer fake-token"}
 
 
 def _make_claims(**overrides):
-    from app.security.neon_auth import StackAuthClaims
+    from app.security.auth_jwt import AuthClaims
 
-    return StackAuthClaims(
+    return AuthClaims(
         sub=overrides.get("sub", FAKE_SUB),
         email=overrides.get("email", FAKE_EMAIL),
         name=overrides.get("name", FAKE_NAME),
@@ -82,7 +82,7 @@ async def user_25(db_session: AsyncSession):
 
     u = User(
         id=new_uuid(),
-        neon_user_id=FAKE_SUB,
+        auth_user_id=FAKE_SUB,
         email=FAKE_EMAIL,
         full_name=FAKE_NAME,
         birth_date=_birth_date_age(25),
@@ -99,10 +99,10 @@ async def user_10(db_session: AsyncSession):
     from app.models.base import new_uuid
     from app.models.user import User
 
-    sub = "neon_young_001"
+    sub = "auth_young_001"
     u = User(
         id=new_uuid(),
-        neon_user_id=sub,
+        auth_user_id=sub,
         email="young@example.com",
         full_name="Young User",
         birth_date=_birth_date_age(10),
@@ -163,8 +163,8 @@ async def course_open(db_session: AsyncSession):
 async def test_list_courses_age_filter_excludes_underage(
     client: AsyncClient, user_10, course_adult, course_open
 ):
-    young_claims = _make_claims(sub=user_10.neon_user_id, email=user_10.email, name=user_10.full_name)
-    with patch("app.deps.verify_stack_token", AsyncMock(return_value=young_claims)):
+    young_claims = _make_claims(sub=user_10.auth_user_id, email=user_10.email, name=user_10.full_name)
+    with patch("app.deps.verify_access_token", AsyncMock(return_value=young_claims)):
         resp = await client.get("/api/v1/courses", headers=HEADERS)
 
     assert resp.status_code == 200
@@ -177,7 +177,7 @@ async def test_list_courses_age_filter_excludes_underage(
 async def test_list_courses_age_filter_includes_eligible(
     client: AsyncClient, user_25, course_adult, course_open
 ):
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.get("/api/v1/courses", headers=HEADERS)
 
     assert resp.status_code == 200
@@ -215,7 +215,7 @@ async def test_list_courses_archived_visible_if_enrolled(
     db_session.add(enrollment)
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         resp = await client.get("/api/v1/courses", headers=HEADERS)
 
     assert resp.status_code == 200
@@ -228,7 +228,7 @@ async def test_list_courses_archived_visible_if_enrolled(
 
 @pytest.mark.asyncio
 async def test_enroll_idempotent(client: AsyncClient, user_25, course_open):
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         r1 = await client.post(f"/api/v1/courses/{course_open.slug}/enroll", headers=HEADERS)
         r2 = await client.post(f"/api/v1/courses/{course_open.slug}/enroll", headers=HEADERS)
 
@@ -241,8 +241,8 @@ async def test_enroll_idempotent(client: AsyncClient, user_25, course_open):
 async def test_enroll_age_restricted_fails(
     client: AsyncClient, user_10, course_adult
 ):
-    young_claims = _make_claims(sub=user_10.neon_user_id, email=user_10.email, name=user_10.full_name)
-    with patch("app.deps.verify_stack_token", AsyncMock(return_value=young_claims)):
+    young_claims = _make_claims(sub=user_10.auth_user_id, email=user_10.email, name=user_10.full_name)
+    with patch("app.deps.verify_access_token", AsyncMock(return_value=young_claims)):
         resp = await client.post(f"/api/v1/courses/{course_adult.slug}/enroll", headers=HEADERS)
 
     assert resp.status_code == 403
@@ -271,7 +271,7 @@ async def test_list_courses_cursor_pagination(
         db_session.add(c)
     await db_session.commit()
 
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         r1 = await client.get("/api/v1/courses?limit=5", headers=HEADERS)
 
     assert r1.status_code == 200
@@ -280,7 +280,7 @@ async def test_list_courses_cursor_pagination(
     assert data["next_cursor"] is not None
 
     cursor = data["next_cursor"]
-    with patch("app.deps.verify_stack_token", _mock_verify()):
+    with patch("app.deps.verify_access_token", _mock_verify()):
         r2 = await client.get(f"/api/v1/courses?limit=5&cursor={cursor}", headers=HEADERS)
 
     assert r2.status_code == 200

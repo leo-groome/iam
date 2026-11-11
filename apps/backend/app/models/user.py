@@ -16,7 +16,7 @@ class User(Base, TimestampMixin):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
-    neon_user_id: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    auth_user_id: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(Text, nullable=False)
     birth_date: Mapped[date] = mapped_column(Date, nullable=False)

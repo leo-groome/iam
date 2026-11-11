@@ -1,17 +1,21 @@
-import { createInternalNeonAuth } from '@neondatabase/neon-js/auth'
+import { createAuthClient } from 'better-auth/client'
+import { emailOTPClient, jwtClient } from 'better-auth/client/plugins'
 import { AUTH_TOKEN_COOKIE } from './auth-constants'
 
 export { AUTH_TOKEN_COOKIE } from './auth-constants'
 
+// Origen del servicio apps/auth (Better Auth), p. ej. http://localhost:3001
 const authUrl =
-  (import.meta.env.PUBLIC_NEON_AUTH_URL as string | undefined) ||
-  (import.meta.env.VITE_NEON_AUTH_URL as string | undefined)
+  (import.meta.env.PUBLIC_AUTH_URL as string | undefined) ||
+  (import.meta.env.VITE_AUTH_URL as string | undefined)
 
 const normalizedAuthUrl = authUrl?.replace(/\/+$/, '')
 
-const neonAuth = createInternalNeonAuth(normalizedAuthUrl ?? 'http://localhost:9999/auth')
-
-export const authClient = neonAuth.adapter
+export const authClient = createAuthClient({
+  baseURL: normalizedAuthUrl ?? 'http://localhost:3001',
+  fetchOptions: { credentials: 'include' },
+  plugins: [emailOTPClient(), jwtClient()],
+})
 
 export function hasAuthConfig(): boolean {
   return Boolean(normalizedAuthUrl)
@@ -19,17 +23,18 @@ export function hasAuthConfig(): boolean {
 
 export function assertAuthConfigured(): void {
   if (!normalizedAuthUrl) {
-    throw new Error('[auth-client] Missing VITE_NEON_AUTH_URL or PUBLIC_NEON_AUTH_URL; restart Astro after setting it')
+    throw new Error('[auth-client] Missing VITE_AUTH_URL or PUBLIC_AUTH_URL; restart the dev server after setting it')
   }
 }
 
+/** Base de los endpoints de Better Auth (`<origen>/api/auth`). */
 export function getAuthUrl(): string {
   assertAuthConfigured()
-  return normalizedAuthUrl as string
+  return `${normalizedAuthUrl}/api/auth`
 }
 
-async function throwNeonAuthResponse(res: Response): Promise<never> {
-  let message = `Neon Auth HTTP ${res.status}`
+async function throwAuthResponse(res: Response): Promise<never> {
+  let message = `Auth HTTP ${res.status}`
   try {
     const body = await res.json()
     if (body?.message) message = body.message
@@ -51,7 +56,7 @@ export async function verifyEmailOtp(email: string, otp: string): Promise<string
     body: JSON.stringify({ email, otp }),
   })
 
-  if (!res.ok) await throwNeonAuthResponse(res)
+  if (!res.ok) await throwAuthResponse(res)
   const data = await res.json().catch(() => null)
   return typeof data?.token === 'string' ? data.token : null
 }
@@ -67,7 +72,7 @@ export async function sendEmailVerificationOtp(email: string): Promise<void> {
     body: JSON.stringify({ email, type: 'email-verification' }),
   })
 
-  if (!res.ok) await throwNeonAuthResponse(res)
+  if (!res.ok) await throwAuthResponse(res)
 }
 
 export async function requestPasswordResetOtp(email: string): Promise<void> {
@@ -81,7 +86,7 @@ export async function requestPasswordResetOtp(email: string): Promise<void> {
     body: JSON.stringify({ email }),
   })
 
-  if (!res.ok) await throwNeonAuthResponse(res)
+  if (!res.ok) await throwAuthResponse(res)
 }
 
 export async function resetPasswordWithOtp(
@@ -99,7 +104,7 @@ export async function resetPasswordWithOtp(
     body: JSON.stringify({ email, otp, password }),
   })
 
-  if (!res.ok) await throwNeonAuthResponse(res)
+  if (!res.ok) await throwAuthResponse(res)
 }
 
 export function isMockAuthAllowed(): boolean {
@@ -137,7 +142,7 @@ export function setAuthTokenCookie(token: string): void {
   if (typeof document === 'undefined') return
   if (!isCookieAuthToken(token)) {
     clearAuthTokenCookie()
-    throw new Error('Neon Auth did not return a backend JWT')
+    throw new Error('Auth service did not return a backend JWT')
   }
   document.cookie = `${AUTH_TOKEN_COOKIE}=${encodeURIComponent(token)}; ${cookieOptions(60 * 15)}`
 }
@@ -163,27 +168,6 @@ function getCookie(name: string): string | null {
   return null
 }
 
-async function getJwtFromSessionHeader(): Promise<string | null> {
-  let jwt: string | null = null
-  const client = authClient as typeof authClient & {
-    getSession: (options?: {
-      fetchOptions?: {
-        onSuccess?: (ctx: { response: Response }) => void
-      }
-    }) => Promise<unknown>
-  }
-
-  await client.getSession({
-    fetchOptions: {
-      onSuccess: (ctx) => {
-        jwt = ctx.response.headers.get('set-auth-jwt')
-      },
-    },
-  })
-
-  return jwt
-}
-
 export async function refreshAuthTokenCookie(): Promise<string> {
   if (isMockAuthAllowed()) {
     const mockToken = getCookie(AUTH_TOKEN_COOKIE)
@@ -192,24 +176,13 @@ export async function refreshAuthTokenCookie(): Promise<string> {
 
   assertAuthConfigured()
 
-  const headerToken = await getJwtFromSessionHeader()
-  if (isJwtLike(headerToken)) {
-    setAuthTokenCookie(headerToken)
-    return headerToken
-  }
-
-  const sessionToken = await neonAuth.getJWTToken().catch(() => null)
-  if (isJwtLike(sessionToken)) {
-    setAuthTokenCookie(sessionToken)
-    return sessionToken
-  }
-
+  // JWT de 15 min emitido por el plugin jwt de Better Auth (requiere sesión por cookie).
   const { data, error } = await authClient.token().catch((err) => {
-    throw new Error(`No pudimos obtener el JWT de Neon Auth: ${(err as Error).message}`)
+    throw new Error(`No pudimos obtener el JWT del servicio de auth: ${(err as Error).message}`)
   })
   if (error) throw error
   if (!data?.token) throw new Error('No auth token returned')
-  if (!isJwtLike(data.token)) throw new Error('Neon Auth did not return a backend JWT')
+  if (!isJwtLike(data.token)) throw new Error('Auth service did not return a backend JWT')
 
   setAuthTokenCookie(data.token)
   return data.token

@@ -2,6 +2,7 @@
 import { onMounted, onActivated, ref } from 'vue';
 import { adminService } from '@/services/admin.service';
 import SkeletonTable from '@/components/ui/SkeletonTable.vue';
+import { plainText } from '@/lib/sanitize';
 
 const courses = ref([]);
 const loading = ref(true);
@@ -58,7 +59,7 @@ onActivated(() => {
             <td class="px-6 py-4">
               <div>
                 <div class="font-bold text-gray-900 text-base mb-1">{{ c.title }}</div>
-                <div class="text-xs text-gray-500 truncate max-w-sm">{{ c.short_desc || 'Sin descripción' }}</div>
+                <div class="text-xs text-gray-500 truncate max-w-sm">{{ plainText(c.short_desc) || 'Sin descripción' }}</div>
               </div>
             </td>
             <td class="px-6 py-4">

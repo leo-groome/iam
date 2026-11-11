@@ -1,1 +1,1 @@
-export const AUTH_TOKEN_COOKIE = 'neon-auth-token'
+export const AUTH_TOKEN_COOKIE = 'iam-auth-token'

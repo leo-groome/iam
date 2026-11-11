@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.user import User
-from app.security.neon_auth import verify_stack_token
+from app.security.auth_jwt import verify_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ async def get_current_user(
     authorization: str = Header(default=""),
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> User:
-    """Validate Neon Auth JWT and return the corresponding DB user.
+    """Validate Better Auth JWT and return the corresponding DB user.
 
     Raises:
         401: token is missing, malformed, expired, or has invalid signature.
@@ -51,7 +51,7 @@ async def get_current_user(
     token = _extract_bearer(authorization)
 
     try:
-        claims = await verify_stack_token(token)
+        claims = await verify_access_token(token)
     except jwt.ExpiredSignatureError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from exc
     except jwt.InvalidTokenError as exc:
@@ -60,11 +60,11 @@ async def get_current_user(
         logger.exception("Unexpected error during token validation")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
-    result = await db.execute(select(User).where(User.neon_user_id == claims.sub))
+    result = await db.execute(select(User).where(User.auth_user_id == claims.sub))
     user = result.scalar_one_or_none()
 
     if user is None:
-        logger.info("User not found in DB after valid token", extra={"neon_user_id_prefix": claims.sub[:8]})
+        logger.info("User not found in DB after valid token", extra={"auth_user_id_prefix": claims.sub[:8]})
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "setup_required", "detail": "User profile not found. Please complete registration."},

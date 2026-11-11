@@ -11,16 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 TEST_DB_URL = "sqlite+aiosqlite:///./test_media.db"
 
-FAKE_SUB_ADMIN = "neon_media_admin_001"
-FAKE_SUB_INSTRUCTOR = "neon_media_instructor_001"
-FAKE_SUB_STUDENT = "neon_media_student_001"
+FAKE_SUB_ADMIN = "auth_media_admin_001"
+FAKE_SUB_INSTRUCTOR = "auth_media_instructor_001"
+FAKE_SUB_STUDENT = "auth_media_student_001"
 HEADERS = {"Authorization": "Bearer fake-token"}
 
 
 def _make_claims(sub: str = FAKE_SUB_ADMIN, email: str = "admin@example.com", name: str = "Admin"):
-    from app.security.neon_auth import StackAuthClaims
+    from app.security.auth_jwt import AuthClaims
 
-    return StackAuthClaims(sub=sub, email=email, name=name)
+    return AuthClaims(sub=sub, email=email, name=name)
 
 
 def _mock_verify(sub: str = FAKE_SUB_ADMIN, email: str = "admin@example.com", name: str = "Admin"):
@@ -80,7 +80,7 @@ async def scaffold(db_session: AsyncSession):
 
     admin = User(
         id=new_uuid(),
-        neon_user_id=FAKE_SUB_ADMIN,
+        auth_user_id=FAKE_SUB_ADMIN,
         email="admin@example.com",
         full_name="Admin User",
         birth_date=_birth_date_age(30),
@@ -89,7 +89,7 @@ async def scaffold(db_session: AsyncSession):
     )
     instructor = User(
         id=new_uuid(),
-        neon_user_id=FAKE_SUB_INSTRUCTOR,
+        auth_user_id=FAKE_SUB_INSTRUCTOR,
         email="instructor@example.com",
         full_name="Instructor User",
         birth_date=_birth_date_age(28),
@@ -98,7 +98,7 @@ async def scaffold(db_session: AsyncSession):
     )
     student = User(
         id=new_uuid(),
-        neon_user_id=FAKE_SUB_STUDENT,
+        auth_user_id=FAKE_SUB_STUDENT,
         email="student@example.com",
         full_name="Student User",
         birth_date=_birth_date_age(20),
@@ -203,7 +203,7 @@ def _mock_r2_upload(put_url: str = "https://r2.example.com/presigned-put"):
 async def test_upload_url_admin_success(client: AsyncClient, scaffold):
     mock_build, mock_upload = _mock_r2_upload()
     with (
-        patch("app.deps.verify_stack_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
+        patch("app.deps.verify_access_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
         patch("app.routers.media.build_key", mock_build),
         patch("app.routers.media.generate_upload_url", mock_upload),
     ):
@@ -224,7 +224,7 @@ async def test_upload_url_instructor_success(client: AsyncClient, scaffold):
     mock_build, mock_upload = _mock_r2_upload()
     with (
         patch(
-            "app.deps.verify_stack_token",
+            "app.deps.verify_access_token",
             _mock_verify(
                 sub=FAKE_SUB_INSTRUCTOR,
                 email="instructor@example.com",
@@ -245,7 +245,7 @@ async def test_upload_url_instructor_success(client: AsyncClient, scaffold):
 @pytest.mark.asyncio
 async def test_upload_url_student_forbidden(client: AsyncClient, scaffold):
     with patch(
-        "app.deps.verify_stack_token",
+        "app.deps.verify_access_token",
         _mock_verify(sub=FAKE_SUB_STUDENT, email="student@example.com", name="Student User"),
     ):
         resp = await client.post(
@@ -260,7 +260,7 @@ async def test_upload_url_student_forbidden(client: AsyncClient, scaffold):
 async def test_upload_url_invalid_content_type_for_scope(client: AsyncClient, scaffold):
     mock_build, mock_upload = _mock_r2_upload()
     with (
-        patch("app.deps.verify_stack_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
+        patch("app.deps.verify_access_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
         patch("app.routers.media.build_key", mock_build),
         patch("app.routers.media.generate_upload_url", mock_upload),
     ):
@@ -278,7 +278,7 @@ async def test_upload_url_invalid_content_type_for_scope(client: AsyncClient, sc
 async def test_upload_url_image_wrong_type_for_pdf_scope(client: AsyncClient, scaffold):
     mock_build, mock_upload = _mock_r2_upload()
     with (
-        patch("app.deps.verify_stack_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
+        patch("app.deps.verify_access_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
         patch("app.routers.media.build_key", mock_build),
         patch("app.routers.media.generate_upload_url", mock_upload),
     ):
@@ -295,7 +295,7 @@ async def test_upload_url_image_wrong_type_for_pdf_scope(client: AsyncClient, sc
 async def test_upload_url_audio_success(client: AsyncClient, scaffold):
     mock_build, mock_upload = _mock_r2_upload()
     with (
-        patch("app.deps.verify_stack_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
+        patch("app.deps.verify_access_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
         patch("app.routers.media.build_key", mock_build),
         patch("app.routers.media.generate_upload_url", mock_upload),
     ):
@@ -312,7 +312,7 @@ async def test_upload_url_audio_success(client: AsyncClient, scaffold):
 async def test_upload_url_audio_wrong_type_returns_422(client: AsyncClient, scaffold):
     mock_build, mock_upload = _mock_r2_upload()
     with (
-        patch("app.deps.verify_stack_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
+        patch("app.deps.verify_access_token", _mock_verify(sub=FAKE_SUB_ADMIN)),
         patch("app.routers.media.build_key", mock_build),
         patch("app.routers.media.generate_upload_url", mock_upload),
     ):
@@ -334,7 +334,7 @@ async def test_play_token_topic_locked_returns_403(client: AsyncClient, scaffold
     block = scaffold["block_with_media"]
     with (
         patch(
-            "app.deps.verify_stack_token",
+            "app.deps.verify_access_token",
             _mock_verify(
                 sub=FAKE_SUB_STUDENT,
                 email="student@example.com",
@@ -357,7 +357,7 @@ async def test_play_token_requires_enrollment(client: AsyncClient, scaffold):
     block = scaffold["block_with_media"]
     with (
         patch(
-            "app.deps.verify_stack_token",
+            "app.deps.verify_access_token",
             _mock_verify(
                 sub=FAKE_SUB_INSTRUCTOR,
                 email="instructor@example.com",
@@ -380,7 +380,7 @@ async def test_play_token_topic_no_media_key_returns_422(client: AsyncClient, sc
     block_no_media = scaffold["block_no_media"]
     with (
         patch(
-            "app.deps.verify_stack_token",
+            "app.deps.verify_access_token",
             _mock_verify(
                 sub=FAKE_SUB_STUDENT,
                 email="student@example.com",
@@ -407,7 +407,7 @@ async def test_play_token_returns_valid_jwt(client: AsyncClient, scaffold):
 
     with (
         patch(
-            "app.deps.verify_stack_token",
+            "app.deps.verify_access_token",
             _mock_verify(
                 sub=FAKE_SUB_STUDENT,
                 email="student@example.com",
@@ -442,7 +442,7 @@ async def test_play_token_block_not_found_returns_404(client: AsyncClient, scaff
 
     with (
         patch(
-            "app.deps.verify_stack_token",
+            "app.deps.verify_access_token",
             _mock_verify(
                 sub=FAKE_SUB_STUDENT,
                 email="student@example.com",
@@ -460,7 +460,7 @@ async def test_play_token_block_not_found_returns_404(client: AsyncClient, scaff
 
 @pytest.mark.asyncio
 async def test_upload_url_rejects_oversize_file(client: AsyncClient, scaffold):
-    with patch("app.deps.verify_stack_token", _mock_verify(sub=FAKE_SUB_ADMIN)):
+    with patch("app.deps.verify_access_token", _mock_verify(sub=FAKE_SUB_ADMIN)):
         resp = await client.post(
             "/api/v1/media/upload-url",
             json={"filename": "doc.pdf", "content_type": "application/pdf", "scope": "pdf",

@@ -23,7 +23,7 @@ export default defineConfig({
       url: 'http://localhost:4321',
       reuseExistingServer: !process.env.CI,
       env: {
-        VITE_NEON_AUTH_URL: 'http://localhost:8000/mock-auth',
+        VITE_AUTH_URL: 'http://localhost:8000/mock-auth',
         ALLOW_MOCK_AUTH: 'true',
         PUBLIC_ALLOW_MOCK_AUTH: 'true',
         PUBLIC_API_URL: 'http://localhost:8000',
@@ -35,8 +35,8 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       env: {
         DATABASE_URL: 'sqlite+aiosqlite:///./test_e2e.db',
-        NEON_AUTH_URL: 'http://localhost:8000/mock-auth',
-        NEON_AUTH_JWKS_URL: 'http://localhost:8000/mock-auth/.well-known/jwks.json',
+        AUTH_BASE_URL: 'http://localhost:8000',
+        AUTH_JWKS_URL: 'http://localhost:8000/mock-auth/jwks',
         ALLOW_MOCK_AUTH: 'true',
         R2_ACCOUNT_ID: 'mock_r2',
         R2_ACCESS_KEY_ID: 'mock_r2_key',

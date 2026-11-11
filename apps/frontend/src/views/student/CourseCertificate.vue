@@ -1,30 +1,40 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { coursesService } from '@/services/courses.service';
+import { apiPost } from '@/lib/api';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const slug = route.params.slug as string;
 
-const curso = ref(null);
+const curso = ref<any>(null);
+const cert = ref<{ public_uuid: string; student_name: string; issued_at: string; verify_url: string } | null>(null);
 const loading = ref(true);
 
 onMounted(async () => {
   try {
     curso.value = await coursesService.getBySlug(slug);
+    // Emite (idempotente) el certificado en el backend: queda registrado y verificable.
+    // 422 course_incomplete => el curso aún no está al 100%.
+    cert.value = (await apiPost('/api/v1/certificates/issue/{course_id}' as any, {
+      params: { course_id: curso.value.id },
+    })) as typeof cert.value;
   } catch (err) {
     console.error(err);
-    router.replace('/catalogo');
+    router.replace(curso.value ? `/curso/${slug}` : '/catalogo');
   } finally {
     loading.value = false;
   }
 });
 
-const studentName = authStore.user?.full_name || '';
-const today = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+const studentName = computed(() => cert.value?.student_name || authStore.user?.full_name || '');
+const today = computed(() =>
+  new Date(cert.value?.issued_at ?? Date.now()).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }),
+);
+const certificateId = computed(() => (cert.value?.public_uuid ?? curso.value?.id ?? '').slice(0, 8).toUpperCase());
 
 const downloading = ref(false);
 
@@ -62,7 +72,7 @@ async function downloadPdf() {
 </script>
 
 <template>
-  <div v-if="!loading && curso">
+  <div v-if="!loading && curso && cert">
     <div class="text-center mb-8">
       <div class="text-6xl mb-3">🎓</div>
       <h1 class="text-4xl font-bold tracking-tight">¡Felicidades!</h1>
@@ -118,7 +128,7 @@ async function downloadPdf() {
             <p>Fecha de emisión</p>
           </div>
           <div class="text-center w-24 md:w-40">
-            <div class="border-t border-gray-400 pt-1 md:pt-2 font-semibold text-gray-800">#{{ curso.id.slice(0, 8).toUpperCase() }}</div>
+            <div class="border-t border-gray-400 pt-1 md:pt-2 font-semibold text-gray-800">#{{ certificateId }}</div>
             <p>ID del Certificado</p>
           </div>
         </div>

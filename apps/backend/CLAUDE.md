@@ -26,17 +26,17 @@ app/
   deps.py          Dependencias FastAPI (get_current_user, etc.)
   models/          SQLAlchemy ORM models
   routers/         Endpoints por dominio (auth, courses, admin…)
-  security/        JWT validation (Neon Auth)
+  security/        JWT validation (Better Auth, JWKS)
 alembic/           Migraciones
 ```
 
 ## DB
-- Driver: `asyncpg` — URL sin query params, SSL via `connect_args={"ssl": "require"}`
+- Driver: `asyncpg` — URL sin query params, SSL via `DB_SSL` + `connect_args`
 - Pool: `size=5`, `max_overflow=10`, `pre_ping=True`, `recycle=300`
 - Base declarativa: `app/models/base.py` — `Base`, `TimestampMixin`, `new_uuid()`
 
 ## Auth
-- Neon Auth JWKS — validación en `app/security/neon_auth.py`
+- Better Auth JWKS — validación en `app/security/auth_jwt.py` (`AUTH_BASE_URL`, `AUTH_JWKS_URL`)
 - `get_current_user` dep en `app/deps.py` → retorna `User` ORM
 - Mock auth disponible con `ALLOW_MOCK_AUTH=true` (solo dev)
 

@@ -41,11 +41,11 @@ async def seed():
     
     async with AsyncSessionLocal() as db:
         # 1. Seed mock users
-        result = await db.execute(select(User).where(User.neon_user_id == "mock_student_id"))
+        result = await db.execute(select(User).where(User.auth_user_id == "mock_student_id"))
         student = result.scalar_one_or_none()
         if not student:
             student = User(
-                neon_user_id="mock_student_id",
+                auth_user_id="mock_student_id",
                 email="student@example.com",
                 full_name="Student User",
                 birth_date=date(2000, 1, 1),
@@ -55,11 +55,11 @@ async def seed():
             db.add(student)
             print("Seeded student user.")
             
-        result = await db.execute(select(User).where(User.neon_user_id == "mock_admin_id"))
+        result = await db.execute(select(User).where(User.auth_user_id == "mock_admin_id"))
         admin = result.scalar_one_or_none()
         if not admin:
             admin = User(
-                neon_user_id="mock_admin_id",
+                auth_user_id="mock_admin_id",
                 email="admin@example.com",
                 full_name="Admin User",
                 birth_date=date(1990, 1, 1),

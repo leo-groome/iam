@@ -159,7 +159,7 @@ onMounted(() => {
   }
 
   // Only enter "complete your profile" mode when the user actually returned
-  // from an OAuth callback (?oauth=1). Otherwise a leftover Neon session would
+  // from an OAuth callback (?oauth=1). Otherwise a leftover auth session would
   // hijack the regular signup form.
   const cameFromOAuth = new URLSearchParams(window.location.search).get('oauth') === '1'
   if (mode.value === 'register' && cameFromOAuth && hasAuthConfig() && !isMockAuthAllowed()) {
@@ -307,7 +307,7 @@ async function handleVerifyRegistration() {
   } catch (err: unknown) {
     console.error('[auth] verification failed:', err)
     if (err instanceof ApiError && err.status === 401) {
-      showToast('error', 'Neon verificó el código, pero el backend no pudo validar el JWT. Revisa Auth URL/JWKS.')
+      showToast('error', 'El servicio de auth verificó el código, pero el backend no pudo validar el JWT. Revisa AUTH_BASE_URL/JWKS.')
     } else {
       showToast('error', classifyAuthError(err))
     }
@@ -402,7 +402,7 @@ async function handleRegister() {
       if (err.status === 403) {
         showToast('error', 'Debes ser mayor de 13 años para registrarte en esta plataforma.')
       } else if (err.status === 401) {
-        showToast('error', 'No pudimos validar tu sesión de Neon Auth. Revisa la configuración de Auth URL/JWKS.')
+        showToast('error', 'No pudimos validar tu sesión del servicio de auth. Revisa la configuración de AUTH_BASE_URL/JWKS.')
       } else if (err.status === 409) {
         showToast('error', 'Ya existe una cuenta con ese correo. Inicia sesión.')
       } else {
@@ -420,24 +420,38 @@ async function handleRegister() {
 // Maps SDK/network errors to safe user-facing strings.
 // NEVER pass raw err.message to the UI — may contain internal detail.
 // ---------------------------------------------------------------------------
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  INVALID_EMAIL_OR_PASSWORD: 'Correo o contraseña incorrectos.',
+  EMAIL_NOT_VERIFIED: 'Revisa tu correo y verifica tu cuenta antes de continuar.',
+  INVALID_OTP: 'El código no es válido o expiró. Revisa tu correo e intenta de nuevo.',
+  OTP_EXPIRED: 'El código no es válido o expiró. Revisa tu correo e intenta de nuevo.',
+  TOO_MANY_ATTEMPTS: 'Demasiados intentos. Solicita un código nuevo.',
+  USER_ALREADY_EXISTS: 'Ya existe una cuenta con ese correo.',
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: 'Ya existe una cuenta con ese correo.',
+  PASSWORD_TOO_SHORT: 'La contraseña es muy corta (mínimo 8 caracteres).',
+}
+
+// Better Auth devuelve `{ code, message, status }` (objeto plano, no Error).
 function classifyAuthError(err: unknown): string {
-  if (err instanceof Error) {
-    const msg = err.message.toLowerCase()
-    if (msg.includes('otp') || msg.includes('code')) {
-      return 'El código no es válido o expiró. Revisa tu correo e intenta de nuevo.'
-    }
-    if (msg.includes('verify') || msg.includes('verification') || msg.includes('verified')) {
-      return 'Revisa tu correo y verifica tu cuenta antes de continuar.'
-    }
-    if (msg.includes('invalid') || msg.includes('incorrect') || msg.includes('wrong')) {
-      return 'Correo o contraseña incorrectos.'
-    }
-    if (msg.includes('email') && msg.includes('exist')) {
-      return 'Ya existe una cuenta con ese correo.'
-    }
-    if (msg.includes('network') || msg.includes('fetch')) {
-      return 'Error de conexión. Verifica tu internet e intenta de nuevo.'
-    }
+  const e = err as { code?: unknown; message?: unknown; status?: unknown } | null
+  if (typeof e?.code === 'string' && AUTH_ERROR_MESSAGES[e.code]) return AUTH_ERROR_MESSAGES[e.code]
+  if (e?.status === 429) return 'Demasiados intentos. Espera un momento e intenta de nuevo.'
+
+  const msg = (typeof e?.message === 'string' ? e.message : '').toLowerCase()
+  if (msg.includes('otp') || msg.includes('code')) {
+    return 'El código no es válido o expiró. Revisa tu correo e intenta de nuevo.'
+  }
+  if (msg.includes('verify') || msg.includes('verification') || msg.includes('verified')) {
+    return 'Revisa tu correo y verifica tu cuenta antes de continuar.'
+  }
+  if (msg.includes('invalid') || msg.includes('incorrect') || msg.includes('wrong')) {
+    return 'Correo o contraseña incorrectos.'
+  }
+  if (msg.includes('email') && msg.includes('exist')) {
+    return 'Ya existe una cuenta con ese correo.'
+  }
+  if (msg.includes('network') || msg.includes('fetch')) {
+    return 'Error de conexión. Verifica tu internet e intenta de nuevo.'
   }
   return 'Algo salió mal. Intenta de nuevo en unos momentos.'
 }
