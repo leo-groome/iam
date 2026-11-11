@@ -19,6 +19,7 @@ class CourseCompletions(BaseModel):
 
 
 class DashboardResponse(BaseModel):
+    certificates_issued: int = 0
     total_students: int
     new_students_last_7d: int
     active_courses: int

@@ -4,7 +4,7 @@ import { apiPost } from '@/lib/api';
 import ContentBlockPlayer from '@/components/ui/ContentBlockPlayer.vue';
 import type { ContentBlockView } from '@/services/courses.service';
 
-const emit = defineEmits<{ 'content-done': [] }>();
+const emit = defineEmits<{ 'content-done': [state?: string] }>();
 
 const props = defineProps<{
   tema?: {
@@ -104,8 +104,8 @@ async function markContentDone(): Promise<void> {
   if (!props.tema || !allRequiredComplete.value || contentDone.value) return;
   markingDone.value = true;
   try {
-    await apiPost(`/api/v1/topics/${props.tema.id}/mark-content-done` as any);
-    emit('content-done');
+    const res = (await apiPost(`/api/v1/topics/${props.tema.id}/mark-content-done` as any)) as { state?: string } | undefined;
+    emit('content-done', res?.state);
     markDoneSuccess.value = true;
     setTimeout(() => {
       markDoneSuccess.value = false;

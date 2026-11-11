@@ -1,0 +1,38 @@
+Title,Description,Priority,Status,Labels
+IAM-004 Clase con examen activo y 0 preguntas bloquea al alumno,"Tema con has_exam=true (default en API) sin preguntas: GET /topics/{id}/exam responde 404 'No exam questions', la UI no muestra error, la clase queda en contenido_visto y el curso nunca llega al 100% (sin certificado). El curso se puede publicar así y la UI de admin también guarda has_exam sin preguntas.
+
+Fix: bloquear publish si algún tema con examen tiene <1 pregunta; has_exam default false; mostrar el error en la UI.
+Evidencia: docs/qa-local/report.md, screenshots/12-t2.png",1,In Review,"Bug,Critical"
+IAM-005 El gating de completado lo afirma el cliente (curso y certificado en 4 requests),"heartbeat acepta last_page>total_pages y total_pages/pos/max_seen_pct enviados por el cliente. Con curl se completa video/PDF, el examen y se emite el certificado en menos de 1 s.
+
+Fix: total_pages server-side al guardar el bloque, rechazar last_page>total_pages, validar avance contra tiempo real entre heartbeats, usar solo duration_seconds del bloque.
+Evidencia: docs/qa-local/report.md",1,In Review,"Bug,Critical,Security"
+IAM-006 Rate limit de /auth/sync compartido por IP del proxy en producción,"slowapi usa get_remote_address; infra/vps corre uvicorn tras Caddy sin --proxy-headers/--forwarded-allow-ips. Verificado en local: X-Forwarded-For distinto comparte el mismo bucket, el 6.º registro del minuto recibe 429 para todos.
+
+Fix: --proxy-headers --forwarded-allow-ips (solo red interna Docker) o key_func por sub; verificar en el VPS real.",1,In Review,"Bug,Critical,Infra"
+IAM-007 PDF requerido imposible de completar con viewport bajo,"ContentBlockPlayer.vue:202 IntersectionObserver threshold 0.5 con contenedor max-h-80vh: si la página (~993px) es >2x el contenedor nunca se registra como vista (viewport <~620px de alto: móvil horizontal, zoom 200%).
+
+Fix: umbral relativo al alto del contenedor.
+Evidencia: screenshots/08-pdf-fin.png vs 09-pdf-ok.png",2,In Review,Bug
+IAM-008 Dashboard admin muestra métricas inventadas,"AdminDashboard.vue (~l.121): cuellos de botella, actividad reciente, rendimiento de módulos, '142 certificados', deltas '+12 este mes' son datos fijos. Conectar a /admin/dashboard u ocultar.
+Evidencia: screenshots/02-admin.png",2,In Review,Bug
+IAM-009 media_key y subidas sin validación server-side,"PUT /admin/topics/{id}/blocks acepta media_key inexistente, 'pdf/../cover/x' y keys de 3000 caracteres. upload-url valida solo el content_type declarado; sin límite de tamaño ni magic bytes (los límites 50MB/500MB son solo texto de UI). Estándar de uploads incumplido.",3,In Review,"Bug,Security"
+IAM-010 Contrato de errores: 422 sin auth y 429 con otro formato,"Sin Authorization responde 422 en vez de 401. El 429 de slowapi responde {""error"": ""...""} en lugar de {""error"": {""code"", ""message""}}.",4,In Review,Bug
+IAM-011 Preguntas creadas con order_index=0,POST /topics/{id}/questions deja order_index=0 en todas; el orden del examen no es determinista.,4,In Review,Bug
+IAM-012 Subtítulo de clase muestra 's · Con examen' sin duración,"Cuando duration_seconds es null se imprime 's'.
+Evidencia: screenshots/07-leccion.png",4,In Review,Bug
+IAM-013 GET /topics/{id} expone media_key de los bloques al estudiante,CLAUDE.md pide ocultarlo; sigue protegido por play-token pero no debería salir.,4,In Review,"Bug,Security"
+IAM-014 seed_e2e.py desactualizado,Crea una clase sin bloques (viola >=1 bloque) y usa create_all; actualizar al flujo actual.,4,In Review,Chore
+IAM-015 Cada Guardar del tema borra el avance de todos los alumnos,"handleSave siempre hace PUT /topics/{id}/blocks (borra/recrea bloques y ContentBlockProgress, devuelve a 'disponible' a los no aprobados) aunque solo cambie una pregunta o el título. Reproducido: PDF 3/3 contenido_visto, PUT idéntico, pdf_last_page=0 y disponible. Además son 3 llamadas no atómicas (topic, blocks, questions): si la 3.ª falla ya se perdió el progreso.
+
+Fix: no reenviar bloques sin cambios; upsert por id; endpoint transaccional.",1,In Review,"Bug,Critical"
+IAM-016 Guardar preguntas recrea todos los IDs y puede borrar el banco,"POST /topics/{id}/questions/bulk archiva todas y crea nuevas (IDs cambian en cada guardado): un alumno con examen abierto recibe 403 invalid_exam_token y pierde sus respuestas; el historial queda en preguntas archivadas. Desmarcar 'Requiere cuestionario' archiva todo el banco sin aviso. has_exam=true con 0 preguntas se guarda. normalizeQuestion marca correcta la 1.ª opción en silencio.
+
+Fix: upsert por id (como PATCH /questions/{id}), no archivar al desmarcar, validar >=1 pregunta.",1,In Review,"Bug,Critical"
+IAM-017 PATCH /admin/options/{id} rompe el invariante de 1 opción correcta,Reproducido: pregunta con 2 correctas y con 0 correctas (imposible de aprobar). Eliminar el endpoint o validar al final de la transacción.,2,In Review,Bug
+IAM-018 Enunciados con formato: banco admin muestra HTML crudo y validaciones inconsistentes,"AdminPreguntas.vue:69 y AdminModuloDetalle.vue:228 pintan {{ enunciado }}: se ve <p>...<strong>. La ayuda dice 5-300 caracteres pero se permiten 5000; el mínimo cuenta etiquetas HTML.
+Evidencia: screenshots/14-admin-lista-preguntas.png",3,In Review,Bug
+IAM-019 El editor rich text genera formato que el sanitizador elimina,"StarterKit permite blockquote/code/strike/hr (atajos de markdown) pero el allow-list solo conserva p,br,strong,em,h2,h3,ul,ol,li,a: el alumno ve texto plano y el editor lo pierde al reabrir. Restringir StarterKit a los nodos permitidos. XSS probado seguro.
+Evidencia: screenshots/15-texto-formato.png",3,In Review,Bug
+IAM-020 Bloques de texto vacíos (<p></p>) aceptados,"UI y API aceptan '<p></p>' y '<p><br></p>'; el alumno ve una tarjeta vacía. Validar sobre texto plano (editor.isEmpty en UI, strip HTML en API).",3,In Review,Bug
+IAM-021 Tras 'Marcar como completado' (solo texto) no aparece 'Ir al Examen' sin recargar,El servidor pasa a contenido_visto pero la UI no actualiza el estado local con la respuesta.,3,In Review,Bug

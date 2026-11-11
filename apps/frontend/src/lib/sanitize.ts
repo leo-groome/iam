@@ -18,6 +18,12 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   }
 });
 
+/** Texto visible de un fragmento HTML (para validar longitudes sin contar etiquetas). */
+export function plainText(html: string | null | undefined): string {
+  if (!html) return '';
+  return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
+}
+
 export function sanitizeHtml(html: string | null | undefined): string {
   if (!html) return '';
   return DOMPurify.sanitize(html, {

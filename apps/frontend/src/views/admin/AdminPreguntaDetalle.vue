@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { onMounted, ref, computed } from 'vue';
 import { adminService } from '@/services/admin.service';
 import { apiGet } from '@/lib/api';
+import { plainText } from '@/lib/sanitize';
 import RichTextEditor from '@/components/ui/RichTextEditor.vue';
 
 const route = useRoute();
@@ -60,9 +61,9 @@ const removeOption = (i: number) => {
 const handleSave = async () => {
   if (saving.value || loading.value) return;
   errorMessage.value = '';
-  const text = enunciado.value.trim();
+  const text = plainText(enunciado.value);
   if (text.length < 5 || enunciado.value.length > 5000) {
-    errorMessage.value = 'El enunciado necesita al menos 5 caracteres (máx. 5000).';
+    errorMessage.value = 'El enunciado necesita al menos 5 caracteres de texto (máx. 5000 con formato).';
     return;
   }
   if (opts.value.some(o => !o.texto.trim() || o.texto.length > 150 || o.feedback.length > 5000) || correctIdx.value < 0) {
@@ -124,7 +125,7 @@ const pageTitle = computed(() => {
     <div>
       <label class="label">Enunciado</label>
       <RichTextEditor v-model="enunciado" placeholder="Escribe la pregunta" />
-      <p class="help">5–300 caracteres.</p>
+      <p class="help">Mínimo 5 caracteres de texto; máximo 5000 incluyendo formato.</p>
     </div>
     <div>
       <label class="label">Opciones de respuesta</label>

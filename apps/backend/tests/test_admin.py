@@ -1462,3 +1462,17 @@ async def test_replace_topic_blocks_rejects_missing_object(client, db):
     assert resp.json()["detail"]["code"] == "invalid_media"
 
 
+@pytest.mark.asyncio
+async def test_question_enunciado_min_length_counts_text_not_html(client, db):
+    course = await _ticket_course(client, db)
+    with patch("app.deps.verify_stack_token", _mock_verify_for(FAKE_ADMIN_SUB, "admin@test.com", "Admin")):
+        module = await client.post(f"/api/v1/admin/courses/{course['id']}/modules",
+                                   json={"title": "Módulo de prueba"}, headers=ADMIN_HEADERS)
+        topic = await client.post(f"/api/v1/admin/modules/{module.json()['id']}/topics", json={
+            "title": "Clase de prueba", "content_type": "texto"}, headers=ADMIN_HEADERS)
+        bad = await client.post(f"/api/v1/admin/topics/{topic.json()['id']}/questions",
+                                json=_bulk_q("<p>a</p>"), headers=ADMIN_HEADERS)
+        good = await client.post(f"/api/v1/admin/topics/{topic.json()['id']}/questions",
+                                 json=_bulk_q("<p>¿Pregunta <strong>real</strong>?</p>"), headers=ADMIN_HEADERS)
+    assert bad.status_code == 422
+    assert good.status_code == 201, good.text
